@@ -1,0 +1,1559 @@
+/*
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  MERIDIAN · MOBILE.CSS
+ *  Android / mobile-first responsive layer.
+ *
+ *  ARCHITECTURE GUARANTEE:
+ *  All media-query-scoped rules are scoped to ≤1024px viewports.
+ *  The ONLY non-media-query rules below are display:none defaults for
+ *  elements that exist solely for mobile (hamburger, drawer) — ensuring
+ *  they are invisible on desktop without any media query needed.
+ *  Desktop experience is pixel-identical to the pre-mobile version.
+ *
+ *  Breakpoints:
+ *    xs  – Android phones  320–480px
+ *    sm  – Large phones    481–768px
+ *    md  – Small tablets   769–1024px
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+/* ── Mobile-only element defaults (hidden on desktop by design) ─────────
+   These elements are new DOM nodes added for mobile navigation.
+   They must be invisible on desktop (>768px) without a media query.
+   This is NOT a global rule — it targets only new mobile-specific classes. */
+.m-menu-btn       { display: none; }   /* hamburger — only shown on mobile via MQ below */
+.m-drawer         { display: none; }   /* slide-out nav drawer */
+.m-drawer-overlay { display: none; }   /* dark backdrop behind drawer */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   1. GLOBAL MOBILE RESETS  (all inside ≤1024px)
+   Prevents the three most common Android overflow sources:
+   horizontal scroll, text inflation, tap-target shrinkage.
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+
+  /* Prevent horizontal overflow on the root.
+     CRITICAL: overflow-x:hidden must ONLY go on body, never on html.
+     Setting overflow-x:hidden on both html AND body causes Android Chrome
+     to convert them to overflow:hidden, killing ALL vertical scrolling. */
+  body {
+    overflow-x: hidden;
+    max-width: 100vw;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* html must remain scrollable — do NOT set overflow on it */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* Every element respects its container width */
+  *, *::before, *::after {
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+
+  /* Prevent images / canvas from escaping */
+  img, canvas, svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Minimum tap target — scoped to interactive leaf elements only.
+     NOT applied to layout containers (tbar, nav, main, section) which
+     must never have their height constrained by this rule. */
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+  a {
+    touch-action: manipulation;
+  }
+
+  /* Prevent zoom on input focus (iOS / Android Chrome) */
+  input, select, textarea {
+    font-size: clamp(14px, 3.5vw, 16px) !important;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Remove stickiness from non-critical elements on small screens
+     to prevent painting jank */
+  .ttabs {
+    position: relative;
+    top: auto;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   2. TOP BAR (tbar) — mobile layout
+   Desktop: brand | wide search bar | LIVE
+   Mobile:  brand | LIVE dot | hamburger button
+   The search bar moves into a full-width row below the brand row.
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  .tbar {
+    height: auto;
+    flex-wrap: wrap;
+    padding: 0 12px;
+    gap: 0;
+    row-gap: 0;
+  }
+
+  /* Row 1: brand + live + hamburger */
+  .tbar > .wordmark {
+    flex: 1;
+    padding: 11px 0;
+    font-size: 15px;
+    letter-spacing: 0.12em;
+  }
+
+  .tbar > .live-dot {
+    order: 2;
+    padding: 0 8px 0 0;
+    font-size: 9px;
+  }
+
+  /* Hide the desktop search bar at small sizes; use a tap-to-search pattern */
+  .tbar > .tcmd {
+    order: 3;
+    flex: 0 0 100%;
+    max-width: 100%;
+    border-left: 0;
+    border-right: 0;
+    border-top: 1px solid var(--hairline);
+    border-bottom: 0;
+    height: 42px;
+    padding: 0 12px;
+    border-radius: 0;
+    font-size: 13px;
+  }
+
+  .tbar > .tcmd input {
+    font-size: 13px !important;
+    width: 100%;
+  }
+
+  /* Show the hamburger on mobile */
+  .m-menu-btn {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 44px;
+    height: 44px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 10px 8px;
+    min-height: 44px;
+    order: 1;
+  }
+
+  .m-menu-btn span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: var(--muted);
+    border-radius: 1px;
+    transition: transform 0.2s, opacity 0.2s;
+  }
+
+  .m-menu-btn[aria-expanded="true"] span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .m-menu-btn[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
+  .m-menu-btn[aria-expanded="true"] span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+  /* Hide the desktop tab bar entirely on phones — replaced by drawer */
+  .ttabs {
+    display: none;
+  }
+
+  /* Active tab badge — shown in tbar to indicate current module */
+  .tbar::after {
+    content: attr(data-active-tab);
+    display: block;
+    width: 100%;
+    padding: 6px 12px;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--amber);
+    background: var(--ink-2);
+    border-top: 1px solid var(--hairline);
+    text-transform: uppercase;
+  }
+}
+
+/* On tablets (769–1024px) keep the tab bar but make it scroll nicely */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .m-menu-btn { display: none; }
+  .m-drawer { display: none !important; }
+  .m-drawer-overlay { display: none !important; }
+
+  .ttabs {
+    position: sticky;
+    top: 52px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .ttabs::-webkit-scrollbar { display: none; }
+
+  .ttabs button {
+    font-size: 11px;
+    padding: 9px 13px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   3. MOBILE DRAWER NAVIGATION
+   Slides in from the left. Contains all 13 module buttons.
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Backdrop overlay */
+  .m-drawer-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.65);
+    z-index: 198;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .m-drawer-overlay.open { display: block; }
+
+  /* Drawer panel */
+  .m-drawer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(300px, 85vw);
+    background: var(--ink-2);
+    border-right: 1px solid var(--hairline);
+    z-index: 199;
+    display: flex !important;
+    flex-direction: column;
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(.4,0,.2,1);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  .m-drawer.open { transform: translateX(0); }
+
+  .m-drawer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid var(--hairline);
+    position: sticky;
+    top: 0;
+    background: var(--ink-2);
+    z-index: 1;
+  }
+
+  .m-drawer-close {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 16px;
+    cursor: pointer;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    border-radius: 4px;
+  }
+  .m-drawer-close:hover { color: var(--fg); background: var(--ink); }
+
+  .m-drawer-tabs {
+    flex: 1;
+    padding: 8px 0 20px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .m-drawer-tabs button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    border-left: 3px solid transparent;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 13px 18px;
+    cursor: pointer;
+    min-height: 48px;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .m-drawer-tabs button:hover,
+  .m-drawer-tabs button:active { background: var(--ink); color: var(--fg); }
+
+  .m-drawer-tabs button.active {
+    border-left-color: var(--amber);
+    color: var(--fg);
+    background: var(--ink);
+  }
+
+  /* Separator between groups */
+  .m-drawer-sep {
+    height: 1px;
+    background: var(--hairline);
+    margin: 6px 0;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   4. MAIN CONTENT AREA — mobile padding
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .tmain {
+    padding: 10px 8px 80px;
+  }
+
+  /* trow: panels always stack vertically on phones */
+  .trow {
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  /* Panels with inline min-width — override to full width on mobile */
+  .panel,
+  .panel.grow {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    /* Remove sticky sidebar behaviour */
+    position: relative !important;
+    top: auto !important;
+  }
+
+  .panel-h {
+    padding: 9px 12px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .panel-h h3 {
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .tmain { padding: 12px 14px 60px; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   5. GLOBAL TAPE — Market Intelligence top strip
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .tape {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 1px;
+  }
+
+  .tape-cell {
+    padding: 8px 10px;
+  }
+
+  .tape-cell .lbl { font-size: 8px; }
+  .tape-cell .px  { font-size: 14px; }
+  .tape-cell .chg { font-size: 9px; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   6. ALL DATA TABLES — horizontal scroll containers
+   Tables cannot shrink below their content width, so we wrap them.
+   The parent gets overflow-x: auto so only the table scrolls, not the page.
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Wrap any table that might overflow */
+  .dt,
+  .ir-fin,
+  .ir-keyfin,
+  .idcf-t,
+  .frc-t,
+  .vm-t,
+  .cal-stable,
+  .rpt table,
+  .screen-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    font-size: 10.5px;
+  }
+
+  /* Allow table cells to use normal white-space when inside scroll container */
+  .dt td, .dt th,
+  .ir-fin td, .ir-fin th {
+    white-space: nowrap;
+    font-size: 10.5px;
+    padding: 5px 8px;
+  }
+
+  /* Table-wrap already exists — make sure it clips correctly */
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+    margin: 0 -8px;
+    padding: 0 8px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   7. EQUITY RESEARCH — company workstation
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Company header */
+  .co-h {
+    padding: 12px 12px 8px;
+  }
+  .co-nm { font-size: clamp(18px, 5vw, 28px); }
+  .co-px { font-size: clamp(18px, 4.5vw, 26px); }
+
+  /* KV grid — 2 columns on mobile */
+  .kv {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .kv-item {
+    padding: 9px 10px;
+  }
+
+  /* Overview row: chart goes below text on all mobile */
+  .co-overview-row {
+    grid-template-columns: 1fr;
+  }
+
+  /* Ratio cards — 2 columns */
+  .ratio-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Business quality bar */
+  .bq-bar {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .bq-bar > *:nth-child(3) { text-align: left; }
+
+  /* SWOT grid — stack on phones */
+  .swot {
+    grid-template-columns: 1fr;
+  }
+
+  /* Valuation football field */
+  .vf-row {
+    grid-template-columns: 90px 1fr;
+    gap: 8px;
+  }
+
+  /* Ownership bar */
+  .own-seg {
+    font-size: 11px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   8. FORENSIC ANALYSIS
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .frc-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .frc-pio {
+    grid-template-columns: 1fr;
+  }
+
+  /* Score card numbers — scale down */
+  .frc-score-num {
+    font-size: clamp(28px, 7vw, 42px);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   9. MODELING LAB — DCF side panel + content
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Stack the DCF form + output vertically */
+  .panel.idcf-side {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    position: relative !important;
+    top: auto !important;
+  }
+
+  .dcf-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 10px;
+    padding: 10px 12px;
+  }
+
+  .dcf-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 10px;
+  }
+
+  .dcf-form input {
+    width: 100%;
+    font-size: 13px !important;
+  }
+
+  /* Valuation methods grid */
+  .vm-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Monte Carlo stats */
+  .mc-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* Football field */
+  .vf-row {
+    grid-template-columns: 85px 1fr;
+  }
+
+  /* VM verdict */
+  .vm-verdict {
+    grid-template-columns: 1fr;
+  }
+
+  /* IDCF KV grid */
+  .idcf-kv,
+  .idcf-verdict {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   10. RISK CENTER
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .rsk-head {
+    grid-template-columns: 1fr;
+  }
+
+  .rsk-cats {
+    grid-template-columns: 1fr;
+  }
+
+  /* Risk matrix — compact on mobile */
+  .rsk-m-row {
+    grid-template-columns: 60px repeat(5, 1fr);
+    font-size: 9px;
+  }
+
+  .rsk-m-dot {
+    width: 18px;
+    height: 18px;
+    font-size: 9px;
+  }
+
+  .rsk-reg-sev {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+
+  /* Risk register rows */
+  .rsk-reg-row {
+    font-size: 11px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   11. EARNINGS CALL
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .ec-head {
+    grid-template-columns: 1fr;
+  }
+
+  .ec-topic {
+    grid-template-columns: 75px 1fr 28px;
+  }
+
+  .ec-paste-panel textarea {
+    height: 160px;
+    font-size: 12px !important;
+  }
+
+  .ec-est-next {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   12. INDUSTRY ANALYSIS
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .ind-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .ind-sh-row {
+    grid-template-columns: 95px 1fr 38px;
+  }
+
+  /* Porter's five forces */
+  .ind-pf {
+    font-size: 11px;
+  }
+  .ind-pf-bar { height: 4px; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   13. MACRO INDICATORS
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .macro-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .macro-row {
+    font-size: 11px;
+  }
+
+  .macro-c {
+    font-size: 10px;
+    min-width: 42px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   14. NEWS & SENTIMENT
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .senti {
+    grid-template-columns: 1fr;
+  }
+
+  .evt-row {
+    grid-template-columns: 75px 1fr 24px;
+    font-size: 11px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   15. INSTITUTIONAL REPORT (.ir-*) — white-page output
+   The report is the trickiest: it's a white-bg document with fixed widths.
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  .report-canvas {
+    padding: 0;
+    border: none;
+    box-shadow: none;
+  }
+
+  .rpt {
+    padding: 14px 12px;
+  }
+
+  /* Cover page */
+  .ir-cover-main {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 16px 14px 0;
+  }
+
+  .ir-cover-left .ir-co {
+    font-size: clamp(20px, 6vw, 28px);
+  }
+
+  .ir-cover-right {
+    width: 100%;
+  }
+
+  .ir-keyfin td {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+
+  /* All IR tables — horizontal scroll */
+  .ir-fin {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    font-size: 10px;
+  }
+
+  .ir-fin td, .ir-fin th {
+    font-size: 10px;
+    padding: 4px 6px;
+    white-space: nowrap;
+  }
+
+  /* DCF summary */
+  .ir-dcf-summary {
+    grid-template-columns: 1fr;
+  }
+
+  /* Waterfall row */
+  .ir-ff-row {
+    grid-template-columns: 120px 1fr 50px;
+    gap: 8px;
+  }
+
+  /* SWOT */
+  .ir-swot {
+    grid-template-columns: 1fr;
+  }
+
+  /* Verdict footer */
+  .ir-verdict {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .ir-verdict > div {
+    padding: 12px 14px;
+  }
+
+  /* Report section headings */
+  .ir h2 {
+    font-size: 13px;
+    margin: 18px 0 8px;
+  }
+
+  /* Paragraphs in report */
+  .ir p {
+    font-size: 11.5px;
+    line-height: 1.65;
+  }
+
+  /* Composite summary box */
+  .ir-comp-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Factor table — scroll */
+  .ir-factor-tbl {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ir-factor-tbl td, .ir-factor-tbl th {
+    font-size: 10px;
+    white-space: nowrap;
+    padding: 4px 6px;
+  }
+  /* Allow evidence column to wrap */
+  .ir-factor-tbl td:last-child { white-space: normal; min-width: 120px; }
+
+  /* Valuation rationale */
+  .ir-val-rationale p { font-size: 11px; }
+
+  /* Forensic grid */
+  .ir-forensic-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   16. SCREENER — filter inputs + results table
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .screen-filters {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  .screen-filters input {
+    width: 100%;
+    font-size: 13px !important;
+  }
+
+  .screen-filters label {
+    font-size: 9px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   17. PORTFOLIO TAB
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Portfolio add row */
+  .pf-add {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  .pf-add input {
+    flex: 1;
+    min-width: 100px;
+    width: auto;
+  }
+
+  /* Allocation row */
+  .alloc-row {
+    grid-template-columns: 1fr auto;
+    gap: 6px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   18. CALCULATORS TAB — side nav + calculator content
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+
+  /* On tablets: calc nav becomes horizontal tabs */
+  #tab-calc .trow[style*="align-items:flex-start"] {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+  /* The sticky sidebar panel becomes full width */
+  #tab-calc .trow > .panel:first-child {
+    position: static !important;
+    top: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 768px) {
+
+  /* Calc nav becomes horizontal pill-tabs row */
+  .calc-nav {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 0;
+    padding-bottom: 2px;
+  }
+  .calc-nav::-webkit-scrollbar { display: none; }
+
+  .calc-grp {
+    display: flex;
+    flex-shrink: 0;
+    padding: 6px 8px;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .calc-gl {
+    font-size: 7px;
+    padding: 0 4px 4px;
+    white-space: nowrap;
+  }
+
+  .calc-link {
+    white-space: nowrap;
+    padding: 7px 10px;
+    border-left: 0;
+    border-bottom: 2px solid transparent;
+    min-width: auto;
+    min-height: 38px;
+  }
+
+  .calc-link b { font-size: 11px; }
+  .calc-link span { display: none; } /* hide description on tiny screens */
+
+  .calc-link.active {
+    border-bottom-color: var(--amber);
+    border-left-color: transparent;
+  }
+
+  /* Calculator grid: stack input / assumptions / result */
+  .cal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cal {
+    padding: 10px 12px;
+  }
+
+  /* Range buttons in calc scenarios */
+  .cal-stable td, .cal-stable th {
+    padding: 5px 7px;
+    font-size: 10px;
+  }
+
+  /* Chart — full width and slightly taller */
+  .cal-chart {
+    height: 200px !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   19. LEARNING CENTER TAB — side nav + topic content
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  #tab-learn .trow[style*="align-items:flex-start"] {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+  #tab-learn .trow > .panel:first-child {
+    position: static !important;
+    top: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 768px) {
+
+  /* Learn nav: horizontal scroll row of group+items */
+  .learn-nav {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .learn-nav::-webkit-scrollbar { display: none; }
+
+  .learn-grp {
+    flex-shrink: 0;
+    padding: 6px 8px;
+    flex-direction: column;
+    gap: 0;
+    display: flex;
+  }
+
+  .learn-gl {
+    font-size: 7px;
+    padding: 0 4px 4px;
+    white-space: nowrap;
+  }
+
+  .learn-link {
+    white-space: nowrap;
+    padding: 7px 10px;
+    border-left: 0;
+    border-bottom: 2px solid transparent;
+    min-height: 38px;
+  }
+
+  .learn-link b { font-size: 11px; }
+  .learn-link span { display: none; }
+
+  .learn-link.active {
+    border-bottom-color: var(--amber);
+    border-left-color: transparent;
+  }
+
+  /* Topic content */
+  .learn-doc {
+    padding: 12px 12px;
+  }
+
+  .learn-sec {
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+  }
+
+  .learn-sh h4 {
+    font-size: 14px;
+  }
+
+  .learn-sb {
+    font-size: 12px;
+  }
+
+  /* Learning visualisations */
+  .lv-row {
+    grid-template-columns: 70px 1fr 1fr 100px;
+    font-size: 10px;
+  }
+
+  /* Learning table */
+  .learn-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .lt-row {
+    grid-template-columns: 1fr 2fr;
+    font-size: 11px;
+  }
+  .lt-row > span:nth-child(3) { display: none; } /* hide 3rd col on xs */
+
+  /* Related concept tags */
+  .learn-rel {
+    gap: 6px;
+  }
+  .learn-rel a {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   20. INTERACTIVE PRICE CHART (Market Intelligence full-size + Research compact)
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  .pc-wrap {
+    padding: 10px 12px;
+  }
+
+  /* Search bar: stack full width */
+  .pc-search {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .pc-search input { flex: 1 1 100%; font-size: 13px !important; }
+  .pc-search .mini-btn { flex: 0 0 auto; min-height: 38px; }
+
+  /* Suggest dropdown — full width */
+  .pc-suggest {
+    right: 0;
+    font-size: 10.5px;
+  }
+  .pc-sugg-item {
+    grid-template-columns: 80px 1fr;
+  }
+  .pc-sugg-item i { display: none; }
+
+  /* Price header */
+  .pc-px { font-size: clamp(16px, 4.5vw, 22px); }
+  .pc-chg { font-size: 11px; }
+
+  /* Range buttons — horizontal scroll pill row */
+  .pc-ranges {
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    gap: 0;
+  }
+  .pc-ranges::-webkit-scrollbar { display: none; }
+
+  .pc-rb {
+    padding: 5px 10px;
+    font-size: 10px;
+    white-space: nowrap;
+    min-height: 38px;
+    flex-shrink: 0;
+  }
+
+  /* Chart canvas — full width, reduced height on tiny screens */
+  .pc-canvas {
+    height: clamp(180px, 40vw, 300px) !important;
+  }
+
+  /* Compact research chart */
+  .pc-compact .pc-canvas {
+    height: clamp(140px, 30vw, 200px) !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   21. PANEL TOOLS — search inputs in panels
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .panel-tools {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 10px;
+    width: 100%;
+  }
+
+  .panel-tools input,
+  .panel-tools select {
+    width: 100% !important;
+    max-width: 100% !important;
+    font-size: 13px !important;
+    min-height: 40px;
+  }
+
+  .panel-tools button,
+  .panel-tools .mini-btn {
+    min-height: 40px;
+    padding: 0 14px;
+    font-size: 11px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   22. BUTTONS — thumb-friendly sizing
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .btn,
+  .btn-amber,
+  .mini-btn {
+    min-height: 40px;
+    padding: 8px 14px;
+    font-size: 12px;
+    touch-action: manipulation;
+  }
+
+  /* Full-width CTAs */
+  .btn-amber[style*="width:100%"] {
+    min-height: 44px;
+    font-size: 13px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   23. FORM INPUTS — prevent zoom, proper sizing
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* All text inputs */
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  textarea,
+  select {
+    font-size: clamp(14px, 3.5vw, 16px) !important;
+    min-height: 40px;
+    padding: 8px 10px;
+    -webkit-appearance: none;
+    border-radius: 0;
+  }
+
+  /* Textarea */
+  textarea {
+    min-height: 120px;
+    max-height: 240px;
+    resize: vertical;
+  }
+
+  /* Remove iOS inner shadow */
+  input[type="text"], input[type="number"] {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   24. TYPOGRAPHY SCALING
+   Uses clamp() to smoothly scale between minimum (320px) and ideal (768px+)
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  .commentary {
+    font-size: clamp(12px, 3.2vw, 14px);
+    padding: 12px 12px;
+    line-height: 1.7;
+  }
+
+  .prose {
+    font-size: clamp(11.5px, 3vw, 13px);
+    padding: 10px 12px;
+    line-height: 1.7;
+  }
+
+  /* Prevent text from overflowing narrow columns */
+  .nm,
+  .cmd-result .nm {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   25. HEATMAP — sector boxes should remain square-ish
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .heatmap {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  }
+
+  .hm-cell {
+    padding: 10px 8px;
+    font-size: 11px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   26. REPORT GENERATION PAGE
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .report-controls {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .report-controls input {
+    width: 100%;
+    font-size: 13px !important;
+  }
+
+  .report-controls select,
+  .report-controls button {
+    min-height: 40px;
+  }
+
+  .report-canvas {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  /* Monochrome report: fonts scale */
+  .ir {
+    font-size: 11.5px;
+    padding: 0;
+  }
+
+  .ir-band {
+    padding: 10px 14px;
+    font-size: 9px;
+  }
+
+  /* Rating box on cover */
+  .ir-rec-box {
+    padding: 10px 14px;
+  }
+
+  .ir-rec {
+    font-size: 18px;
+    letter-spacing: 0.1em;
+  }
+
+  /* Highlights list */
+  .ir-highlights {
+    padding: 14px 14px;
+  }
+
+  .ir-hi-list {
+    padding-left: 16px;
+  }
+
+  .ir-hi-list li {
+    font-size: 11.5px;
+    line-height: 1.6;
+    margin-bottom: 6px;
+  }
+
+  .ir-lead {
+    font-size: 12px;
+    line-height: 1.65;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   27. LIBRARY TAB — search + cards
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .lib-search {
+    padding: 10px 12px;
+  }
+
+  .lib-search input {
+    width: 100%;
+    font-size: 13px !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   28. EMPTY STATES & MINI STATES
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .empty-state {
+    padding: 30px 16px;
+  }
+
+  .empty-state .dim {
+    max-width: 100%;
+    font-size: 11.5px;
+  }
+
+  .empty-mini {
+    font-size: 11px;
+    padding: 10px 12px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   29. ANDROID CHROME — SPECIFIC OPTIMISATIONS
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  /* GPU-composited scrolling for panels */
+  .tmain,
+  .trow,
+  .table-wrap,
+  .calc-nav,
+  .learn-nav {
+    will-change: scroll-position;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Prevent pull-to-refresh on main content area (causes accidental refreshes) */
+  body {
+    overscroll-behavior-y: none;
+  }
+
+  /* Disable text selection highlights on buttons/nav (reduces repaint) */
+  .ttabs button,
+  .m-drawer-tabs button,
+  .calc-link,
+  .learn-link {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Smooth font rendering */
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   30. SMALL PHONE OVERRIDES (max 380px — galaxy s-series, pixel compact)
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 380px) {
+
+  .wordmark { font-size: 13px; letter-spacing: 0.08em; }
+
+  .panel-h h3 { font-size: 8.5px; letter-spacing: 0.12em; }
+
+  .kv {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .kv-item label { font-size: 8px; }
+  .kv-item .kv-v { font-size: 13px; }
+
+  .tape {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .frc-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .ir-comp-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .mc-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Calc nav: show icons only */
+  .calc-link b { font-size: 10px; }
+
+  .pc-canvas { height: 160px !important; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   31. SIDE PANELS — override inline min-width styles with !important
+   These panels have inline style="min-width:Xpx" which beats class selectors.
+   On mobile they must become full-width stacked, not side-by-side columns.
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .m-side-panel {
+    /* Beat inline style specificity */
+    min-width: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    position: relative !important;
+    top: auto !important;
+    /* Remove sticky sidebar behaviour on mobile */
+    flex-shrink: 0;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   32. CROSS-ASSET MATRIX — table on mobile
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .mx {
+    font-size: 9.5px;
+  }
+  .mx td {
+    min-width: 44px;
+    padding: 4px 5px;
+  }
+  /* Wrap the whole matrix in a scroll container */
+  .matrix-wrap,
+  .trow > .panel > .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   33. REPORT GENERATION — report-controls layout fix
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .report-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+    padding: 10px 12px;
+  }
+  .report-controls select,
+  .report-controls input {
+    width: 100% !important;
+  }
+  .report-controls .btn,
+  .report-controls .btn-amber {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   34. WORD EXPORT BUTTON ROW
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .rpt-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+  }
+  .rpt-actions button {
+    flex: 1;
+    min-width: 120px;
+    min-height: 40px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   35. SCREENER — result table override
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .screen-table {
+    font-size: 10px;
+  }
+  .screen-table th,
+  .screen-table td {
+    padding: 5px 7px;
+    white-space: nowrap;
+  }
+  /* Results count + status */
+  .screen-status {
+    font-size: 10px;
+    padding: 8px 12px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   36. PORTFOLIO — holdings table
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .pf-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .pf-table td,
+  .pf-table th {
+    font-size: 10.5px;
+    padding: 6px 8px;
+    white-space: nowrap;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   37. CHART CANVAS ELEMENTS — general resize safety net
+   The chart drawing functions use canvas.offsetWidth which requires the
+   canvas to have a defined CSS width. On mobile this ensures no overflow.
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  canvas {
+    max-width: 100% !important;
+    display: block;
+  }
+  canvas.chart {
+    height: 180px;
+  }
+  .mc-canvas {
+    height: 140px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   38. LEARN TABLE — 3-col → 2-col on tablets, 1-col on phones
+────────────────────────────────────────────────────────────────────────── */
+@media (min-width: 481px) and (max-width: 768px) {
+  .lt-row {
+    grid-template-columns: 1fr 2fr;
+  }
+  .lt-row > span:nth-child(3) { display: none; }
+}
+
+@media (max-width: 480px) {
+  .lt-row {
+    grid-template-columns: 1fr;
+  }
+  .lt-row > span:nth-child(2),
+  .lt-row > span:nth-child(3) { display: none; }
+  .lt-row > span:nth-child(1) { font-weight: 600; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   39. VISUAL OVERFLOW SAFETY — final catch-all
+   Any element wider than the viewport on mobile gets hidden overflow.
+   This is a safety net, not a substitute for fixing the root cause.
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Sections that render dynamic content — ensure they can't overflow */
+  #researchBody,
+  #forensicBody,
+  #riskBody,
+  #modelsBody,
+  #reportsBody,
+  #earningsBody,
+  #screenerBody,
+  #portfolioBody,
+  #newsBody,
+  #marketCommentary {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   40. SAFE AREA INSETS — for Android phones with notches / camera cutouts
+────────────────────────────────────────────────────────────────────────── */
+@supports (padding: max(0px)) {
+  @media (max-width: 768px) {
+    .tbar {
+      padding-left: max(12px, env(safe-area-inset-left));
+      padding-right: max(12px, env(safe-area-inset-right));
+    }
+    .tmain {
+      padding-bottom: max(80px, calc(env(safe-area-inset-bottom) + 60px));
+    }
+  }
+}

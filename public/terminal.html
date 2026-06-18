@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0d1117" />
+  <title>MERIDIAN Terminal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/terminal.css" />
+  <link rel="stylesheet" href="/mobile.css" />
+</head>
+<body class="term-body">
+
+  <!-- ── Top bar: brand · global command bar · status ── -->
+  <header class="tbar">
+    <a class="wordmark" href="/">MERIDIAN<span class="wordmark-tick">▮</span></a>
+    <div class="tcmd" id="tcmd">
+      <span class="cmd-prompt">/</span>
+      <input id="tcmdInput" placeholder="Company or ticker — loads the Research Workstation (e.g. RELIANCE.NS, TCS, AAPL)" autocomplete="off" spellcheck="false" />
+      <div class="cmd-results" id="tcmdResults" hidden></div>
+    </div>
+    <span class="live-dot" id="termLive"><i></i>LIVE</span>
+    <!-- Mobile-only hamburger -->
+    <button class="m-menu-btn" id="mMenuBtn" aria-label="Open navigation" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+  </header>
+
+  <!-- Mobile-only tab drawer overlay -->
+  <div class="m-drawer-overlay" id="mDrawerOverlay" aria-hidden="true"></div>
+  <nav class="m-drawer" id="mDrawer" aria-label="Module navigation" hidden>
+    <div class="m-drawer-head">
+      <span class="mono" style="font-size:10px;letter-spacing:.12em;color:var(--amber)">MODULES</span>
+      <button class="m-drawer-close" id="mDrawerClose" aria-label="Close navigation">✕</button>
+    </div>
+    <div class="m-drawer-tabs" id="mDrawerTabs">
+      <!-- populated by JS from ttabs -->
+    </div>
+  </nav>
+
+  <!-- ── Module tabs ── -->
+  <nav class="ttabs" id="ttabs">
+    <button data-tab="markets" class="active">Market Intelligence</button>
+    <button data-tab="research">Equity Research</button>
+    <button data-tab="earnings">Earnings Call</button>
+    <button data-tab="forensic">Forensic Analysis</button>
+    <button data-tab="models">Modeling Lab</button>
+    <button data-tab="risk">Risk Center</button>
+    <button data-tab="reports">Report Generation</button>
+    <button data-tab="screener">Screener</button>
+    <button data-tab="portfolio">Portfolio</button>
+    <button data-tab="news">News &amp; Sentiment</button>
+    <button data-tab="calc">Calculators</button>
+    <button data-tab="learn">Learning Center</button>
+    <button data-tab="library">Library</button>
+  </nav>
+
+  <main class="tmain">
+
+    <!-- ════ TAB · MARKET INTELLIGENCE ════ -->
+    <section class="tab" id="tab-markets">
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>GLOBAL TAPE</h3><span class="panel-sub mono" id="tapeAsOf"></span></div>
+          <div class="tape" id="tape"></div>
+        </div>
+        <div class="panel m-side-panel" style="min-width:280px">
+          <div class="panel-h"><h3>MARKET BREADTH · NIFTY UNIVERSE</h3></div>
+          <div id="breadth" class="breadth"><div class="loading mono">scanning universe…</div></div>
+        </div>
+      </div>
+
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>SECTOR HEATMAP · NSE</h3><span class="panel-sub mono">size-equal · colour = day change</span></div>
+          <div class="heatmap" id="heatmap"></div>
+        </div>
+      </div>
+
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>CROSS-ASSET MATRIX</h3>
+            <div class="panel-tools mono">
+              <input id="matrixSymbols" value="^NSEI,^NSEBANK,^CNXIT,^GSPC,GC=F,USDINR=X,BTC-USD" spellcheck="false" />
+              <select id="matrixRange"><option value="3mo">3M</option><option value="6mo" selected>6M</option><option value="1y">1Y</option></select>
+              <button class="mini-btn" id="matrixRun">Run</button>
+            </div>
+          </div>
+          <div id="matrix"><div class="loading mono">computing correlations, volatility, momentum…</div></div>
+        </div>
+      </div>
+
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>MARKET ANALYSIS ENGINE</h3><span class="panel-sub mono">deterministic — computed from the data above</span></div>
+          <div class="commentary" id="marketCommentary"></div>
+        </div>
+      </div>
+
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>INTERACTIVE PRICE CHART</h3><span class="panel-sub mono">any index · stock · currency · commodity · crypto — 1D to 5Y</span></div>
+          <div id="miPriceChart"></div>
+        </div>
+      </div>
+
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>INDUSTRY &amp; COMPETITIVE ANALYSIS</h3>
+            <div class="panel-tools mono">
+              <input id="indSym" value="" placeholder="ticker — e.g. RELIANCE.NS" spellcheck="false" style="text-transform:uppercase" />
+              <button class="mini-btn" id="indRun">Analyze</button>
+            </div>
+          </div>
+          <div id="industryOut"><div class="empty-mini mono">Enter a company to analyze its industry — sector aggregates, market-share structure, Porter's Five Forces, industry economics and lifecycle stage. Auto-loads with the company open in Research.</div></div>
+        </div>
+      </div>
+
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>MACRO INDICATORS</h3><span class="panel-sub mono" id="macroAsOf">live · rates · FX · commodities · volatility</span></div>
+          <div id="macroOut"><div class="loading mono" style="padding:20px">loading macro snapshot…</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · EQUITY RESEARCH WORKSTATION ════ -->
+    <section class="tab" id="tab-research" hidden>
+      <div class="empty-state" id="researchEmpty">
+        <p class="mono">EQUITY RESEARCH WORKSTATION</p>
+        <h2>Type a company in the command bar above.</h2>
+        <p class="dim">The workstation pulls live data and builds the full analysis — overview, statements, ratio library, variance drivers, peers, positioning and valuation.</p>
+        <div class="chip-row" id="quickPicks"></div>
+      </div>
+      <div id="researchBody" hidden></div>
+    </section>
+
+    <!-- ════ TAB · FINANCIAL MODELING LAB ════ -->
+    <section class="tab" id="tab-models" hidden>
+      <div class="trow" style="align-items:flex-start">
+        <div class="panel idcf-side m-side-panel" style="min-width:300px;max-width:330px;position:sticky;top:12px">
+          <div class="panel-h"><h3>DCF · ASSUMPTIONS</h3><span class="panel-sub mono" id="dcfFor"></span></div>
+          <div class="dcf-form" id="dcfForm"><div class="empty-mini mono">Load a company in Research, or type a ticker:</div><label>Ticker<input id="idcfSym" type="text" placeholder="e.g. RELIANCE.NS" style="text-transform:uppercase"></label><button class="btn btn-amber" id="idcfLoad" style="width:100%;margin-top:8px">Build model</button></div>
+          <div id="idcfStatus" class="panel-sub mono" style="padding:10px 16px"></div>
+        </div>
+        <div class="panel grow">
+          <div class="panel-h"><h3>INSTITUTIONAL DCF MODEL</h3><span class="panel-sub mono" id="idcfMeta">17-section FCFF working · recomputes on every assumption change</span></div>
+          <div id="idcfOut"><div class="empty-mini mono">The full analyst-grade DCF — historical foundation, forecast build-up, EBIT→NOPAT→FCFF schedule, WACC, discounting, terminal value, EV bridge, sensitivity, scenarios and AI commentary — renders here.</div></div>
+        </div>
+      </div>
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>RELATIVE VALUATION · COMPARABLE COMPANIES</h3><span class="panel-sub mono" id="compsFor"></span></div>
+          <div id="compsOut"><div class="empty-mini mono">Loads automatically with peer data from the Research tab.</div></div>
+        </div>
+      </div>
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>VALUATION METHODS · BLENDED TARGET</h3><span class="panel-sub mono" id="valFor"></span></div>
+          <div id="valMethodsOut"><div class="empty-mini mono">EV/EBITDA, P/E, PEG, Residual Income, Dividend Discount, Sum-of-Parts and DCF — each with full workings, plotted on a football field and blended into one target. Loads with the model.</div></div>
+        </div>
+      </div>
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>MONTE CARLO SIMULATION</h3><span class="panel-sub mono" id="mcFor"></span></div>
+          <div id="mcOut"><div class="empty-mini mono">5,000-run simulation flexing growth, margin, WACC and terminal growth — shows the full distribution of intrinsic value and the probability of upside.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · EARNINGS CALL ════ -->
+    <section class="tab" id="tab-earnings" hidden>
+      <div class="trow" style="align-items:flex-start">
+        <div class="panel m-side-panel" style="min-width:300px;max-width:340px;position:sticky;top:12px">
+          <div class="panel-h"><h3>EARNINGS CALL</h3></div>
+          <div style="padding:14px 16px">
+            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:6px">Paste transcript below</label>
+            <textarea id="ecPaste" placeholder="Paste an earnings-call transcript here — any format, any company. Meridian will compute management tone, guidance, risk mentions, competitor mentions, topic frequency and per-speaker sentiment." style="width:100%;height:240px;background:var(--ink);border:1px solid var(--hairline);color:var(--fg);padding:10px;font-family:var(--mono);font-size:11px;line-height:1.5;resize:vertical"></textarea>
+            <button class="btn btn-amber" id="ecAnalyze" style="width:100%;margin-top:10px">Analyse transcript</button>
+            <div id="ecStatus" class="panel-sub mono" style="margin-top:10px"></div>
+            <div class="note" style="font-size:10px;color:var(--muted-ink);line-height:1.6;margin-top:14px;border-top:1px solid var(--hairline);padding-top:12px">
+              Paste any earnings call transcript — from Seeking Alpha, the company's IR site, or your own notes. The full analysis (tone, guidance, risks, competitors, topics, speaker-by-speaker sentiment) runs locally on the text. Nothing is sent to an external AI.
+            </div>
+          </div>
+        </div>
+        <div class="panel grow">
+          <div class="panel-h"><h3>EARNINGS CALL ANALYSIS</h3><span class="panel-sub mono" id="ecFor"></span></div>
+          <div id="ecOut"><div class="empty-mini mono">Paste an earnings-call transcript on the left and click Analyse — Meridian computes management tone (0–100), guidance statements, risk mentions, competitor references, topic frequency and per-speaker sentiment. Every signal is traceable directly to the text.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · FORENSIC ANALYSIS ════ -->
+    <section class="tab" id="tab-forensic" hidden>
+      <div class="trow" style="align-items:flex-start">
+        <div class="panel m-side-panel" style="min-width:280px;max-width:300px;position:sticky;top:12px">
+          <div class="panel-h"><h3>FORENSIC ANALYSIS</h3></div>
+          <div style="padding:14px 16px">
+            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:6px">Ticker</label>
+            <input id="frcSym" type="text" placeholder="e.g. RELIANCE.NS" style="text-transform:uppercase;width:100%;background:var(--ink);border:1px solid var(--hairline);color:var(--fg);padding:8px 10px;font-family:var(--mono);font-size:12px">
+            <button class="btn btn-amber" id="frcLoad" style="width:100%;margin-top:10px">Run forensic scan</button>
+            <div id="frcStatus" class="panel-sub mono" style="margin-top:12px"></div>
+            <div class="note" style="font-size:10px;color:var(--muted-ink);line-height:1.5;margin-top:12px">Screens earnings quality, cash-flow quality, accounting quality and financial-distress risk using the Piotroski, Altman and Beneish models — every component shown and auditable.</div>
+          </div>
+        </div>
+        <div class="panel grow">
+          <div class="panel-h"><h3>FORENSIC SCORECARD</h3><span class="panel-sub mono" id="frcFor"></span></div>
+          <div id="frcOut"><div class="empty-mini mono">Run a forensic scan to see the earnings-quality, cash-flow, accounting and distress-risk scorecard — Piotroski F, Altman Z, Beneish M, working-capital trend and red-flag detection.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · RISK CENTER ════ -->
+    <section class="tab" id="tab-risk" hidden>
+      <div class="trow" style="align-items:flex-start">
+        <div class="panel m-side-panel" style="min-width:280px;max-width:300px;position:sticky;top:12px">
+          <div class="panel-h"><h3>RISK CENTER</h3></div>
+          <div style="padding:14px 16px">
+            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:6px">Ticker</label>
+            <input id="rskSym" type="text" placeholder="e.g. RELIANCE.NS" style="text-transform:uppercase;width:100%;background:var(--ink);border:1px solid var(--hairline);color:var(--fg);padding:8px 10px;font-family:var(--mono);font-size:12px">
+            <button class="btn btn-amber" id="rskLoad" style="width:100%;margin-top:10px">Assess risk</button>
+            <div id="rskStatus" class="panel-sub mono" style="margin-top:12px"></div>
+            <div class="note" style="font-size:10px;color:var(--muted-ink);line-height:1.5;margin-top:12px">Scores business, financial, valuation, governance, market, regulatory, ESG and industry risks — each with a computed probability × impact, plotted on a 5×5 matrix, rolled into a composite risk score and downside scenarios.</div>
+          </div>
+        </div>
+        <div class="panel grow">
+          <div class="panel-h"><h3>RISK ASSESSMENT</h3><span class="panel-sub mono" id="rskFor"></span></div>
+          <div id="rskOut"><div class="empty-mini mono">Assess a company to see its composite risk score, probability×impact matrix, category breakdown, scored risk register and downside scenarios.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · AI RESEARCH ENGINE ════ -->
+    <section class="tab" id="tab-reports" hidden>
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>GENERATE RESEARCH</h3><span class="panel-sub mono" id="aiMode"></span></div>
+          <div class="report-controls">
+            <input id="reportSymbol" class="mono" placeholder="Symbol — e.g. RELIANCE.NS" spellcheck="false" />
+            <select id="reportType">
+              <option>Initiating Coverage</option>
+              <option>Sell-Side Research Report</option>
+              <option>Buy-Side Research Note</option>
+              <option>Investment Memo</option>
+              <option>Earnings Review</option>
+            </select>
+            <button class="btn btn-amber" id="reportGo">Generate report</button>
+            <span class="mono dim" id="reportStatus"></span>
+          </div>
+        </div>
+      </div>
+      <div class="report-actions" id="reportActions" hidden>
+        <button class="mini-btn" id="reportPrint">Print / PDF</button>
+        <button class="mini-btn" id="reportDoc">Download .doc</button>
+        <button class="mini-btn" id="reportSave">Save to Library</button>
+      </div>
+      <div class="report-canvas" id="reportCanvas"></div>
+    </section>
+
+    <!-- ════ TAB · SCREENER ════ -->
+    <section class="tab" id="tab-screener" hidden>
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>SCREENER &amp; DISCOVERY</h3><span class="panel-sub mono" id="screenInfo">first scan takes 2–3 min (paced to avoid rate limits), then cached 6h</span></div>
+          <div class="screen-filters mono" id="screenFilters">
+            <label>Mcap ≥ <input id="f_mcap" type="number" placeholder="₹ Cr" /></label>
+            <label>P/E ≤ <input id="f_pe" type="number" /></label>
+            <label>ROE ≥ <input id="f_roe" type="number" />%</label>
+            <label>Rev gr ≥ <input id="f_rg" type="number" />%</label>
+            <label>Net mgn ≥ <input id="f_nm" type="number" />%</label>
+            <label>D/E ≤ <input id="f_de" type="number" step="0.1" /></label>
+            <label>Sector <select id="f_sector"><option value="">All</option></select></label>
+            <button class="mini-btn" id="screenApply">Apply</button>
+            <button class="mini-btn" id="screenReset">Reset</button>
+          </div>
+          <div id="screenIdeas"></div>
+          <div class="table-wrap"><table class="dt" id="screenTable"></table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · PORTFOLIO ════ -->
+    <section class="tab" id="tab-portfolio" hidden>
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>HOLDINGS</h3><span class="panel-sub mono">stored locally in your browser</span></div>
+          <div class="pf-add mono">
+            <input id="pfSym" placeholder="SYMBOL e.g. TCS.NS" spellcheck="false" />
+            <input id="pfQty" type="number" placeholder="Qty" />
+            <input id="pfCost" type="number" placeholder="Avg cost" />
+            <button class="mini-btn" id="pfAdd">Add</button>
+            <button class="mini-btn" id="pfRefresh">Refresh prices</button>
+          </div>
+          <div class="table-wrap"><table class="dt" id="pfTable"></table></div>
+        </div>
+        <div class="panel m-side-panel" style="min-width:300px">
+          <div class="panel-h"><h3>PORTFOLIO ANALYTICS</h3></div>
+          <div id="pfStats" class="breadth"></div>
+        </div>
+      </div>
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>ALLOCATION &amp; EXPOSURE</h3></div>
+          <div id="pfAlloc"></div>
+        </div>
+        <div class="panel grow">
+          <div class="panel-h"><h3>HOLDINGS CORRELATION &amp; RISK</h3><span class="panel-sub mono">6-month daily returns</span></div>
+          <div id="pfRisk"><div class="empty-mini mono">Add 2+ holdings and refresh.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · NEWS & SENTIMENT ════ -->
+    <section class="tab" id="tab-news" hidden>
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>NEWS &amp; MARKET SENTIMENT</h3>
+            <div class="panel-tools mono">
+              <select id="newsMode"><option value="company">Company</option><option value="industry">Industry</option><option value="market">Market</option></select>
+              <input id="newsQuery" value="NIFTY" spellcheck="false" />
+              <button class="mini-btn" id="newsGo">Fetch</button>
+            </div>
+          </div>
+          <div id="newsAgg"></div>
+        </div>
+      </div>
+      <div class="trow">
+        <div class="panel m-side-panel" style="min-width:300px"><div class="panel-h"><h3>EVENT TRACKER</h3><span class="panel-sub mono">tagged headlines</span></div><div id="eventTracker"><div class="empty-mini mono">Fetch news to track corporate events.</div></div></div>
+        <div class="panel grow"><div class="panel-h"><h3>HEADLINES</h3><span class="panel-sub mono" id="newsCount"></span></div><div id="newsList"><div class="loading mono">loading…</div></div></div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · CALCULATORS ════ -->
+    <section class="tab" id="tab-calc" hidden>
+      <div class="trow" style="align-items:flex-start">
+        <div class="panel m-side-panel" style="min-width:240px;max-width:260px;position:sticky;top:12px">
+          <div class="panel-h"><h3>CALCULATORS</h3></div>
+          <div class="calc-nav" id="calcNav"></div>
+        </div>
+        <div class="panel grow">
+          <div class="panel-h"><h3 id="calcTitle">Select a calculator</h3><span class="panel-sub mono" id="calcSub"></span></div>
+          <div id="calcOut"><div class="empty-mini mono">Pick a calculator from the left. Investment Suite is general-purpose (SIP, SWP, Retirement, Lumpsum, Inflation, Wealth). ESOP Suite is for employees / founders evaluating stock options — enter a listed company ticker to auto-fill share count and price.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · LEARNING CENTER ════ -->
+    <section class="tab" id="tab-learn" hidden>
+      <div class="trow" style="align-items:flex-start">
+        <div class="panel m-side-panel" style="min-width:240px;max-width:260px;position:sticky;top:12px">
+          <div class="panel-h"><h3>LEARNING CENTER</h3></div>
+          <div class="learn-nav" id="learnNav"></div>
+        </div>
+        <div class="panel grow">
+          <div class="panel-h"><h3 id="learnTitle">Equity Investing Basics</h3><span class="panel-sub mono">finance concepts in plain language</span></div>
+          <div id="learnOut"><div class="empty-mini mono">Welcome. Pick a topic on the left — every concept is explained in plain English with a real example, why it matters, common mistakes, and an interactive calculator where relevant. No finance background assumed.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · LIBRARY ════ -->
+    <section class="tab" id="tab-library" hidden>
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>RESEARCH DOCUMENT CENTER</h3><span class="panel-sub mono">saved on the server — survives restarts</span></div>
+          <div id="libraryList"><div class="loading mono">loading…</div></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="/terminal.js"></script>
+  <script src="/chart-component.js"></script>
+  <script src="/terminal-modules.js"></script>
+  <script src="/calculators.js"></script>
+  <script src="/learning.js"></script>
+</body>
+</html>
