@@ -204,13 +204,101 @@ a:hover .arr { transform: translateX(4px); }
 .final-h { font-family: var(--sans); font-weight: 600; font-size: clamp(40px, 6.5vw, 92px); line-height: 0.98; letter-spacing: -0.04em; margin-bottom: 44px; }
 
 /* ── FOOTER ── */
-.footer { border-top: 1px solid var(--line); max-width: 1320px; margin: 0 auto; padding: 56px 40px 40px; }
-.footer-top { display: flex; align-items: center; justify-content: space-between; gap: 30px; flex-wrap: wrap; }
-.footer-links { display: flex; gap: 30px; flex-wrap: wrap; }
-.footer-links a { font-size: 14px; color: var(--ink-soft); }
-.footer-links a:hover { color: var(--ink); }
-.footer-legal { margin-top: 50px; padding-top: 22px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.footer {
+  border-top: 1px solid var(--line);
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 34px 40px 20px;
+}
 
+.footer-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.footer-links {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  white-space: nowrap;
+}
+
+.footer-links a {
+  position: relative;
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.footer-links a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  width: 0;
+  height: 1px;
+  background: var(--ink);
+  transition: width 0.2s ease;
+}
+
+.footer-links a:hover {
+  color: var(--ink);
+}
+
+.footer-links a:hover::after {
+  width: 100%;
+}
+
+.footer-separator {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.footer-legal {
+  margin-top: 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* ── MOBILE ── */
+@media (max-width: 640px) {
+  .footer {
+    padding: 22px 20px 16px;
+  }
+
+  .footer-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding-bottom: 14px;
+  }
+
+  .footer-links {
+    gap: 8px;
+  }
+
+  .footer-links a,
+  .footer-separator {
+    font-size: 11px;
+  }
+
+  .footer-legal {
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 13px;
+    font-size: 10px;
+    line-height: 1.4;
+  }
+}
 /* ── RESPONSIVE ── */
 @media (max-width: 1024px) {
   .pipe { grid-template-columns: 1fr; }
