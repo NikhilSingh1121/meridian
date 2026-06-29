@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/png" href="/logo.png">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>M-Terminal — Market research & Equity analysis</title>
+  <meta name="description" content="From ticker to defensible research reports in minutes. Every number computed. Every claim cited." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/landing-mobile.css" />
+</head>
+<body>
+
+  <header class="nav" id="nav">
+    <div class="nav-inner">
+      <a class="brand" href="/">MERIDIAN</a>
+      <nav class="nav-links">
+        <a href="#services">Platform</a>
+        <a href="#showcase">Research</a>
+        <a href="#trust">Methodology</a>
+        <a href="#feedback">Feedback</a>
+      </nav>
+      <a class="nav-cta" href="/terminal">Open the Terminal <span class="arr">&rarr;</span></a>
+    </div>
+  </header>
+
+  <!-- ════ HERO (parallax mountain terrain) ════ -->
+  <section class="hero" id="hero">
+    <canvas id="terrain" class="terrain" aria-hidden="true"></canvas>
+    <div class="hero-fog"></div>
+    <div class="hero-top">
+      <div class="hero-inner">
+        <div class="hero-main">
+          <p class="eyebrow reveal-up">Equity research & Market Analysis &middot; AI-Based</p>
+          <h1 class="hero-h1">
+            <span class="line reveal-up" style="--d:.05s">Institutional</span>
+            <span class="line reveal-up" style="--d:.14s">research,</span>
+            <span class="line reveal-up accent" style="--d:.24s">rebuilt.</span>
+          </h1>
+        </div>
+        <div class="hero-aside reveal-up" style="--d:.4s">
+          <p>From a ticker to a defensible, fully-cited research report &mdash; in minutes, for analysts, RIAs, family offices and research desks.</p>
+          <a class="under-link" href="#services">What the platform does <span class="arr">&rarr;</span></a>
+        </div>
+      </div>
+    </div>
+    <div class="hero-statement">
+      <p class="eyebrow center" style="margin-bottom:24px">The platform</p>
+      <p class="reveal-words big">An AI-native research platform that computes every number, cites every claim, and generates institutional-grade equity research at scale.</p>
+    </div>
+    <div class="ticker" aria-label="Live market ticker">
+      <div class="ticker-track" id="tickerTrack"></div>
+    </div>
+  </section>
+
+  <!-- ════ STATS (immediately after hero, like reference) ════ -->
+  <section class="section stats" id="stats">
+    <div class="stats-grid">
+      <div class="stats-left">
+        <p class="eyebrow">By the numbers</p>
+        <h2 class="stats-statement reveal-words">Where financial data becomes investment intelligence.Track market movements in real time, analyze companies, model valuations, analyze forensic risk & financials and generate research reports — within a single platform.</h2>
+      </div>
+      <div class="stats-right">
+        <div class="stat-cell reveal-up"><span class="stat-num mono" data-to="2000" data-suf="+">0</span><span class="stat-cap">Companies covered</span></div>
+        <div class="stat-cell reveal-up"><span class="stat-num mono" data-to="48000" data-suf="+">0</span><span class="stat-cap">Filings processed</span></div>
+        <div class="stat-cell reveal-up"><span class="stat-num mono" data-to="12500" data-suf="+">0</span><span class="stat-cap">Reports generated</span></div>
+        <div class="stat-cell reveal-up"><span class="stat-num mono" data-to="9400" data-suf="+">0</span><span class="stat-cap">Transcript hours analyzed</span></div>
+        <div class="stat-cell reveal-up wide"><span class="stat-num mono" data-to="60" data-suf="M+">0</span><span class="stat-cap">Financial data points</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════ SERVICES (Tres Mares-style pinned sequence) ════ -->
+  <section class="services" id="services">
+    <div class="services-sticky">
+      <div class="services-stage-full">
+        <canvas id="svcCanvas" class="svc-canvas" aria-hidden="true"></canvas>
+        <svg id="svcShape" class="svc-shape" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <path id="svcShapePath" fill="#c2181b" d=""></path>
+        </svg>
+        <span class="ghost-word" id="ghostWord">Workspace</span>
+      </div>
+      <div class="services-inner">
+        <div class="services-nav">
+          <p class="eyebrow">The platform</p>
+          <ul id="svcNav">
+            <li class="active" data-s="0">Research Workspace</li>
+            <li data-s="1">Valuation &amp; DCF Engine</li>
+            <li data-s="2">Forensic &amp; Quality of Earnings</li>
+            <li data-s="3">Report Generation</li>
+          </ul>
+        </div>
+        <div class="services-copy">
+          <div class="svc-copy" id="svcCopy"></div>
+        </div>
+        <div class="services-stats" id="svcStats"></div>
+      </div>
+      <div class="svc-progress" id="svcProgress"></div>
+    </div>
+  </section>
+
+  <!-- ════ PIPELINE ════ -->
+  <section class="section pipeline" id="pipeline">
+          </div>
+        <div class="pipe-mock mono" id="pipeMock"></div>
+        <div class="pipe-meta"><span class="mono" id="pipeMeta"></span></div>
+  </section>
+
+    <!-- ════ CAPABILITIES ════ -->
+  <section class="section caps">
+    <p class="eyebrow center">Capabilities</p>
+    <div class="caps-grid">
+      <article class="cap"><span class="cap-n mono">01</span><h4>Research Workspace</h4><p>A persistent analyst workstation per company, with a source drawer pinned to every claim.</p></article>
+      <article class="cap"><span class="cap-n mono">02</span><h4>Valuation Engine</h4><p>DCF, comparables and scenarios with provenance on every assumption.</p></article>
+      <article class="cap"><span class="cap-n mono">03</span><h4>Forensic Analysis</h4><p>Accruals, related-party flags, pledge and audit-qualification tracking.</p></article>
+      <article class="cap"><span class="cap-n mono">04</span><h4>Earnings Call Intelligence</h4><p>Guidance changes, tone deltas and a promise-versus-delivery tracker.</p></article>
+      <article class="cap"><span class="cap-n mono">05</span><h4>Portfolio Analytics</h4><p>Allocation, factor exposure, correlation and honest drawdown analysis.</p></article>
+      <article class="cap"><span class="cap-n mono">06</span><h4>Screener</h4><p>Institutional filtering across fundamentals, valuation history and quality.</p></article>
+      <article class="cap"><span class="cap-n mono">07</span><h4>Thesis Monitoring</h4><p>The platform remembers your thesis and flags the filing that breaks it.</p></article>
+      <article class="cap"><span class="cap-n mono">08</span><h4>Research Library</h4><p>A firm-wide, versioned record of every report, model and rating.</p></article>
+    </div>
+  </section>
+
+  <!-- ════ TRUST ════ -->
+  <section class="section trust" id="trust">
+    <div class="trust-grid">
+      <div class="trust-copy">
+        <p class="eyebrow">Methodology</p>
+        <h2 class="display">Built for <span class="accent">auditability.</span></h2>
+        <p class="trust-lead">Trust in research is earned through transparency, not endorsements. So we publish how the engine works &mdash; and refuse to let a model invent a number.</p>
+        <a class="under-link dark" href="#">Read the methodology <span class="arr">&rarr;</span></a>
+      </div>
+      <div class="trust-list">
+        <div class="tl-row reveal-up"><span class="tl-n mono">01</span><div><h4>Every number traceable</h4><p>Each figure resolves to a calculation reading a point-in-time database.</p></div></div>
+        <div class="tl-row reveal-up"><span class="tl-n mono">02</span><div><h4>Every claim cited</h4><p>Qualitative statements resolve to a span in a filing or transcript.</p></div></div>
+        <div class="tl-row reveal-up"><span class="tl-n mono">03</span><div><h4>Versioned research history</h4><p>Reports, models and ratings are immutable and timestamped.</p></div></div>
+        <div class="tl-row reveal-up"><span class="tl-n mono">04</span><div><h4>Deterministic calculations</h4><p>The model never computes &mdash; it writes around numbers it is handed.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+    <!-- ════ FEEDBACK ════ -->
+  <section class="section feedback" id="feedback">
+    <div class="show-head">
+      <p class="eyebrow">Feedback</p>
+      <h2 class="display reveal-words">Share your thoughts.</h2>
+      <p class="fb-sub">Help improve Meridian &mdash; your feedback goes directly to the creator.</p>
+    </div>
+    <div class="fb-grid">
+      <div class="fb-form">
+        <label class="fb-label">FULL NAME <span>*</span></label>
+        <input id="fbName" class="fb-input" type="text" placeholder="Your full name" />
+        <label class="fb-label">EMAIL ADDRESS <span>*</span></label>
+        <input id="fbEmail" class="fb-input" type="email" placeholder="your@email.com" />
+        <label class="fb-label">CONTACT NUMBER</label>
+        <input id="fbPhone" class="fb-input" type="tel" placeholder="+91 98765 43210" />
+        <label class="fb-label">FEEDBACK MESSAGE <span>*</span></label>
+        <textarea id="fbMsg" class="fb-input fb-textarea" placeholder="Share your thoughts, suggestions, bugs, or just say hello..."></textarea>
+        <label class="fb-label">RATING</label>
+        <div class="fb-rating" id="fbRating">
+          <button data-r="1" type="button">&#9733;</button>
+          <button data-r="2" type="button">&#9733;&#9733;</button>
+          <button data-r="3" type="button">&#9733;&#9733;&#9733;</button>
+          <button data-r="4" type="button">&#9733;&#9733;&#9733;&#9733;</button>
+          <button data-r="5" type="button">&#9733;&#9733;&#9733;&#9733;&#9733;</button>
+        </div>
+        <div class="fb-actions">
+          <button class="fb-send gmail" id="fbGmail" type="button">Send via Gmail</button>
+          <button class="fb-send outlook" id="fbOutlook" type="button">Send via Outlook</button>
+        </div>
+        <p class="fb-note" id="fbNote"></p>
+      </div>
+      <div class="fb-side">
+        <div class="fb-card">
+          <p class="fb-card-h">CONTACT THE CREATOR</p>
+          <p class="fb-name">Nikhil Pratap Singh</p>
+          <a class="fb-contact" href="mailto:nikhilpratap112006@gmail.com">&#9993; nikhilpratap112006@gmail.com</a>
+          <a class="fb-contact" href="https://linkedin.com/in/nikhilpr11" target="_blank" rel="noopener">&#128279; linkedin.com/in/nikhilpr11</a>
+        </div>
+        <div class="fb-card">
+          <p class="fb-card-h">WHAT WE'D LOVE TO HEAR</p>
+          <ul class="fb-list">
+            <li>Valuation methodology accuracy</li>
+            <li>Missing sectors or geographies</li>
+            <li>Feature requests or improvements</li>
+            <li>Bug reports or UI issues</li>
+            <li>Coverage gaps</li>
+            <li>India-specific reporting scenarios</li>
+          </ul>
+        </div>
+        <div class="fb-card">
+          <p class="fb-card-h">PRIVACY NOTE</p>
+          <p class="fb-privacy">Your feedback is sent directly to the creator via your own email client. Your contact details are used solely for follow-up if required and will not be shared with third parties.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════ FINAL ════ -->
+  <section class="section final">
+    <h2 class="final-h reveal-words">Research at institutional scale.</h2>
+    <a class="btn-primary lg" href="/terminal">Launch Meridian</a>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-top">
+      <span class="brand">MERIDIAN</span>
+      <nav class="footer-links">
+        <a href="#trust">Methodology</a><a href="#feedback">Feedback</a><a href="#" Documentation</a>
+        <a href="/terms">Terms & Conditions</a><a href="/privacy">Privacy Policy</a>
+      </nav>
+    </div>
+    <div class="footer-legal">
+      <span>&copy; 2026 Meridian Intelligence</span>
+      <span>Market data may be delayed. Nothing herein is investment advice.</span>
+    </div>
+  </footer>
+
+  <script src="/lenis.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
