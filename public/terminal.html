@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/png" href="/logo.png">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0d1117" />
+  <title>MTerminal — Market research & Equity analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/terminal.css" />
+  <link rel="stylesheet" href="/sector-analysis.css" />
+  <link rel="stylesheet" href="/price-action.css" />
+  <link rel="stylesheet" href="/auth.css" />
+  <link rel="stylesheet" href="/mobile.css" />
+</head>
+<body class="term-body">
+
+  <!-- ── Top bar: brand · global command bar · status ── -->
+  <header class="tbar">
+    <a class="wordmark" href="/">MERIDIAN<span class="wordmark-tick">▮</span></a>
+    <div class="tcmd" id="tcmd">
+      <span class="cmd-prompt">/</span>
+      <input id="tcmdInput" placeholder="Company or ticker — loads the Research Workstation (e.g. RELIANCE.NS, TCS, AAPL)" autocomplete="off" spellcheck="false" />
+      <kbd class="tcmd-kbd" id="tcmdKbd" title="Command palette — jump to any module or ticker">Ctrl·K</kbd>
+      <div class="cmd-results" id="tcmdResults" hidden></div>
+    </div>
+    <span class="live-dot" id="termLive"><i></i>LIVE</span>
+    <button class="settings-btn" id="settingsBtn" aria-label="Settings" aria-expanded="false" aria-haspopup="true">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+    </button>
+    <!-- Mobile-only hamburger -->
+    <button class="m-menu-btn" id="mMenuBtn" aria-label="Open navigation" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+  </header>
+
+  <!-- Settings / account popup (populated by auth.js) -->
+  <div class="settings-pop" id="settingsPop" role="dialog" aria-label="Settings" hidden></div>
+
+  <!-- Mobile-only tab drawer overlay -->
+  <div class="m-drawer-overlay" id="mDrawerOverlay" aria-hidden="true"></div>
+  <nav class="m-drawer" id="mDrawer" aria-label="Module navigation" hidden>
+    <div class="m-drawer-head">
+      <span class="mono" style="font-size:10px;letter-spacing:.12em;color:var(--amber)">MODULES</span>
+      <button class="m-drawer-close" id="mDrawerClose" aria-label="Close navigation">✕</button>
+    </div>
+    <div class="m-drawer-tabs" id="mDrawerTabs">
+      <!-- populated by JS from ttabs -->
+    </div>
+  </nav>
+
+  <!-- ── Module tabs ── -->
+  <nav class="ttabs" id="ttabs">
+    <button data-tab="markets" class="active">Market Intelligence</button>
+    <button data-tab="research">Equity Research</button>
+    <button data-tab="earnings">Earnings Call</button>
+    <button data-tab="forensic">Forensic Analysis</button>
+    <button data-tab="models">Modeling Lab</button>
+    <button data-tab="risk">Risk Center</button>
+    <button data-tab="reports">Report Generation</button>
+    <button data-tab="portfolio">Portfolio</button>
+    <button data-tab="sector">Sector Analysis</button>
+    <button data-tab="news">News &amp; Sentiment</button>
+    <button data-tab="calc">Calculators</button>
+    <button data-tab="learn">Learning Center</button>
+    <button data-tab="library">Library</button>
+  </nav>
+
+  <main class="tmain">
+
+    <!-- ════ TAB · MARKET INTELLIGENCE ════ -->
+    <section class="tab" id="tab-markets">
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>CHART ANALYSIS</h3><span class="panel-sub mono">search any ticker or name · macro presets (rates · FX · commodities · volatility · crypto) · compare up to 5 · zoom · sharp-move reads</span></div>
+          <div id="miPriceChart"></div>
+        </div>
+      </div>
+
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>GLOBAL TAPE</h3><span class="panel-sub mono" id="tapeAsOf"></span></div>
+          <div class="tape" id="tape"></div>
+        </div>
+        <div class="panel m-side-panel" style="min-width:280px">
+          <div class="panel-h"><h3>MARKET BREADTH · NIFTY UNIVERSE</h3></div>
+          <div id="breadth" class="breadth"><div class="loading mono">scanning universe…</div></div>
+        </div>
+      </div>
+
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>SECTOR HEATMAP · NSE</h3><span class="panel-sub mono">size-equal · colour = day change</span></div>
+          <div class="heatmap" id="heatmap"></div>
+        </div>
+      </div>
+
+      <div class="trow mtx-watch-row">
+        <div class="panel mtx-col">
+          <div class="panel-h"><h3>CROSS-ASSET MATRIX</h3>
+            <div class="panel-tools mono">
+              <input id="matrixSymbols" value="^NSEI,^NSEBANK,^CNXIT,^GSPC,GC=F,USDINR=X,BTC-USD" spellcheck="false" />
+              <select id="matrixRange"><option value="3mo">3M</option><option value="6mo" selected>6M</option><option value="1y">1Y</option></select>
+              <button class="mini-btn" id="matrixRun">Run</button>
+            </div>
+          </div>
+          <div id="matrix"><div class="loading mono">computing correlations, volatility, momentum…</div></div>
+        </div>
+        <div class="panel watch-col">
+          <div class="panel-h"><h3>WATCHLIST</h3><span class="panel-sub mono" id="watchCount"></span></div>
+          <div class="wl-add"><div class="cx-search"><input id="watchAdd" placeholder="Add by ticker or name — e.g. RELIANCE.NS, TCS, Infosys" autocomplete="off" spellcheck="false" /><div class="cx-drop" id="watchAddDrop" hidden></div></div></div>
+          <div id="watchList" class="watchlist"></div>
+        </div>
+      </div>
+
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>MARKET ANALYSIS ENGINE</h3><span class="panel-sub mono">deterministic — computed from the data above</span></div>
+          <div class="commentary" id="marketCommentary"></div>
+        </div>
+      </div>
+
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>INDUSTRY &amp; COMPETITIVE ANALYSIS</h3>
+            <div class="panel-tools mono">
+              <input id="indSym" value="" placeholder="ticker — e.g. RELIANCE.NS" spellcheck="false" style="text-transform:uppercase" />
+              <button class="mini-btn" id="indRun">Analyze</button>
+            </div>
+          </div>
+          <div id="industryOut"><div class="empty-mini mono">Enter a company to analyze its industry — sector aggregates, market-share structure, Porter's Five Forces, industry economics and lifecycle stage. Auto-loads with the company open in Research.</div></div>
+        </div>
+      </div>
+
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>MACRO COMMAND</h3><span class="panel-sub mono" id="macroAsOf">global equity · rates · FX · commodities · volatility · crypto — live</span></div>
+          <div id="macroOut"><div class="loading mono" style="padding:20px">loading macro snapshot…</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · EQUITY RESEARCH WORKSTATION ════ -->
+    <section class="tab" id="tab-research" hidden>
+      <div class="empty-state" id="researchEmpty">
+        <p class="mono">EQUITY RESEARCH WORKSTATION</p>
+        <h2>Type a company in the command bar above.</h2>
+        <p class="dim">The workstation pulls live data and builds the full analysis — overview, statements, ratio library, variance drivers, peers, positioning and valuation.</p>
+        <div class="chip-row" id="quickPicks"></div>
+      </div>
+      <div id="researchBody" hidden></div>
+    </section>
+
+    <!-- ════ TAB · FINANCIAL MODELING LAB ════ -->
+    <section class="tab" id="tab-models" hidden>
+      <div class="trow" style="align-items:flex-start">
+        <div class="panel idcf-side m-side-panel" style="min-width:300px;max-width:330px;position:sticky;top:12px">
+          <div class="panel-h"><h3>DCF · ASSUMPTIONS</h3><span class="panel-sub mono" id="dcfFor"></span></div>
+          <div class="dcf-form" id="dcfForm"><div class="empty-mini mono">Load a company in Research, or type a ticker:</div><label>Ticker<input id="idcfSym" type="text" placeholder="e.g. RELIANCE.NS" style="text-transform:uppercase"></label><button class="btn btn-amber" id="idcfLoad" style="width:100%;margin-top:8px">Build model</button></div>
+          <div id="idcfStatus" class="panel-sub mono" style="padding:10px 16px"></div>
+          <div class="scn" id="scnPanel">
+            <div class="panel-sub mono" style="padding:10px 16px 4px;border-top:1px solid var(--hairline)">SCENARIO MANAGER</div>
+            <div class="scn-add">
+              <input id="scnName" type="text" placeholder="e.g. Bull — margin expansion" maxlength="40" />
+              <button class="mini-btn" id="scnSave" title="Snapshot every current assumption — scalars, year-wise edits, capital allocation, terminal method — as a named scenario">Save</button>
+            </div>
+            <div id="scnList"><div class="empty-mini mono" style="padding:8px 16px">Adjust assumptions, then save them as named scenarios to compare bull / base / bear side-by-side.</div></div>
+          </div>
+        </div>
+        <div class="panel grow">
+          <div class="panel-h" style="display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+              <h3>INSTITUTIONAL DCF MODEL</h3>
+              <span class="panel-sub mono" id="idcfMeta">17-section FCFF working · recomputes on every assumption change</span>
+            </div>
+            <button class="btn btn-ghost mono" id="idcfExportExcel"
+              style="display:none;font-size:11px;padding:6px 12px;letter-spacing:.5px;border:1px solid var(--hairline);background:transparent;color:var(--amber);cursor:pointer"
+              title="Download a fully-linked .xlsx with formulas, named ranges, sensitivity grid and scenario stress-tests.">
+              ↓ EXPORT TO EXCEL
+            </button>
+          </div>
+          <div id="idcfOut"><div class="empty-mini mono">The full analyst-grade DCF — historical foundation, forecast build-up, EBIT→NOPAT→FCFF schedule, WACC, discounting, terminal value, EV bridge, sensitivity, scenarios and AI commentary — renders here.</div></div>
+        </div>
+      </div>
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>RELATIVE VALUATION · COMPARABLE COMPANIES</h3><span class="panel-sub mono" id="compsFor"></span></div>
+          <div id="compsOut"><div class="empty-mini mono">Loads automatically with peer data from the Research tab.</div></div>
+        </div>
+      </div>
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>VALUATION METHODS · BLENDED TARGET</h3><span class="panel-sub mono" id="valFor"></span></div>
+          <div id="valMethodsOut"><div class="empty-mini mono">EV/EBITDA, P/E, PEG, Residual Income, Dividend Discount, Sum-of-Parts and DCF — each with full workings, plotted on a football field and blended into one target. Loads with the model.</div></div>
+        </div>
+      </div>
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>MONTE CARLO SIMULATION</h3><span class="panel-sub mono" id="mcFor"></span></div>
+          <div id="mcOut"><div class="empty-mini mono">5,000-run simulation flexing growth, margin, WACC and terminal growth — shows the full distribution of intrinsic value and the probability of upside.</div></div>
+        </div>
+      </div>
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>HISTORICAL VALUATION BANDS</h3><span class="panel-sub mono" id="bandsFor">5-year trailing P/E · P/B vs the stock's own history</span></div>
+          <div id="bandsOut"><div class="empty-mini mono">Where does today's multiple sit against five years of the stock's own valuation history? Loads with the model.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · EARNINGS CALL ════ -->
+    <section class="tab" id="tab-earnings" hidden>
+      <div class="ec-page">
+        <!-- ticker loader -->
+        <div class="ec-loadbar">
+          <div class="ec-loadbar-in">
+            <span class="ec-slash mono">/</span>
+            <input id="ecSym" placeholder="Ticker — RELIANCE.NS · TCS.NS · AAPL · MSFT · any listed company" autocomplete="off" spellcheck="false">
+            <button class="btn btn-amber" id="ecLoad" type="button">Load earnings</button>
+          </div>
+          <span id="ecCoreStatus" class="panel-sub mono"></span>
+        </div>
+
+        <!-- 50 / 50 core: recent earnings calls (left) · schedule (right) -->
+        <div class="ec-core" id="ecCore">
+          <div class="ec-core-empty empty-mini mono">Enter a ticker to see its earnings-call schedule and recent calls — actual vs. estimate EPS, surprise, forward consensus and transcript links. Keyless · works for any exchange (NSE · BSE · US · global).</div>
+        </div>
+
+        <!-- analysis: input methods + institutional report -->
+        <div class="ec-analysis">
+          <div class="ec-an-head">
+            <h3>EARNINGS CALL ANALYSIS</h3>
+            <span class="panel-sub mono" id="ecFor">paste a transcript or import a PDF</span>
+          </div>
+          <div class="ec-inpanel">
+            <div class="ec-tabs" id="ecInTabs">
+              <button class="ec-tab active" data-in="text" type="button">✎ Paste text</button>
+              <button class="ec-tab" data-in="pdf" type="button">⬆ Import PDF</button>
+            </div>
+            <div class="ec-in" id="ecInText">
+              <textarea id="ecPaste" placeholder="Paste an earnings-call transcript here — any format, any company. Non-content lines (headers, footers, page numbers, disclaimers) are stripped automatically before analysis."></textarea>
+            </div>
+            <div class="ec-in" id="ecInPdf" hidden>
+              <label class="ec-drop" id="ecDrop">
+                <input type="file" id="ecPdf" accept="application/pdf,.pdf" hidden>
+                <div class="ec-drop-ic">⬆</div>
+                <div class="ec-drop-t">Drop a transcript PDF here, or click to choose</div>
+                <div class="ec-drop-s mono">Text is extracted in your browser context · headers, footers &amp; page numbers removed</div>
+                <div class="ec-drop-file mono" id="ecPdfName"></div>
+              </label>
+            </div>
+            <button class="btn btn-amber" id="ecAnalyze" type="button" style="width:100%;margin-top:10px">Analyse transcript</button>
+            <div id="ecStatus" class="panel-sub mono" style="margin-top:8px"></div>
+            <div class="note ec-an-note">Deterministic engine (tone, guidance, risks, KPIs, Q&amp;A, topics, speakers, SWOT, scorecard) runs locally on the text. With an <b>ANTHROPIC_API_KEY</b> set, a full institutional-grade report is generated per the built-in analyst prompt. Every signal traces to the transcript.</div>
+          </div>
+          <div id="ecOut"><div class="empty-mini mono">Load a company above for its schedule &amp; recent calls, then paste a transcript or import a PDF to generate the analysis — management tone, guidance tracking, risk &amp; competitor intelligence, topic frequency, per-speaker sentiment and an institutional scorecard.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · FORENSIC ANALYSIS ════ -->
+    <section class="tab" id="tab-forensic" hidden>
+      <div class="trow" style="align-items:flex-start">
+        <div class="panel m-side-panel" style="min-width:280px;max-width:300px;position:sticky;top:12px">
+          <div class="panel-h"><h3>FORENSIC ANALYSIS</h3></div>
+          <div style="padding:14px 16px">
+            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:6px">Ticker</label>
+            <input id="frcSym" type="text" placeholder="e.g. RELIANCE.NS" style="text-transform:uppercase;width:100%;background:var(--ink);border:1px solid var(--hairline);color:var(--fg);padding:8px 10px;font-family:var(--mono);font-size:12px">
+            <button class="btn btn-amber" id="frcLoad" style="width:100%;margin-top:10px">Run forensic scan</button>
+            <div id="frcStatus" class="panel-sub mono" style="margin-top:12px"></div>
+            <div class="note" style="font-size:10px;color:var(--muted-ink);line-height:1.5;margin-top:12px">Screens earnings quality, cash-flow quality, accounting quality and financial-distress risk using the Piotroski, Altman and Beneish models — every component shown and auditable.</div>
+          </div>
+        </div>
+        <div class="panel grow">
+          <div class="panel-h"><h3>FORENSIC SCORECARD</h3><span class="panel-sub mono" id="frcFor"></span></div>
+          <div id="frcOut"><div class="empty-mini mono">Run a forensic scan to see the earnings-quality, cash-flow, accounting and distress-risk scorecard — Piotroski F, Altman Z, Beneish M, working-capital trend and red-flag detection.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · RISK CENTER ════ -->
+    <section class="tab" id="tab-risk" hidden>
+      <div class="trow" style="align-items:flex-start">
+        <div class="panel m-side-panel" style="min-width:280px;max-width:300px;position:sticky;top:12px">
+          <div class="panel-h"><h3>RISK CENTER</h3></div>
+          <div style="padding:14px 16px">
+            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:6px">Ticker</label>
+            <input id="rskSym" type="text" placeholder="e.g. RELIANCE.NS" style="text-transform:uppercase;width:100%;background:var(--ink);border:1px solid var(--hairline);color:var(--fg);padding:8px 10px;font-family:var(--mono);font-size:12px">
+            <button class="btn btn-amber" id="rskLoad" style="width:100%;margin-top:10px">Assess risk</button>
+            <div id="rskStatus" class="panel-sub mono" style="margin-top:12px"></div>
+            <div class="note" style="font-size:10px;color:var(--muted-ink);line-height:1.5;margin-top:12px">Scores business, financial, valuation, governance, market, regulatory, ESG and industry risks — each with a computed probability × impact, plotted on a 5×5 matrix, rolled into a composite risk score and downside scenarios.</div>
+          </div>
+        </div>
+        <div class="panel grow">
+          <div class="panel-h"><h3>RISK ASSESSMENT</h3><span class="panel-sub mono" id="rskFor"></span></div>
+          <div id="rskOut"><div class="empty-mini mono">Assess a company to see its composite risk score, probability×impact matrix, category breakdown, scored risk register and downside scenarios.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · AI RESEARCH ENGINE ════ -->
+    <section class="tab" id="tab-reports" hidden>
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>GENERATE RESEARCH</h3><span class="panel-sub mono" id="aiMode"></span></div>
+          <div class="report-controls">
+            <input id="reportSymbol" class="mono" placeholder="Symbol — e.g. RELIANCE.NS" spellcheck="false" />
+            <select id="reportType">
+              <option>Initiating Coverage</option>
+            </select>
+            <button class="btn btn-amber" id="reportGo">Generate report</button>
+            <span class="mono dim" id="reportStatus"></span>
+          </div>
+        </div>
+      </div>
+      <div class="report-actions" id="reportActions" hidden>
+        <button class="mini-btn" id="reportPrint">Print / PDF</button>
+        <button class="mini-btn" id="reportDoc">Download .doc</button>
+        <button class="mini-btn" id="reportSave">Save to Library</button>
+      </div>
+      <div class="report-canvas" id="reportCanvas"></div>
+    </section>
+
+    <!-- ════ TAB · PORTFOLIO · INSTITUTIONAL TECHNICAL SCREENER ════════════
+         Cohesive desktop workspace, Bloomberg/Refinitiv-class hierarchy:
+         empty → header → toolbar → chips → screener → analytics → alerts.
+         Per-portfolio runtime cache lives in JS — DOM is purely a view. ─── -->
+    <section class="tab" id="tab-portfolio" hidden>
+
+      <!-- Modal root (scoped to portfolio tab; renders on top via fixed pos) -->
+      <div id="pfModalRoot" class="pfm-root" hidden></div>
+
+      <!-- ─── EMPTY STATE ─────────────────────────────────────────────── -->
+      <div id="pfEmptyShell" class="pfe" hidden>
+        <div class="pfe-card">
+          <div class="pfe-eyebrow mono">PORTFOLIO · TECHNICAL SCREENER</div>
+          <h2>Build your institutional screening workspace.</h2>
+          <p>Create a portfolio, pick a market universe, add up to 20 companies and run a live multi-factor technical screen — trend, momentum, oscillators, volume, volatility and price action — across every name.</p>
+          <div class="pfe-steps">
+            <div class="pfe-step"><span class="pfe-step-n">1</span><div class="pfe-step-b"><strong>Create portfolio</strong><span>Name it, save it.</span></div></div>
+            <div class="pfe-step"><span class="pfe-step-n">2</span><div class="pfe-step-b"><strong>Select universe</strong><span>Nifty 50, S&amp;P 500, NASDAQ…</span></div></div>
+            <div class="pfe-step"><span class="pfe-step-n">3</span><div class="pfe-step-b"><strong>Search companies</strong><span>Add up to 20 names.</span></div></div>
+            <div class="pfe-step"><span class="pfe-step-n">4</span><div class="pfe-step-b"><strong>Screen &amp; monitor</strong><span>Live indicators, signals &amp; alerts.</span></div></div>
+          </div>
+          <button class="pfe-cta" id="pfEmptyCreate">+ Create your first portfolio</button>
+        </div>
+      </div>
+
+      <!-- ─── MAIN WORKSPACE ──────────────────────────────────────────── -->
+      <div id="pfWorkspace" class="pfw" hidden>
+
+        <!-- Portfolio Header -->
+        <header class="pfh">
+          <div class="pfh-left">
+            <div class="pfh-bread mono">PORTFOLIOS<span class="pfh-bsep">/</span><span id="pfhBread">—</span></div>
+            <div class="pfh-titlerow">
+              <div class="pfh-switcher" id="pfhSwitcher">
+                <button class="pfh-switch-btn" id="pfhSwitchBtn">
+                  <span class="pfh-title" id="pfhTitle">—</span>
+                  <span class="pfh-caret">▾</span>
+                </button>
+                <div class="pfh-switch-menu" id="pfhSwitchMenu" hidden></div>
+              </div>
+            </div>
+            <div class="pfh-meta">
+              <div class="pfh-pill"><span class="pfh-pill-l">UNIVERSE</span><span class="pfh-pill-v" id="pfhUniverse">—</span></div>
+              <div class="pfh-pill"><span class="pfh-pill-l">COMPANIES</span><span class="pfh-pill-v"><span id="pfhCount">0</span> / 20</span></div>
+              <div class="pfh-pill pfh-pill-upd"><span class="pfh-pill-l">UPDATED</span><span class="pfh-pill-v" id="pfhUpdated">—</span><button class="pfh-pill-ref" id="pfhUpdRefresh" title="Refresh" aria-label="Refresh">↻</button></div>
+            </div>
+          </div>
+          <div class="pfh-actions">
+            <button class="pfh-btn" id="pfActAdd"><span class="pfh-btn-i">＋</span>Add Companies</button>
+            <button class="pfh-btn" id="pfActRefresh"><span class="pfh-btn-i" id="pfActRefreshI">↻</span>Refresh</button>
+            <button class="pfh-btn" id="pfActExport"><span class="pfh-btn-i">↓</span>Export</button>
+            <div class="pfh-settings-wrap">
+              <button class="pfh-btn pfh-btn-icon" id="pfActSettings" title="Settings">⋯</button>
+              <div class="pfh-settings-menu" id="pfSettingsMenu" hidden></div>
+            </div>
+          </div>
+        </header>
+
+        <!-- Add-Companies popover (anchored under header button) -->
+        <div class="pf-addpop" id="pfAddPop" hidden></div>
+
+        <!-- Stats strip (rendered by _renderStatStrip) -->
+        <div class="pfstat" id="pfStatStrip"></div>
+
+        <!-- AI Price Action & Candlestick Analysis Workspace (rendered by PA) -->
+        <div class="pfpa" id="pfPriceAction" hidden></div>
+
+        <!-- Toolbar -->
+        <div class="pft">
+          <div class="pft-search">
+            <span class="pft-search-i">⌕</span>
+            <input id="pfSearch" placeholder="Search company to add…" spellcheck="false" autocomplete="off" />
+            <div id="pfSearchResults" class="cmd-results pft-search-results" hidden></div>
+          </div>
+          <div class="pft-right">
+            <div class="pft-filter-wrap">
+              <button class="pft-filter-btn" id="pfFilterBtn"><span class="pft-fi">⚲</span>Filter<span class="pft-filter-badge" id="pfFilterBadge" hidden>0</span><span class="pft-fc">▾</span></button>
+              <div class="pft-filter-panel" id="pfFilterPanel" hidden></div>
+            </div>
+            <div class="pft-active" id="pfActiveFilters"></div>
+            <button class="pft-clear" id="pfClearAll" hidden>Clear all</button>
+          </div>
+        </div>
+
+        <!-- Company chips -->
+        <div class="pfc" id="pfChipsRow"></div>
+
+        <!-- Screener -->
+        <div class="pfs">
+          <div class="pfs-wrap" id="pfsWrap"><table class="pfs-table" id="pfScreener"></table></div>
+          <div class="pfs-foot">
+            <span class="pfs-count mono" id="pfsCount"></span>
+            <span class="pfs-status mono" id="pfsStatus"></span>
+          </div>
+        </div>
+
+        <!-- Portfolio Insights -->
+        <section class="pfi" id="pfInsights">
+          <header class="pfi-head">
+            <div class="pfi-title"><span class="pfi-title-ic">◈</span> PORTFOLIO INSIGHTS</div>
+            <button class="pfi-collapse" id="pfiCollapse" aria-label="Collapse" aria-expanded="true">⌃</button>
+          </header>
+          <div class="pfi-body" id="pfiBody">
+            <div class="pfi-grid">
+              <div class="pfi-card">
+                <div class="pfi-card-h">Technical Score Distribution</div>
+                <div id="pfiScoreDist" class="pfi-card-b"></div>
+              </div>
+              <div class="pfi-card">
+                <div class="pfi-card-h">Sector Allocation</div>
+                <div id="pfiSector" class="pfi-card-b"></div>
+              </div>
+              <div class="pfi-card">
+                <div class="pfi-card-h">Signal Distribution</div>
+                <div id="pfiSignal" class="pfi-card-b"></div>
+              </div>
+              <div class="pfi-card">
+                <div class="pfi-card-h">Recent Changes <span class="pfi-card-hsub">(Composition Log)</span></div>
+                <div id="pfiChanges" class="pfi-card-b"></div>
+              </div>
+            </div>
+
+            <div class="pfi-alerts">
+              <div class="pfi-alerts-h">ACTIVE TECHNICAL ALERTS</div>
+              <div class="pfi-alerts-row" id="pfiAlertCards"></div>
+              <button class="pfi-alerts-all" id="pfiViewAlerts">View All Alerts →</button>
+            </div>
+            <div class="pfi-alerts-detail" id="pfiAlertsDetail" hidden></div>
+
+            <div class="pfi-foot">
+              <span class="pfi-foot-note">All technical scores are based on a composite of 8 indicators. Scored 0–100. Higher is better.</span>
+              <span class="pfi-foot-time mono">Data as of <span id="pfiDataTime">—</span></span>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- ─── TRANSACTIONS & PERFORMANCE (real-money ledger · XIRR · vs NIFTY) ── -->
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h">
+            <h3>TRANSACTIONS &amp; PERFORMANCE</h3>
+            <span class="panel-sub mono" id="txnAsOf">weighted-average cost · money-weighted XIRR · benchmarked vs NIFTY 50</span>
+          </div>
+          <div class="txn-add mono">
+            <input id="txnSym" type="text" placeholder="Symbol e.g. RELIANCE.NS" style="text-transform:uppercase" />
+            <select id="txnSide"><option value="BUY">BUY</option><option value="SELL">SELL</option></select>
+            <input id="txnQty" type="number" min="0" step="any" placeholder="Qty" />
+            <input id="txnPrice" type="number" min="0" step="any" placeholder="Price" />
+            <input id="txnDate" type="date" />
+            <button class="mini-btn" id="txnAdd">Add trade</button>
+          </div>
+          <div id="txnPerf"></div>
+          <div id="txnHoldings"></div>
+          <div id="txnLedger"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · SECTOR ANALYSIS ════
+         Institutional sector / industry breakdown (see sector-analysis.js).
+         All rendering lives in #sectorRoot — TABS.sector.init() builds it. -->
+    <section class="tab" id="tab-sector" hidden>
+      <div id="sectorRoot"></div>
+    </section>
+
+    <!-- ════ TAB · NEWS & SENTIMENT ════ -->
+    <section class="tab" id="tab-news" hidden>
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>NEWS &amp; MARKET SENTIMENT</h3>
+            <div class="panel-tools mono">
+              <select id="newsMode"><option value="company">Company</option><option value="industry">Industry</option><option value="market">Market</option></select>
+              <input id="newsQuery" value="NIFTY" spellcheck="false" />
+              <button class="mini-btn" id="newsGo">Fetch</button>
+            </div>
+          </div>
+          <div id="newsAgg"></div>
+        </div>
+      </div>
+      <div class="trow">
+        <div class="panel grow"><div class="panel-h"><h3>HEADLINES</h3><span class="panel-sub mono" id="newsCount"></span></div><div id="newsList"><div class="loading mono">loading…</div></div></div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · CALCULATORS ════ -->
+    <section class="tab" id="tab-calc" hidden>
+      <div class="trow" style="align-items:flex-start">
+        <div class="panel m-side-panel" style="min-width:240px;max-width:260px;position:sticky;top:12px">
+          <div class="panel-h"><h3>CALCULATORS</h3></div>
+          <div class="calc-nav" id="calcNav"></div>
+        </div>
+        <div class="panel grow">
+          <div class="panel-h"><h3 id="calcTitle">Select a calculator</h3><span class="panel-sub mono" id="calcSub"></span></div>
+          <div id="calcOut"><div class="empty-mini mono">Pick a calculator from the left. Investment Suite is general-purpose (SIP, SWP, Retirement, Lumpsum, Inflation, Wealth). ESOP Suite is for employees / founders evaluating stock options — enter a listed company ticker to auto-fill share count and price.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · LEARNING CENTER ════ -->
+    <section class="tab" id="tab-learn" hidden>
+      <div class="trow" style="align-items:flex-start">
+        <div class="panel m-side-panel" style="min-width:240px;max-width:260px;position:sticky;top:12px">
+          <div class="panel-h"><h3>LEARNING CENTER</h3></div>
+          <div class="learn-nav" id="learnNav"></div>
+        </div>
+        <div class="panel grow">
+          <div class="panel-h"><h3 id="learnTitle">Equity Investing Basics</h3><span class="panel-sub mono">finance concepts in plain language</span></div>
+          <div id="learnOut"><div class="empty-mini mono">Welcome. Pick a topic on the left — every concept is explained in plain English with a real example, why it matters, common mistakes, and an interactive calculator where relevant. No finance background assumed.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ TAB · LIBRARY ════ -->
+    <section class="tab" id="tab-library" hidden>
+      <div class="trow">
+        <div class="panel grow">
+          <div class="panel-h"><h3>RESEARCH DOCUMENT CENTER</h3><span class="panel-sub mono">saved on the server — survives restarts</span></div>
+          <div id="libraryList"><div class="loading mono">loading…</div></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="/user-store.js"></script>
+  <script src="/terminal.js"></script>
+  <script src="/context-palette.js"></script>
+  <script src="/macro-command.js"></script>
+  <script src="/chart-component.js"></script>
+  <script src="/terminal-modules.js"></script>
+  <script src="/price-action.js"></script>
+  <script src="/sector-analysis.js"></script>
+  <script src="/calculators.js"></script>
+  <script src="/learning.js"></script>
+  <script src="/auth.js"></script>
+</body>
+</html>

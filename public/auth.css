@@ -1,0 +1,123 @@
+/* ════════════════════════════════════════════════════════════════════════
+   MERIDIAN · AUTH UI STYLES
+   Settings gear + popup, profile/account panels, Google button, sign-in gate.
+   Uses existing terminal tokens only.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── gear button in the top bar ── */
+.settings-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; flex-shrink: 0; margin-left: 4px;
+  background: none; border: 0; color: var(--muted);
+  cursor: pointer; transition: color .15s ease, transform .3s ease;
+}
+.settings-btn:hover { color: var(--amber-bright); transform: rotate(30deg); }
+.settings-btn[aria-expanded="true"] { color: var(--amber-bright); }
+
+/* ── popup ── */
+.settings-pop {
+  position: fixed; top: 52px; right: 16px; z-index: 400;
+  width: 320px; max-width: calc(100vw - 24px);
+  background: var(--ink-2); border: 1px solid var(--hairline);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .55); overflow: hidden;
+  animation: sp-in .14s ease-out;
+}
+@keyframes sp-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.sp-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border-bottom: 1px solid var(--hairline); background: var(--ink-3);
+}
+.sp-title { font-family: var(--mono); font-size: 11px; letter-spacing: .16em; color: var(--fg); font-weight: 600; }
+.sp-close { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 13px; padding: 2px 4px; line-height: 1; }
+.sp-close:hover { color: var(--fg); }
+.sp-body { padding: 14px; }
+.sp-body.signing { opacity: .5; pointer-events: none; }
+.sp-label { font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted-ink); margin-bottom: 10px; }
+.sp-note { font-family: var(--sans); font-size: 12px; line-height: 1.5; color: var(--muted); margin-bottom: 14px; }
+
+/* ── Google button (fallback / gate) ── */
+.sp-google {
+  display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
+  background: var(--fg); color: #1a1a1a; border: 0; padding: 10px 14px; cursor: pointer;
+  font-family: var(--sans); font-size: 13px; font-weight: 600; border-radius: 3px; margin-top: 8px;
+  transition: filter .15s ease;
+}
+.sp-google:hover { filter: brightness(.93); }
+.sp-g {
+  display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+  background: #fff; color: #4285f4; border-radius: 2px; font-family: var(--sans); font-weight: 700; font-size: 12px;
+}
+.gsi-slot { display: flex; justify-content: center; min-height: 0; }
+.gsi-slot:not(:empty) + .sp-google { display: none; } /* hide fallback once the real button renders */
+
+.sp-err { font-family: var(--mono); font-size: 11px; color: var(--down); margin-top: 10px; line-height: 1.4; }
+
+/* ── signed-in: user block ── */
+.sp-user { display: flex; align-items: center; gap: 11px; padding: 4px 0 14px; }
+.sp-avatar { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid var(--hairline); }
+.sp-avatar-i { display: flex; align-items: center; justify-content: center; background: var(--amber); color: var(--ink); font-family: var(--sans); font-weight: 700; font-size: 18px; }
+.sp-uinfo { min-width: 0; }
+.sp-uname { font-family: var(--sans); font-size: 14px; font-weight: 600; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-uemail { font-family: var(--mono); font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── items (Profile / Account / Log out) ── */
+.sp-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  background: none; border: 0; border-top: 1px solid color-mix(in srgb, var(--hairline) 55%, transparent);
+  padding: 11px 2px; cursor: pointer; color: var(--fg); font-family: var(--sans); font-size: 13px;
+  transition: color .12s ease;
+}
+.sp-item:hover { color: var(--amber-bright); }
+.sp-item svg { color: var(--muted); flex-shrink: 0; }
+.sp-item:hover svg { color: var(--amber-bright); }
+.sp-item.open { color: var(--amber-bright); }
+.sp-chev { margin-left: auto; color: var(--muted-ink); transition: transform .15s ease; }
+.sp-item.open .sp-chev { transform: rotate(90deg); }
+.sp-danger { color: var(--down); }
+.sp-danger svg { color: var(--down); }
+.sp-danger:hover, .sp-danger:hover svg { color: #e0897c; }
+
+/* ── inline panels ── */
+.sp-panel { padding: 4px 2px 12px; }
+.sp-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.sp-field span { font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted-ink); }
+.sp-field em { text-transform: none; letter-spacing: 0; color: var(--muted-ink); font-style: normal; }
+.sp-field input { background: var(--ink); border: 1px solid var(--hairline); color: var(--fg); font-family: var(--mono); font-size: 12px; padding: 8px 10px; outline: none; }
+.sp-field input:focus { border-color: var(--amber); }
+.sp-field input:disabled { color: var(--muted); background: var(--ink-3); }
+.sp-panel-actions { display: flex; align-items: center; gap: 10px; }
+.sp-save { background: var(--amber); color: var(--ink); border: 0; padding: 7px 16px; font-family: var(--mono); font-size: 11px; font-weight: 600; cursor: pointer; border-radius: 2px; }
+.sp-save:hover { background: var(--amber-bright); }
+.sp-save:disabled { opacity: .5; cursor: default; }
+.sp-saved { font-family: var(--mono); font-size: 11px; color: var(--up); }
+.sp-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid color-mix(in srgb, var(--hairline) 40%, transparent); font-family: var(--mono); font-size: 11.5px; }
+.sp-meta span { color: var(--muted-ink); }
+.sp-meta b { color: var(--fg); font-weight: 500; }
+.sp-mono { font-family: var(--mono); }
+
+/* ── sign-in gate over Portfolio / Library ── */
+#tab-portfolio, #tab-library { position: relative; }
+.auth-gate {
+  position: absolute; inset: 0; z-index: 30;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: color-mix(in srgb, var(--ink) 86%, transparent);
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+}
+.auth-gate-card {
+  width: 100%; max-width: 380px; text-align: center;
+  background: var(--ink-2); border: 1px solid var(--hairline); padding: 30px 28px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, .5);
+}
+.auth-gate-card.signing { opacity: .5; pointer-events: none; }
+.ag-lock { width: 52px; height: 52px; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--amber); color: var(--amber-bright); border-radius: 50%; background: color-mix(in srgb, var(--amber) 10%, transparent); }
+.ag-title { font-family: var(--serif); font-size: 20px; font-weight: 700; color: var(--fg); margin-bottom: 10px; letter-spacing: -.01em; }
+.ag-blurb { font-family: var(--sans); font-size: 12.5px; line-height: 1.55; color: var(--muted); margin-bottom: 18px; }
+.ag-google { max-width: 300px; margin: 8px auto 0; }
+.auth-gate-card .gsi-slot { margin-top: 4px; }
+
+/* ── responsive ── */
+@media (max-width: 560px) {
+  .settings-pop { top: 48px; right: 8px; left: 8px; width: auto; max-width: none; }
+  .auth-gate { padding: 16px; }
+  .auth-gate-card { padding: 24px 18px; }
+}

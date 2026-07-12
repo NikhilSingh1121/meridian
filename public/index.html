@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/png" href="/logo.png">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>M-Terminal — Market research & Equity analysis</title>
+  <meta name="description" content="From ticker to defensible research reports in minutes. Every number computed. Every claim cited." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/landing-mobile.css" />
+  <script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
+</head>
+<body>
+
+  <header class="nav" id="nav">
+    <div class="nav-inner">
+      <a class="brand" href="/">MERIDIAN</a>
+      <nav class="nav-links">
+        <a href="#services">Platform</a>
+        <a href="#showcase">Research</a>
+        <a href="#trust">Methodology</a>
+        <a href="#feedback">Feedback</a>
+      </nav>
+      <a class="nav-cta" href="/terminal">Open the Terminal <span class="arr">&rarr;</span></a>
+    </div>
+  </header>
+
+  <!-- ════ HERO (parallax mountain terrain) ════ -->
+  <section class="hero" id="hero">
+    <canvas id="terrain" class="terrain" aria-hidden="true"></canvas>
+    <div class="hero-fog"></div>
+    <div class="hero-top">
+      <div class="hero-inner">
+        <div class="hero-main">
+          <p class="eyebrow reveal-up">Equity research & Market Analysis &middot; AI-Based</p>
+          <h1 class="hero-h1">
+            <span class="line reveal-up" style="--d:.05s">Institutional</span>
+            <span class="line reveal-up" style="--d:.14s">research,</span>
+            <span class="line reveal-up accent" style="--d:.24s">rebuilt.</span>
+          </h1>
+        </div>
+        <div class="hero-aside reveal-up" style="--d:.4s">
+          <p>From a ticker to a defensible, fully-cited research report &mdash; in minutes, for analysts, RIAs, family offices and research desks.</p>
+          <a class="under-link" href="#services">What the platform does <span class="arr">&rarr;</span></a>
+        </div>
+      </div>
+    </div>
+    <div class="hero-statement">
+      <p class="eyebrow center" style="margin-bottom:24px">The platform</p>
+      <p class="reveal-words big">An AI-native research platform that computes every number, cites every claim, and generates institutional-grade equity research at scale.</p>
+    </div>
+    <div class="ticker" aria-label="Live market ticker">
+      <div class="ticker-track" id="tickerTrack"></div>
+    </div>
+  </section>
+
+  <!-- ════ STATS (immediately after hero, like reference) ════ -->
+  <section class="section stats" id="stats">
+    <div class="stats-grid">
+      <div class="stats-left">
+        <p class="eyebrow">By the numbers</p>
+        <h2 class="stats-statement reveal-words">Where financial data becomes investment intelligence.Track market movements in real time, analyze companies, model valuations, analyze forensic risk & financials and generate research reports — within a single platform.</h2>
+      </div>
+      <div class="stats-right">
+        <div class="stat-cell reveal-up"><span class="stat-num mono" data-to="2000" data-suf="+">0</span><span class="stat-cap">Companies covered</span></div>
+        <div class="stat-cell reveal-up"><span class="stat-num mono" data-to="48000" data-suf="+">0</span><span class="stat-cap">Filings processed</span></div>
+        <div class="stat-cell reveal-up"><span class="stat-num mono" data-to="12500" data-suf="+">0</span><span class="stat-cap">Reports generated</span></div>
+        <div class="stat-cell reveal-up"><span class="stat-num mono" data-to="9400" data-suf="+">0</span><span class="stat-cap">Transcript hours analyzed</span></div>
+        <div class="stat-cell reveal-up wide"><span class="stat-num mono" data-to="60" data-suf="M+">0</span><span class="stat-cap">Financial data points</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════ SERVICES (Tres Mares-style pinned sequence) ════ -->
+  <section class="services" id="services">
+    <div class="services-sticky">
+      <div class="services-stage-full">
+        <canvas id="svcCanvas" class="svc-canvas" aria-hidden="true"></canvas>
+        <svg id="svcShape" class="svc-shape" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <path id="svcShapePath" fill="#c2181b" d=""></path>
+        </svg>
+        <span class="ghost-word" id="ghostWord">Workspace</span>
+      </div>
+      <div class="services-inner">
+        <div class="services-nav">
+          <p class="eyebrow">The platform</p>
+          <ul id="svcNav">
+            <li class="active" data-s="0">Research Workspace</li>
+            <li data-s="1">Valuation &amp; DCF Engine</li>
+            <li data-s="2">Forensic &amp; Quality of Earnings</li>
+            <li data-s="3">Report Generation</li>
+          </ul>
+        </div>
+        <div class="services-copy">
+          <div class="svc-copy" id="svcCopy"></div>
+        </div>
+        <div class="services-stats" id="svcStats"></div>
+      </div>
+      <div class="svc-progress" id="svcProgress"></div>
+    </div>
+  </section>
+
+      <!-- ════ CAPABILITIES ════ -->
+  <section class="section caps">
+    <p class="eyebrow center">Capabilities</p>
+    <div class="caps-grid">
+      <article class="cap"><span class="cap-n mono">01</span><h4>Research Workspace</h4><p>A persistent analyst workstation per company, with a source drawer pinned to every claim.</p></article>
+      <article class="cap"><span class="cap-n mono">02</span><h4>Valuation Engine</h4><p>DCF, comparables and scenarios with provenance on every assumption.</p></article>
+      <article class="cap"><span class="cap-n mono">03</span><h4>Forensic Analysis</h4><p>Accruals, related-party flags, pledge and audit-qualification tracking.</p></article>
+      <article class="cap"><span class="cap-n mono">04</span><h4>Earnings Call Intelligence</h4><p>Guidance changes, tone deltas and a promise-versus-delivery tracker.</p></article>
+      <article class="cap"><span class="cap-n mono">05</span><h4>Portfolio Analytics</h4><p>Allocation, factor exposure, correlation and honest drawdown analysis.</p></article>
+      <article class="cap"><span class="cap-n mono">06</span><h4>Screener</h4><p>Institutional filtering across fundamentals, valuation history and quality.</p></article>
+      <article class="cap"><span class="cap-n mono">07</span><h4>Thesis Monitoring</h4><p>The platform remembers your thesis and flags the filing that breaks it.</p></article>
+      <article class="cap"><span class="cap-n mono">08</span><h4>Research Library</h4><p>A firm-wide, versioned record of every report, model and rating.</p></article>
+    </div>
+  </section>
+
+  <!-- ════ TRUST ════ -->
+  <section class="section trust" id="trust">
+    <div class="trust-grid">
+      <div class="trust-copy">
+        <p class="eyebrow">Methodology</p>
+        <h2 class="display">Built for <span class="accent">auditability.</span></h2>
+        <p class="trust-lead">Trust in research is earned through transparency, not endorsements. So we publish how the engine works &mdash; and refuse to let a model invent a number.</p>
+        <a class="under-link dark" href="#">Read the methodology <span class="arr">&rarr;</span></a>
+      </div>
+      <div class="trust-list">
+        <div class="tl-row reveal-up"><span class="tl-n mono">01</span><div><h4>Every number traceable</h4><p>Each figure resolves to a calculation reading a point-in-time database.</p></div></div>
+        <div class="tl-row reveal-up"><span class="tl-n mono">02</span><div><h4>Every claim cited</h4><p>Qualitative statements resolve to a span in a filing or transcript.</p></div></div>
+        <div class="tl-row reveal-up"><span class="tl-n mono">03</span><div><h4>Versioned research history</h4><p>Reports, models and ratings are immutable and timestamped.</p></div></div>
+        <div class="tl-row reveal-up"><span class="tl-n mono">04</span><div><h4>Deterministic calculations</h4><p>The model never computes &mdash; it writes around numbers it is handed.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════ WAVE TERRAIN (fixed bg, fades in on feedback, stays through CTA) ════ -->
+  <div class="wave-terrain" id="waveTerrain" aria-hidden="true">
+    <svg class="wave-terrain-svg" viewBox="0 0 1920 620" preserveAspectRatio="xMidYMax slice">
+      <defs>
+        <linearGradient id="wtg0" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#efeeeb"/><stop offset="1" stop-color="#f6f5f3"/></linearGradient>
+        <linearGradient id="wtg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e8e6e2"/><stop offset="1" stop-color="#f6f5f3"/></linearGradient>
+        <linearGradient id="wtg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dedbd6"/><stop offset="1" stop-color="#efeeec"/></linearGradient>
+        <linearGradient id="wtg3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d3d0ca"/><stop offset="1" stop-color="#e9e8e5"/></linearGradient>
+        <filter id="wtblur" x="-4%" y="-20%" width="108%" height="140%"><feGaussianBlur stdDeviation="2.6"/></filter>
+        <filter id="wtblur2" x="-4%" y="-20%" width="108%" height="140%"><feGaussianBlur stdDeviation="1.2"/></filter>
+      </defs>
+      <g class="wt-plane wt-p0"><path fill="url(#wtg0)" filter="url(#wtblur)" d="M0,360 C160,300 360,392 600,348 C840,304 980,404 1220,364 C1460,324 1620,404 1920,356 L1920,620 0,620 Z"/></g>
+      <g class="wt-plane wt-p1"><path fill="url(#wtg1)" filter="url(#wtblur2)" d="M0,420 C180,340 340,460 560,400 C780,340 900,470 1140,420 C1380,370 1520,480 1720,430 C1810,408 1880,430 1920,420 L1920,620 0,620 Z"/></g>
+      <g class="wt-plane wt-p2"><path fill="url(#wtg2)" d="M0,500 C220,430 420,540 640,490 C860,440 1040,560 1260,510 C1480,460 1660,560 1920,505 L1920,620 0,620 Z"/></g>
+      <g class="wt-plane wt-p3">
+        <path fill="url(#wtg3)" d="M0,570 C260,520 460,600 720,565 C980,530 1200,610 1460,575 C1660,548 1800,600 1920,580 L1920,620 0,620 Z"/>
+        <path class="wt-path" d="M960,620 C930,560 1010,520 960,470 C910,420 1000,390 970,340" fill="none" stroke="#c2181b" stroke-width="2" stroke-dasharray="1 7" stroke-linecap="round" opacity=".7"/>
+        <g fill="#c2181b">
+          <rect x="470" y="520" width="10" height="10" opacity=".8"/>
+          <rect x="1380" y="556" width="8" height="8" opacity=".55"/>
+          <rect x="250" y="586" width="7" height="7" opacity=".4"/>
+        </g>
+      </g>
+    </svg>
+  </div>
+
+  <!-- ════ FEEDBACK & SUPPORT (v58) ════ -->
+  <section class="feedback" id="feedback">
+    <div class="fb-grid">
+
+      <!-- feedback form -->
+      <div class="fb-card fb-form-card">
+        <div class="fb-header">
+          <span class="fb-plane" aria-hidden="true">
+            <picture>
+              <source srcset="/img/plane-mountain.webp" type="image/webp">
+              <img src="/img/plane-mountain.png" alt="" loading="lazy" decoding="async" width="800" height="537">
+            </picture>
+          </span>
+          <p class="fb-eyebrow mono">Feedback</p>
+          <h3 class="fb-h">Share your <span class="accent">thoughts.</span></h3>
+          <p class="fb-sub">Help improve Meridian &mdash; your feedback goes directly to the creator.</p>
+        </div>
+
+        <label class="fb-label" for="fbName">Full name <span>*</span></label>
+        <input id="fbName" class="fb-input" type="text" placeholder="Your full name" autocomplete="name" />
+        <label class="fb-label" for="fbEmail">Email address <span>*</span></label>
+        <input id="fbEmail" class="fb-input" type="email" placeholder="you@email.com" autocomplete="email" />
+        <label class="fb-label" for="fbPhone">Contact number</label>
+        <input id="fbPhone" class="fb-input" type="tel" placeholder="+91 98765 43210" autocomplete="tel" />
+        <label class="fb-label" for="fbMsg">Feedback message <span>*</span></label>
+        <textarea id="fbMsg" class="fb-input fb-textarea" placeholder="Share your thoughts, suggestions, bugs, or just say hello..."></textarea>
+        <span class="fb-label">Rating</span>
+        <div class="fb-rating" id="fbRating">
+          <button data-r="1" type="button" aria-label="1 star">&#9733;</button>
+          <button data-r="2" type="button" aria-label="2 stars">&#9733;&#9733;</button>
+          <button data-r="3" type="button" aria-label="3 stars">&#9733;&#9733;&#9733;</button>
+          <button data-r="4" type="button" aria-label="4 stars">&#9733;&#9733;&#9733;&#9733;</button>
+          <button data-r="5" type="button" aria-label="5 stars">&#9733;&#9733;&#9733;&#9733;&#9733;</button>
+        </div>
+        <div class="fb-actions">
+          <button class="fb-send gmail" id="fbGmail" type="button">&#9993; Send via Gmail</button>
+          <button class="fb-send outlook" id="fbOutlook" type="button">Send via Outlook</button>
+        </div>
+
+      </div>
+
+      <!-- support / donation -->
+      <div class="fb-card fb-support-card">
+        <div class="fb-header">
+          <span class="fb-rocket" aria-hidden="true">
+            <picture>
+              <source srcset="/img/rocket-clouds.webp" type="image/webp">
+              <img src="/img/rocket-clouds.png" alt="" loading="lazy" decoding="async" width="700" height="509">
+            </picture>
+          </span>
+          <p class="fb-eyebrow mono">Support Meridian</p>
+          <h3 class="fb-h">Help keep <span class="accent">Meridian</span> independent.</h3>
+          <p class="fb-sub">Meridian is built and maintained independently. Your support helps fund infrastructure, market data, new research tools, and continuous improvements &mdash; keeping Meridian accessible for everyone.</p>
+        </div>
+
+        <div class="sup-points">
+          <div class="sup-pt"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9 12l2 2 4-4" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>Independent &amp; community funded</div>
+          <div class="sup-pt"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 8l8 8M16 8l-8 8" stroke="currentColor" stroke-width="1.7"/></svg>No ads or sponsored research</div>
+          <div class="sup-pt"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>Secure payments via Razorpay UPI</div>
+          <div class="sup-pt"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.5-9-9a5 5 0 0 1 9-3 5 5 0 0 1 9 3c-2 4.5-9 9-9 9z" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>Every contribution directly supports development</div>
+        </div>
+
+        <div class="sup-grid">
+          <span class="sup-pop mono">&#9733; Most popular</span>
+          <div class="sup-fixed">
+            <div class="sup-head">
+              <span class="sup-cup" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M7 10h15v9a7 7 0 0 1-14 0z" fill="#fbe4e4" stroke="#c2181b" stroke-width="1.5"/><path d="M22 12h3a3 3 0 0 1 0 6h-3" fill="none" stroke="#c2181b" stroke-width="1.5"/><path d="M13 15l1.6 1.8L18 13.6" fill="none" stroke="#c2181b" stroke-width="1.5"/></svg></span>
+              <div class="sup-htxt">
+                <p class="sup-t">Support Meridian</p>
+                <p class="sup-s">A small support that makes a big difference.</p>
+              </div>
+            </div>
+            <p class="sup-amt">&#8377;99</p>
+            <span class="sup-chip mono">One-time contribution</span>
+            <span class="sup-mountain-art" aria-hidden="true">
+              <picture>
+                <source srcset="/img/mountain-flag.webp" type="image/webp">
+                <img src="/img/mountain-flag.png" alt="" loading="lazy" decoding="async" width="520" height="351">
+              </picture>
+            </span>
+            <button class="sup-btn primary" id="supFixed" type="button">Contribute &#8377;99 <span class="arr">&rarr;</span></button>
+          </div>
+          <div class="sup-divider" aria-hidden="true"><span class="sup-or mono">OR</span></div>
+          <div class="sup-custom">
+            <div class="sup-head">
+              <span class="sup-pen" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20l1-4L16 5l3 3L8 19z" fill="#fbe4e4" stroke="#c2181b" stroke-width="1.5"/></svg></span>
+              <div class="sup-htxt">
+                <p class="sup-t">Choose Your Amount</p>
+                <p class="sup-s">Enter any amount you wish to contribute.</p>
+              </div>
+            </div>
+            <div class="sup-input-wrap"><span class="mono">&#8377;</span><input id="supAmount" class="sup-input" type="number" min="1" placeholder="Enter amount" inputmode="numeric" /></div>
+            <button class="sup-btn" id="supCustom" type="button">Custom Amount <span class="arr">&rarr;</span></button>
+          </div>
+        </div>
+        <p class="fb-note" id="supNote" aria-live="polite"></p>
+        <div class="sup-pay">
+          <div class="sup-secure-line">
+            <span class="sup-shield" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9 12l2 2 4-4" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></span>
+            <div class="sup-secure-txt">
+              <span class="sup-secure-strong">100% secure payments</span>
+              <span class="sup-secure-sub mono">powered by Razorpay</span>
+            </div>
+          </div>
+          <div class="sup-brands" aria-label="Accepted payment methods">
+            <span class="pay-brand pay-upi">UPI<i></i></span>
+            <span class="pay-brand pay-gpay"><b class="g-b">G</b> Pay</span>
+            <span class="pay-brand pay-paytm">Pay<em>tm</em></span>
+            <span class="pay-brand pay-phonepe"><b class="pp-dot"></b>PhonePe</span>
+            <span class="pay-brand pay-visa">VISA</span>
+            <span class="pay-brand pay-mc"><i class="mc-r"></i><i class="mc-y"></i></span>
+            <span class="pay-brand pay-rupay">RuPay<b class="rp-flag"></b></span>
+            <span class="pay-more mono">&amp; more</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- where your support goes -->
+      <aside class="fb-card fb-side-card">
+        <p class="fb-eyebrow mono">Where your support goes</p>
+
+        <!-- Community goal tracker (live, driven by /api/support/goal) -->
+        <div class="side-goal" id="sideGoal" aria-live="polite">
+          <p class="side-goal-label mono">Community goal</p>
+          <p class="side-goal-amt">
+            <span class="side-goal-raised">&#8377;<span id="sgRaised">0</span></span>
+            <span class="side-goal-sep">/</span>
+            <span class="side-goal-target mono">&#8377;<span id="sgTarget">10,000</span></span>
+          </p>
+          <div class="side-goal-bar-wrap">
+            <div class="side-goal-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Community goal progress">
+              <span class="side-goal-fill" id="sgFill"></span>
+            </div>
+            <span class="side-goal-pct mono" id="sgPct">0%</span>
+          </div>
+          <p class="side-goal-meta mono"><span id="sgCount">0</span> contributors</p>
+        </div>
+
+        <div class="side-row"><span class="side-ic"><svg viewBox="0 0 24 24"><path d="M5 20V10M10 20V4M15 20v-8M20 20V7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></span><div><h4>Market data &amp; APIs</h4><p>Real-time data, filings, and essential APIs.</p></div></div>
+        <div class="side-row"><span class="side-ic"><svg viewBox="0 0 24 24"><path d="M7 18a4 4 0 0 1 0-8 6 6 0 0 1 11.6 1.6A3.5 3.5 0 0 1 18 18z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></span><div><h4>Cloud hosting</h4><p>Secure, reliable, and scalable infrastructure.</p></div></div>
+        <div class="side-row"><span class="side-ic"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M15.5 15.5L20 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><div><h4>Research &amp; tools</h4><p>Advanced models and research modules.</p></div></div>
+        <div class="side-row"><span class="side-ic"><svg viewBox="0 0 24 24"><path d="M4 14a8 8 0 0 1 16 0" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 14l4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 18h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><div><h4>Performance improvements</h4><p>Faster insights, smoother experience.</p></div></div>
+        <div class="side-heart"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.5-9-9a5 5 0 0 1 9-3 5 5 0 0 1 9 3c-2 4.5-9 9-9 9z" fill="#c2181b"/></svg>Your support keeps Meridian independent, and growing.</div>
+        <div class="fb-contact-card">
+          <p class="fb-eyebrow mono">Contact the creator</p>
+          <p class="fb-name">Nikhil Pratap Singh</p>
+          <a class="fb-contact" href="mailto:nikhilpratap112006@gmail.com">&#9993; nikhilpratap112006@gmail.com</a>
+          <a class="fb-contact" href="https://linkedin.com/in/nikhilpr11" target="_blank" rel="noopener">&#128279; linkedin.com/in/nikhilpr11</a>
+        </div>
+      </aside>
+    </div>
+    <p class="fb-footline"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.5-9-9a5 5 0 0 1 9-3 5 5 0 0 1 9 3c-2 4.5-9 9-9 9z" fill="#c2181b"/></svg> Meridian will always remain free to explore. Your support simply helps build it faster.</p>
+  </section>
+
+  <!-- ════ FINAL CTA + FOOTER (v58) ════ -->
+  <section class="final" id="final">
+    <div class="final-inner">
+      <h2 class="final-h">Research at institutional scale.</h2>
+      <a class="btn-primary lg" id="finalCta" href="/terminal">Launch Meridian <span class="arr">&rarr;</span></a>
+    </div>
+    <footer class="footer">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <span class="brand">MERIDIAN</span>
+          <p class="footer-copy">&copy; 2026 Meridian Intelligence</p>
+          <p class="footer-legal-line">Market data may be delayed. Nothing herein is investment advice.</p>
+        </div>
+        <div class="footer-about">
+          <p class="fb-eyebrow mono">About me</p>
+          <p>Hi, I&rsquo;m Nikhil &mdash; a CA finalist passionate about financial research, technology, and solving real-world problems.</p>
+          <a class="under-link sm" href="https://linkedin.com/in/nikhilpr11" target="_blank" rel="noopener">Read more <span class="arr">&rarr;</span></a>
+        </div>
+        <nav class="footer-links" aria-label="Policies">
+          <a href="/cancellation">Cancellation Policy</a>
+          <a href="/refund">Refund Policy</a>
+          <a href="/terms">Terms</a>
+          <a href="/privacy">Privacy Policy</a>
+        </nav>
+      </div>
+    </footer>
+  </section>
+<!-- ════ REAL PRODUCT EXPERIENCE ════ -->
+  <section class="px" id="experience" aria-label="Real product experience">
+    <div class="px-stage">
+      <div class="px-glow" aria-hidden="true"></div>
+      <header class="px-head">
+        <p class="px-eyebrow mono">REAL PRODUCT EXPERIENCE</p>
+        <h2 class="px-title">See Meridian Terminal in action</h2>
+        <p class="px-sub">Real interface. Real data. Real workflows. Institutional-grade financial intelligence.</p>
+      </header>
+
+      <div class="px-carousel" id="pxCarousel" tabindex="0" role="region" aria-roledescription="carousel" aria-label="Product tour">
+        <div class="px-slidearea" id="pxSlideArea"></div>
+
+        <div class="px-controls">
+          <button class="px-nav px-prev" id="pxPrev" aria-label="Previous slide">←</button>
+          <div class="px-progress mono" aria-live="polite"><span id="pxCur">01</span><i>/</i><span id="pxTotal">18</span></div>
+          <button class="px-nav px-next" id="pxNext" aria-label="Next slide">→</button>
+        </div>
+
+        <div class="px-dots" id="pxDots" role="tablist" aria-label="Slides"></div>
+      </div>
+    </div>
+  </section>
+  <script src="/lenis.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
+
+

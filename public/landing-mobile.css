@@ -1,0 +1,435 @@
+/*
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  MERIDIAN · LANDING-MOBILE.CSS
+ *  Mobile / Android responsive layer for the marketing landing page (index.html).
+ *
+ *  ARCHITECTURE GUARANTEE (matches /public/mobile.css used by the terminal):
+ *  Every rule below lives inside a @media (max-width: …) block. There are
+ *  no unscoped selectors, so nothing here can ever apply above 1024px.
+ *  Desktop (>1024px) remains pixel-identical to styles.css alone.
+ *
+ *  Breakpoints:
+ *    xs  – Android phones  320–480px
+ *    sm  – Large phones    481–768px
+ *    md  – Small tablets   769–1024px
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   1. GLOBAL MOBILE SAFETY NET (≤1024px)
+   Same defensive baseline used on the terminal: no horizontal overflow,
+   no input-triggered zoom, 44px tap targets, momentum scrolling.
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+
+  /* overflow-x:hidden on html kills vertical scroll on Android Chrome.
+     Set it only on body; leave html untouched. */
+  body {
+    overflow-x: hidden;
+    max-width: 100vw;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+
+  img, canvas, svg {
+    max-width: 100%;
+  }
+
+  /* Tap targets: nav links, buttons, inputs */
+  .nav-cta, .btn-primary, .btn-link, .under-link,
+  .pstep, .show-tab, .fb-send, .fb-rating button,
+  input, textarea, select, button {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  /* Prevent iOS/Android auto-zoom on focus */
+  .fb-input, input, textarea, select {
+    font-size: clamp(14px, 3.5vw, 16px) !important;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   2. HERO — fix text/aside overlap (the critical bug)
+   Desktop uses a fixed 2-col grid (1fr 320px) so hero-aside sits beside the
+   headline. Below 1024px that 320px column no longer has room and the
+   absolutely-unconstrained text collides with the headline. Stack instead.
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .hero-inner {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    padding-top: 130px;
+    align-items: start;
+  }
+  .hero-aside {
+    max-width: 100%;
+    padding-bottom: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .hero-inner { padding: 110px 22px 0; }
+  .hero-h1 { font-size: clamp(40px, 13vw, 64px); }
+  .hero-statement { padding: 14vh 22px 12vh; }
+  .hero-statement .big { font-size: clamp(20px, 5.6vw, 30px); }
+  .eyebrow { font-size: 11px; letter-spacing: 0.14em; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   3. TICKER STRIP — keep readable height on small phones
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .ticker { height: 44px; }
+  .tk { font-size: 12px; gap: 8px; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   4. PIPELINE — fix step-grid overflow (the critical bug)
+   At ≤1024px .pipe-steps becomes a 3-col grid but keeps desktop padding/gap,
+   so long labels ("Financial extraction", "Report generation") force the
+   grid wider than the viewport. Tighten padding and let labels wrap.
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .pipe-steps {
+    width: 100%;
+  }
+  .pstep {
+    padding: 14px 10px;
+    gap: 8px;
+    min-width: 0;
+  }
+  .pstep .pl {
+    font-size: 12.5px;
+    line-height: 1.25;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+  .pstep .pn {
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+  .pipe-stage {
+    padding: 22px 18px;
+    min-height: 0;
+  }
+  .pipe-mock {
+    font-size: 12.5px;
+    line-height: 1.7;
+    overflow-wrap: break-word;
+  }
+}
+
+@media (max-width: 480px) {
+  .pipe-steps {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .pstep .pl { font-size: 11.5px; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   5. SECTION RHYTHM — breathing room without the cramped feel
+   Desktop section padding (130px) is too generous for small screens and the
+   existing 640px rule already trims it to 90px; add an xs-specific step
+   down so 320–480px devices get proportionate, not cramped, spacing.
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .section { padding-top: 64px; padding-bottom: 64px; }
+  .show-head { margin-bottom: 40px; }
+  .final { padding: 90px 22px; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   6. STATS — tighten the 2-col number grid on the smallest phones
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .stat-cell { padding: 22px 16px; }
+  .stat-num { font-size: clamp(30px, 9vw, 42px); }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   7. SERVICES (pinned sequence) — already falls back to a static layout
+   below 1024px via styles.css + app.js's isPinned() check. Just tame the
+   decorative canvas/shape/ghost-word so they don't crowd the copy.
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .svc-shape { opacity: .5; }
+  .ghost-word { font-size: clamp(40px, 16vw, 90px); opacity: .7; }
+}
+
+@media (max-width: 640px) {
+  .services-stage-full { opacity: .8; }
+  .svc-copy { max-width: 100%; }
+  .services-stats { flex-direction: row; flex-wrap: wrap; gap: 18px 28px; text-align: left; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   8. SHOWCASE MOCK — keep the product preview legible, never clipped
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .show-stage-wrap { padding: 0 18px; }
+  .showcase-immersive .mock-body { padding: 18px; min-height: 0; }
+  .mk-kv { grid-template-columns: 1fr 1fr; }
+  .mk-row { grid-template-columns: 1fr 70px 70px; font-size: 11px; }
+  .show-tabs { padding: 0 18px; }
+  .show-caption { padding: 0 18px; }
+}
+
+@media (max-width: 480px) {
+  .mk-row { grid-template-columns: 1fr 1fr; }
+  .mk-row > span:nth-child(3) { display: none; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   9. FEEDBACK FORM — full-width controls, no keyboard-induced jumps
+   inputs already inherit the 44px/16px rules from section 1; this adds
+   layout polish only.
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .fb-actions { flex-direction: column; }
+  .fb-send { width: 100%; text-align: center; }
+  .fb-rating { grid-template-columns: repeat(5, 1fr); gap: 5px; }
+  .fb-rating button { padding: 10px 4px; font-size: 11px; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   10. NAV — collapse desktop links, keep brand + CTA reachable by thumb
+   (.nav-links is already display:none at ≤640px in styles.css; this just
+   ensures the remaining bar has comfortable tap spacing.)
+────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .nav-inner { height: 64px; gap: 16px; }
+  .nav-cta {
+    font-size: 13px;
+    padding: 10px 14px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  /* Brand wordmark — expand tap area with padding, not layout */
+  .brand {
+    padding: 9px 0;
+  }
+  /* Contact card links */
+  a.fb-contact {
+    display: block;
+    padding: 6px 0;
+    min-height: 44px;
+    line-height: 1.55;
+  }
+  /* Footer navigation links */
+  .footer-links a {
+    display: inline-block;
+    padding: 10px 6px;
+    min-height: 44px;
+    line-height: 1;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   11. SAFE-AREA INSETS — Android/notched devices
+────────────────────────────────────────────────────────────────────────── */
+@supports (padding: max(0px)) {
+  @media (max-width: 640px) {
+    .nav-inner {
+      padding-left: max(22px, env(safe-area-inset-left));
+      padding-right: max(22px, env(safe-area-inset-right));
+    }
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   12. REDUCED MOTION passthrough already handled in styles.css — no
+   duplicate rule needed here.
+────────────────────────────────────────────────────────────────────────── */
+
+
+/* ═════════════════════════════════════════════════════════════════════════
+   ═════════════  ANDROID FIX PASS (v63)  ═════════════
+   These blocks fix five Android-only regressions reported against v63.
+   Every rule is inside a mobile @media query — desktop is untouched.
+
+   Issues addressed:
+     A. Feedback card plane graphic renders at natural aspect on Android
+        (styles.css height was being ignored by picture>img on some engines),
+        squeezing eyebrow / heading / sub over the inputs.
+     B. Support card rocket graphic — same problem, same fix.
+     C. Hero bottom shows a huge slab of empty terrain because .hero-top
+        had min-height:88vh + hero-statement uses 22vh/18vh padding.
+     D. Ticker items visually merge on Android — `gap` between flex items
+        on .ticker-track / .tk isn't respected by older WebViews, so labels
+        and values run together with no separator.
+     E. "MOST POPULAR" chip visually collides with the cup logo + "Support
+        Meridian" row inside the ₹99 panel.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* ─── A + B. Feedback plane & Support rocket illustrations ─────────────
+   Force the illustration container AND the inner <img> to a bounded height
+   with object-fit:cover so the picture cannot exceed 130px (Android engines
+   were falling back to the img's intrinsic 800×537 / 700×509 dimensions).
+   Also promote them out of the float context so the eyebrow / heading /
+   sub text always start on a clean new line below the graphic. */
+@media (max-width: 640px) {
+  .fb-plane,
+  .fb-rocket {
+    float: none !important;
+    display: block !important;
+    position: relative !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 130px !important;
+    max-height: 130px !important;
+    margin: 0 0 18px 0 !important;
+    border-radius: 12px;
+    overflow: hidden;
+    shape-outside: none !important;
+  }
+  .fb-plane picture,
+  .fb-rocket picture {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+  .fb-plane img,
+  .fb-rocket img {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 130px !important;
+    object-fit: cover !important;
+    object-position: center 32% !important;
+  }
+  /* Once the graphic is a full-width block, the eyebrow / heading / sub
+     below must sit in the normal document flow with no residual clear-fix
+     wrap-around from styles.css. */
+  .fb-header {
+    display: block !important;
+    position: relative;
+  }
+  .fb-header .fb-eyebrow,
+  .fb-header .fb-h,
+  .fb-header .fb-sub {
+    clear: both !important;
+    float: none !important;
+    width: 100%;
+  }
+  .fb-header .fb-eyebrow { margin-top: 2px; }
+}
+
+@media (max-width: 480px) {
+  .fb-plane,
+  .fb-rocket {
+    height: 112px !important;
+    max-height: 112px !important;
+    margin-bottom: 14px !important;
+  }
+  .fb-plane img,
+  .fb-rocket img {
+    max-height: 112px !important;
+  }
+}
+
+/* ─── C. Hero: too much empty terrain at the bottom ─────────────────────
+   Trim min-height on .hero-top (was 88vh) and shrink the vertical padding
+   on .hero-statement (was 14vh/12vh via section 2 above, still too airy on
+   Android where the terrain fills the whole viewport behind it). Content
+   now sits closer together — same design, just less empty grey. */
+@media (max-width: 900px) {
+  .hero-top { min-height: 0; }
+}
+
+@media (max-width: 640px) {
+  .hero-inner { padding-top: 108px; padding-bottom: 28px; }
+  .hero-statement { padding: 8vh 22px 8vh; }
+}
+
+@media (max-width: 480px) {
+  .hero-inner { padding-top: 96px; padding-bottom: 20px; }
+  .hero-statement { padding: 6vh 20px 6vh; }
+  .hero-h1 { margin-top: 14px; }
+  /* Softens the parallax terrain so the empty lower half reads as ambient
+     background instead of a dominant grey slab. Desktop opacity untouched. */
+  .terrain { opacity: 0.72; }
+}
+
+/* ─── D. Ticker items merging on Android ───────────────────────────────
+   .ticker-track uses `gap: 52px` and .tk uses `gap: 10px` (both flex-gap).
+   Older Android WebViews render this without any separation once the
+   marquee starts translating. Add explicit horizontal padding on each .tk
+   plus per-child right-margins so separation survives regardless of
+   flex-gap support. Also add a subtle divider so items read as distinct
+   even when the marquee is mid-scroll. */
+@media (max-width: 1024px) {
+  .ticker-track {
+    gap: 0 !important;
+  }
+  .tk {
+    padding: 0 22px;
+    gap: 8px;
+    border-right: 1px solid var(--line);
+    align-items: center;
+  }
+  .tk > * + * {
+    margin-left: 6px;
+  }
+  .tk .tk-l { padding-right: 2px; }
+}
+
+@media (max-width: 640px) {
+  .ticker { height: 46px; }
+  .tk {
+    font-size: 12px;
+    padding: 0 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .ticker { height: 44px; }
+  .tk {
+    font-size: 11.5px;
+    padding: 0 16px;
+    gap: 6px;
+  }
+  .tk > * + * { margin-left: 4px; }
+}
+
+/* ─── E. "MOST POPULAR" chip crowding the cup + heading row ────────────
+   On mobile the sup-grid collapses to a single column and its padding-top
+   (34px) leaves almost no visual gap between the absolutely-positioned
+   MOST POPULAR chip and the .sup-head row directly below it. Push the
+   panel padding down and give .sup-fixed .sup-head its own top offset so
+   the chip has breathing room. */
+@media (max-width: 900px) {
+  .sup-grid {
+    padding-top: 52px !important;
+  }
+  .sup-fixed .sup-head {
+    margin-top: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .sup-grid {
+    padding-top: 56px !important;
+  }
+  .sup-fixed .sup-head {
+    margin-top: 14px;
+  }
+  .sup-pop {
+    top: 14px;
+    left: 16px;
+  }
+}
+
