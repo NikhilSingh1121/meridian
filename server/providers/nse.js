@@ -242,4 +242,25 @@ async function fiiDiiPack() {
   };
 }
 
-module.exports = { fiiDiiLatest, fiiDiiPack, fiiWindows, fiiExtras };
+/**
+ * Seed captured FII/DII history from an env var when empty (Render's disk is
+ * wiped on redeploy and NSE's historical endpoint is often blocked from cloud
+ * hosts, so the chart can restart from zero). Set FIIDII_SEED to a JSON array of
+ * {date,fii,dii} sessions to restore the series on boot. Only seeds an empty
+ * store; genuine captured sessions are never overwritten. For full durability,
+ * use a persistent disk (MERIDIAN_DATA_DIR).
+ */
+function seedHistoryFromEnv() {
+  const raw = process.env.FIIDII_SEED;
+  if (!raw) return;
+  if (readHistory().length) return;
+  try {
+    const sessions = JSON.parse(raw);
+    if (Array.isArray(sessions) && sessions.length) {
+      const n = writeHistory(sessions).length;
+      console.log(`[nse] seeded ${n} FII/DII session(s) from FIIDII_SEED`);
+    }
+  } catch (e) { console.warn("[nse] FIIDII_SEED parse failed:", e.message); }
+}
+
+module.exports = { fiiDiiLatest, fiiDiiPack, fiiWindows, fiiExtras, seedHistoryFromEnv };

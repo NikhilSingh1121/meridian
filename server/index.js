@@ -53,6 +53,10 @@ app.use((err, req, res, _next) => {
 });
 
 require("./lib/datastore").init().then(() => {
+// Restore ephemeral counters from env seeds (Render wipes the disk on redeploy):
+//   SUPPORT_SEED_INR → community-goal total ; FIIDII_SEED → FII/DII chart history.
+try { require("./lib/payments-store").seedFromEnv(); } catch (e) { console.warn("[seed] payments:", e.message); }
+try { require("./providers/nse").seedHistoryFromEnv(); } catch (e) { console.warn("[seed] fiidii:", e.message); }
 app.listen(PORT, () => {
   console.log(`MERIDIAN running → http://localhost:${PORT}`);
   console.log(`Terminal        → http://localhost:${PORT}/terminal`);

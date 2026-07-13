@@ -83,4 +83,22 @@ function summary() {
   };
 }
 
-module.exports = { read, recordPayment, summary };
+/**
+ * Seed the running total from an env var when the store is empty. On Render the
+ * disk is ephemeral, so after a redeploy the community-goal total would restart
+ * from zero; set SUPPORT_SEED_INR to the last known total and it is restored on
+ * boot (new contributions add on top). Idempotent — only seeds an empty store.
+ * For TRUE durability (keeping post-seed contributions too) use a persistent
+ * disk and point MERIDIAN_DATA_DIR at it.
+ */
+function seedFromEnv() {
+  const seed = Number(process.env.SUPPORT_SEED_INR);
+  if (!Number.isFinite(seed) || seed <= 0) return;
+  const s = read();
+  if (s.count > 0 || s.total_inr > 0) return; // already has data — don't double-count
+  const amt = Math.round(seed * 100) / 100;
+  writeAtomic({ payments: [{ id: "seed:baseline", amount_inr: amt, ts: Date.now(), src: "seed", email: null }], total_inr: amt, count: 1, updated_at: Date.now() });
+  console.log(`[payments] seeded community-goal baseline ₹${amt} from SUPPORT_SEED_INR`);
+}
+
+module.exports = { read, recordPayment, summary, seedFromEnv };

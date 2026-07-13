@@ -221,7 +221,21 @@ async function buildIndia() {
     hist("USDINR=X", "3mo", "1d"),
     cachedDurable("fred:TRESEGINM052N", 12 * 60 * 60 * 1000, () => M.fredSeries("TRESEGINM052N", 60)).catch(() => []),
     cachedDurable("fred:INDPROINDMISMEI", 12 * 60 * 60 * 1000, () => M.fredSeries("INDPROINDMISMEI", 60)).catch(() => []),
-    cachedDurable("wb:IND:gdp", 24 * 60 * 60 * 1000, () => M.worldBank("IND", "NY.GDP.MKTP.KD.ZG", 15)).catch(() => []),
+    cachedDurable("wb:IND:gdp", 24 * 60 * 60 * 1000, async () => {
+      // World Bank first; if it's unreachable (it often is from cloud hosts),
+      // fall back to the IMF WEO real-GDP-growth series so the card never drops.
+      let g = await M.worldBank("IND", "NY.GDP.MKTP.KD.ZG", 15).catch(() => []);
+      if (!g.length) {
+        const imf = await M.imfIndicator("NGDP_RPCH", ["IND"]).catch(() => ({}));
+        const d = imf && imf.IND;
+        if (d && d.trend && d.trend.length) {
+          const endY = +d.year || new Date().getFullYear();
+          g = d.trend.map((v, i) => ({ date: String(endY - (d.trend.length - 1 - i)), v }));
+        }
+      }
+      if (!g.length) throw new Error("no GDP series"); // let cachedDurable serve last-good snapshot
+      return g;
+    }).catch(() => []),
   ]);
   const repo = ratesPack && ratesPack.policy ? ratesPack.policy.find((p) => p.cc === "IN") : null;
   const in10 = ratesPack && ratesPack.bonds ? ratesPack.bonds.find((b) => b.cc === "IN") : null;

@@ -254,9 +254,12 @@
                 <div class="ec-drop-file mono" id="ecPdfName"></div>
               </label>
             </div>
-            <button class="btn btn-amber" id="ecAnalyze" type="button" style="width:100%;margin-top:10px">Analyse transcript</button>
+            <div class="ec-btnrow">
+              <button class="btn btn-amber" id="ecAnalyze" type="button">Analyse transcript</button>
+              <button class="btn" id="ecDocx" type="button" title="Download a formatted .docx research report">⬇ DOCX report</button>
+            </div>
             <div id="ecStatus" class="panel-sub mono" style="margin-top:8px"></div>
-            <div class="note ec-an-note">Deterministic engine (tone, guidance, risks, KPIs, Q&amp;A, topics, speakers, SWOT, scorecard) runs locally on the text. With an <b>ANTHROPIC_API_KEY</b> set, a full institutional-grade report is generated per the built-in analyst prompt. Every signal traces to the transcript.</div>
+            <div class="note ec-an-note">Fully deterministic — a 9-section institutional dashboard (assessment, financial snapshot, management scorecard, sentiment timeline, segments, guidance, risk heat-map, thesis, evidence appendix) is computed locally from the transcript. No AI, no external calls. Every figure is extracted verbatim and every score traces to the text. Use <b>⬇ DOCX report</b> for a formatted download.</div>
           </div>
           <div id="ecOut"><div class="empty-mini mono">Load a company above for its schedule &amp; recent calls, then paste a transcript or import a PDF to generate the analysis — management tone, guidance tracking, risk &amp; competitor intelligence, topic frequency, per-speaker sentiment and an institutional scorecard.</div></div>
         </div>

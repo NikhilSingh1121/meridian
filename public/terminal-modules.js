@@ -6170,65 +6170,358 @@ function renderRisk(d) {
 
 /* ════════ EARNINGS CALL (dedicated top-level module) ════════ */
 TABS.earnings = {
+  _inMode: "text",
+  _pdfText: null,
+  _pdfName: null,
   init() {
+    const load = () => this.loadCore(($("#ecSym").value || "").trim());
+    $("#ecLoad") && $("#ecLoad").addEventListener("click", load);
+    $("#ecSym") && $("#ecSym").addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });
+    $$("#ecInTabs .ec-tab").forEach((b) => b.addEventListener("click", () => this.switchInput(b.dataset.in)));
     const an = $("#ecAnalyze");
     if (an) an.addEventListener("click", () => this.analyze());
+    $("#ecDocx") && $("#ecDocx").addEventListener("click", () => this.downloadDocx());
     $("#ecPaste") && $("#ecPaste").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.ctrlKey) this.analyze(); });
+    this.wirePdf();
   },
+
+  _currentText() { return this._inMode === "pdf" ? (this._pdfText || "") : (($("#ecPaste").value || "").trim()); },
+
+  async downloadDocx() {
+    const text = this._currentText();
+    if (!text || text.length < 100) { $("#ecStatus").innerHTML = `<span class="down">Add a transcript first (paste or import a PDF).</span>`; return; }
+    const btn = $("#ecDocx"); const orig = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "building…"; }
+    try {
+      const sym = ($("#ecSym").value || "").trim().toUpperCase();
+      const res = await fetch("/api/earnings/report.docx", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ transcript: text, symbol: sym || undefined }) });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || ("HTTP " + res.status)); }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${sym || "earnings"}_earnings_call_analysis.docx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      $("#ecStatus").innerHTML = `<span class="up">DOCX report downloaded.</span>`;
+    } catch (e) {
+      $("#ecStatus").innerHTML = `<span class="down">${esc(e.message)}</span>`;
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = orig; }
+    }
+  },
+
+  switchInput(mode) {
+    this._inMode = mode;
+    $$("#ecInTabs .ec-tab").forEach((b) => b.classList.toggle("active", b.dataset.in === mode));
+    $("#ecInText").hidden = mode !== "text";
+    $("#ecInPdf").hidden = mode !== "pdf";
+  },
+
+  /* ── CORE: schedule (right) + recent calls (left) ── */
+  async loadCore(sym) {
+    if (!sym) { $("#ecCoreStatus").innerHTML = `<span class="down">Enter a ticker.</span>`; return; }
+    sym = sym.toUpperCase();
+    $("#ecCoreStatus").textContent = "loading earnings data…";
+    $("#ecCore").innerHTML = `<div class="ec-core-empty loading mono">fetching schedule &amp; recent calls for ${esc(sym)}…</div>`;
+    try {
+      const d = await api(`/api/earnings/summary/${encodeURIComponent(sym)}`);
+      if (!d.available) throw new Error(d.error || "no earnings data");
+      $("#ecCoreStatus").innerHTML = `<span class="up">${esc(d.name)}</span> · ${esc(d.exchange || "")} · live`;
+      $("#ecFor").textContent = `${d.name} — paste a transcript or import a PDF`;
+      this.renderCore(d);
+    } catch (e) {
+      $("#ecCore").innerHTML = `<div class="ec-core-empty empty-mini mono">Earnings data unavailable for ${esc(sym)} — ${esc(e.message || "")}. Check the ticker (use the exchange suffix, e.g. RELIANCE.NS).</div>`;
+      $("#ecCoreStatus").textContent = "";
+    }
+  },
+
+  renderCore(d) {
+    const ccy = d.currency || "";
+    const eps = (v) => (v == null ? "—" : F.px(v, ccy, Math.abs(v) < 10 ? 2 : 1));
+    const surpTxt = (v) => (v == null ? "—" : (v >= 0 ? "+" : "") + v.toFixed(1) + "%");
+    const cls = (v) => (v == null ? "" : v >= 0 ? "up" : "down");
+    const dfmt = (iso) => { if (!iso) return "—"; const dt = new Date(iso); return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); };
+
+    // LEFT — recent calls
+    const s = d.stats || {};
+    const hist = (d.history || []).slice(-8);
+    const maxAbs = Math.max(1, ...hist.map((h) => Math.abs(h.surprisePct || 0)));
+    const bars = hist.map((h) => {
+      const v = h.surprisePct;
+      const ht = v == null ? 0 : Math.max(4, (Math.abs(v) / maxAbs) * 58);
+      return `<div class="ec-surp-col" title="${dfmt(h.date)} · ${surpTxt(v)}"><div class="ec-surp-bar ${v >= 0 ? "up" : "down"}" style="height:${ht}px"></div><span class="ec-surp-x">${new Date(h.date).toLocaleDateString("en-GB", { month: "short", year: "2-digit" })}</span></div>`;
+    }).join("");
+    const histRows = hist.slice().reverse().map((h) => `<tr>
+      <td>${dfmt(h.date)}</td><td>${eps(h.epsActual)}</td><td>${eps(h.epsEstimate)}</td>
+      <td class="${cls(h.surprisePct)}">${surpTxt(h.surprisePct)}</td>
+      <td>${h.beat == null ? "—" : h.beat ? "<span class='up'>Beat</span>" : "<span class='down'>Miss</span>"}</td></tr>`).join("");
+    const left = `<div class="ec-panel">
+      <div class="ec-ph"><h4>Recent Earnings Calls</h4><span class="ec-ph-sub">${s.quarters || 0} quarters · actual vs estimate</span></div>
+      <div class="ec-pbody">
+        <div class="ec-stats">
+          <div class="ec-stat"><div class="l">Hit rate</div><div class="v ${s.hitRate >= 60 ? "up" : s.hitRate < 40 ? "down" : ""}">${s.hitRate == null ? "—" : Math.round(s.hitRate) + "%"}</div></div>
+          <div class="ec-stat"><div class="l">Beats / Misses</div><div class="v">${s.beats ?? "—"} / ${s.misses ?? "—"}</div></div>
+          <div class="ec-stat"><div class="l">Avg surprise</div><div class="v ${cls(s.avgSurprise)}">${s.avgSurprise == null ? "—" : surpTxt(s.avgSurprise)}</div></div>
+        </div>
+        ${hist.length ? `<div><div class="ec-lbl">Surprise history</div><div class="ec-surp">${bars}</div></div>` : ""}
+        ${hist.length ? `<table class="ec-tbl"><thead><tr><th>Quarter end</th><th>Actual</th><th>Estimate</th><th>Surprise</th><th>Result</th></tr></thead><tbody>${histRows}</tbody></table>` : `<div class="empty-mini mono">No reported-quarter history exposed for this ticker.</div>`}
+      </div></div>`;
+
+    // RIGHT — schedule
+    const n = d.next || {};
+    const cd = n.daysUntil == null ? "" : n.daysUntil < 0 ? `${Math.abs(n.daysUntil)}d ago` : n.daysUntil === 0 ? "today" : `in ${n.daysUntil} days`;
+    const fwdRows = (d.forward || []).map((f) => `<tr>
+      <td>${f.label}</td><td>${eps(f.epsAvg)}</td>
+      <td class="${cls(f.growthPct)}">${f.growthPct == null ? "—" : (f.growthPct >= 0 ? "+" : "") + f.growthPct.toFixed(0) + "%"}</td>
+      <td>${f.numAnalysts ?? "—"}</td></tr>`).join("");
+    const links = (d.links || []).map((l) => `<a class="ec-link" href="${l.url}" target="_blank" rel="noopener">${esc(l.label)} ↗</a>`).join("");
+    const right = `<div class="ec-panel">
+      <div class="ec-ph"><h4>Earnings Call Schedule</h4><span class="ec-ph-sub">next call · forward consensus</span></div>
+      <div class="ec-pbody">
+        <div class="ec-next">
+          <div class="ec-next-top"><span class="ec-next-date">${dfmt(n.date)}</span><span class="ec-next-cd">${cd}</span></div>
+          <div class="ec-next-tag">${n.date ? (n.isEstimate ? "estimated date" : "confirmed date") : "date not scheduled"}${d.exchange ? " · " + esc(d.exchange) : ""}</div>
+          <div class="ec-next-grid">
+            <div class="ec-next-cell"><div class="l">Consensus EPS</div><div class="v">${eps(n.epsEstimate)}</div></div>
+            <div class="ec-next-cell"><div class="l">Consensus revenue</div><div class="v">${n.revenueEstimate == null ? "—" : F.cap(n.revenueEstimate, ccy)}</div></div>
+          </div>
+        </div>
+        ${fwdRows ? `<div><div class="ec-lbl">Forward consensus (analyst estimates)</div><table class="ec-tbl"><thead><tr><th>Period</th><th>EPS est.</th><th>YoY</th><th>Analysts</th></tr></thead><tbody>${fwdRows}</tbody></table></div>` : ""}
+        <div><div class="ec-lbl">Transcripts &amp; filings</div><div class="ec-links">${links}</div></div>
+      </div></div>`;
+
+    $("#ecCore").innerHTML = left + right;
+  },
+
+  /* ── PDF import ── */
+  wirePdf() {
+    const inp = $("#ecPdf"), drop = $("#ecDrop");
+    if (!inp || !drop) return;
+    inp.addEventListener("change", () => { if (inp.files && inp.files[0]) this.handlePdf(inp.files[0]); });
+    ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("drag"); }));
+    ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("drag"); }));
+    drop.addEventListener("drop", (e) => { const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) this.handlePdf(f); });
+  },
+  async handlePdf(file) {
+    if (!/pdf$/i.test(file.name) && file.type !== "application/pdf") { $("#ecStatus").innerHTML = `<span class="down">Please choose a PDF file.</span>`; return; }
+    this._pdfText = null; this._pdfName = file.name;
+    $("#ecPdfName").textContent = `${file.name} — extracting…`;
+    $("#ecStatus").textContent = "";
+    try {
+      const buf = await file.arrayBuffer();
+      const b64 = _b64(buf);
+      const d = await api("/api/earnings/extract-pdf", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pdf: b64 }) });
+      if (d.error || !d.text) throw new Error(d.error || "could not read text from this PDF");
+      this._pdfText = d.text;
+      $("#ecPdfName").textContent = `${file.name} · ${d.pages || "?"} pages · ${d.words || d.text.split(/\s+/).length} words extracted · boilerplate removed`;
+      $("#ecStatus").innerHTML = `<span class="up">Ready — click Analyse.</span>`;
+    } catch (e) {
+      $("#ecPdfName").textContent = `${file.name} — ${e.message}`;
+      $("#ecStatus").innerHTML = `<span class="down">${esc(e.message)}. If it is a scanned PDF, paste the text instead.</span>`;
+    }
+  },
+
   async analyze() {
-    const transcript = $("#ecPaste").value.trim();
-    if (transcript.length < 100) {
-      $("#ecStatus").innerHTML = `<span class="down">Paste a longer transcript (at least a few paragraphs).</span>`;
+    const text = this._inMode === "pdf" ? (this._pdfText || "") : ($("#ecPaste").value || "").trim();
+    if (!text || text.length < 100) {
+      $("#ecStatus").innerHTML = `<span class="down">${this._inMode === "pdf" ? "Import a transcript PDF first (or one with less text than expected)." : "Paste a longer transcript (at least a few paragraphs)."}</span>`;
       return;
     }
     $("#ecStatus").textContent = "analysing…";
-    $("#ecOut").innerHTML = `<div class="loading mono" style="padding:40px">Analysing transcript — computing tone, guidance, risks, competitor mentions, topics…</div>`;
+    ecAnimate($("#ecOut"), ["Cleaning transcript — stripping headers, footers & page numbers", "Segmenting speakers & Q&A", "Scoring management tone & guidance", "Extracting KPIs, risks & topics", "Composing the institutional report"]);
     try {
-      const d = await api("/api/earnings/analyze", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ transcript }) });
-      if (d.error) { $("#ecOut").innerHTML = `<div class="empty-mini">${d.error}</div>`; $("#ecStatus").textContent = ""; return; }
-      $("#ecFor").textContent = "transcript analysis";
-      $("#ecStatus").textContent = "done · Ctrl+Enter to re-run";
+      const sym = ($("#ecSym").value || "").trim().toUpperCase();
+      const d = await api("/api/earnings/analyze", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ transcript: text, symbol: sym || undefined }) });
+      if (d.error) { $("#ecOut").innerHTML = `<div class="empty-mini">${esc(d.error)}</div>`; $("#ecStatus").textContent = ""; return; }
+      $("#ecStatus").textContent = `done · ${this._inMode === "pdf" ? "PDF" : "text"} · re-run anytime`;
       $("#ecOut").innerHTML = renderEarnings(d);
     } catch (e) {
-      $("#ecOut").innerHTML = `<div class="empty-mini">${e.message}</div>`;
+      $("#ecOut").innerHTML = `<div class="empty-mini">${esc(e.message)}</div>`;
       $("#ecStatus").textContent = "";
     }
   },
 };
 
+/* base64-encode an ArrayBuffer (chunked to avoid call-stack limits) */
+function _b64(buf) {
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  return btoa(bin);
+}
+
+/* staged progress animation in a container */
+function ecAnimate(host, steps) {
+  if (!host) return;
+  host.innerHTML = `<div class="ec-anim">
+    <div class="ec-anim-ring"></div>
+    <div class="ec-anim-bar"><i id="ecAnimBar"></i></div>
+    <div class="ec-anim-steps">${steps.map((s, i) => `<div class="ec-anim-step" data-i="${i}"><span class="dot"></span><span>${esc(s)}</span></div>`).join("")}</div>
+  </div>`;
+  let i = 0;
+  const els = [...host.querySelectorAll(".ec-anim-step")];
+  const bar = host.querySelector("#ecAnimBar");
+  const tick = () => {
+    if (!host.querySelector(".ec-anim") || i >= els.length) return;
+    els.forEach((e, k) => { e.classList.toggle("active", k === i); e.classList.toggle("done", k < i); });
+    if (bar) bar.style.width = Math.round(((i + 1) / els.length) * 100) + "%";
+    i++;
+    if (i <= els.length) setTimeout(tick, 620);
+  };
+  tick();
+}
+
+/* ── deterministic dashboard renderers ── */
+function ecBar(pct, color) {
+  const v = Math.max(0, Math.min(100, Math.round(pct || 0)));
+  const col = color || (v >= 70 ? "var(--up)" : v >= 45 ? "var(--amber)" : "var(--down)");
+  return `<div class="ecd-bar"><i style="width:${v}%;background:${col}"></i></div>`;
+}
+function ecLine(points) {
+  if (!points || points.length < 2) return "";
+  // generous side padding so the first/last labels never clip
+  const w = 360, h = 104, pl = 30, pr = 30, pt = 20, pb = 22, iw = w - pl - pr, ih = h - pt - pb;
+  const X = (i) => pl + (i / (points.length - 1)) * iw, Y = (v) => pt + (1 - v / 100) * ih;
+  const anchor = (i) => (i === 0 ? "start" : i === points.length - 1 ? "end" : "middle");
+  const path = points.map((p, i) => `${X(i).toFixed(1)},${Y(p.score).toFixed(1)}`).join(" ");
+  const dots = points.map((p, i) => `<circle cx="${X(i).toFixed(1)}" cy="${Y(p.score).toFixed(1)}" r="3" fill="var(--amber-bright)"/><text x="${X(i).toFixed(1)}" y="${(Y(p.score) - 7).toFixed(1)}" font-size="8" fill="var(--muted)" text-anchor="${anchor(i)}">${p.score}</text>`).join("");
+  const labels = points.map((p, i) => `<text x="${X(i).toFixed(1)}" y="${h - 5}" font-size="7.5" fill="var(--muted-ink)" text-anchor="${anchor(i)}">${esc(p.label)}</text>`).join("");
+  return `<svg class="ecd-line" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet"><line x1="${pl}" y1="${Y(50).toFixed(1)}" x2="${w - pr}" y2="${Y(50).toFixed(1)}" stroke="rgba(255,255,255,.12)" stroke-dasharray="3 3"/><polyline points="${path}" fill="none" stroke="var(--amber)" stroke-width="1.6"/>${dots}${labels}</svg>`;
+}
+function ecScatter(risks) {
+  if (!risks || !risks.length) return "";
+  const w = 380, h = 300, pl = 34, pr = 18, pt = 16, pb = 34, iw = w - pl - pr, ih = h - pt - pb;
+  const X = (p) => pl + (Math.max(0, Math.min(3, p)) / 3) * iw, Y = (i) => pt + (1 - Math.max(0, Math.min(3, i)) / 3) * ih;
+  // place numbered dots, then relax overlaps so labels never collide
+  // seed a tiny deterministic offset so coincident points don't start stacked
+  const P = risks.map((r, idx) => ({ x: X(r.probability) + Math.cos(idx * 2.399) * 0.6, y: Y(r.impact) + Math.sin(idx * 2.399) * 0.6, r, idx }));
+  const R = 10;
+  for (let it = 0; it < 80; it++) for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
+    let dx = P[j].x - P[i].x, dy = P[j].y - P[i].y, d = Math.hypot(dx, dy);
+    if (d < 0.6) { const ang = i * 2.399 + j * 1.7; dx = Math.cos(ang); dy = Math.sin(ang); d = 1; } // coincident → deterministic direction
+    if (d < R * 2) { const push = (R * 2 - d) / 2, ux = dx / d, uy = dy / d; P[i].x -= ux * push; P[i].y -= uy * push; P[j].x += ux * push; P[j].y += uy * push; }
+  }
+  P.forEach((p) => { p.x = Math.max(pl + R, Math.min(pl + iw - R, p.x)); p.y = Math.max(pt + R, Math.min(pt + ih - R, p.y)); });
+  const band = ["Low", "Med", "High"];
+  const axis = `<rect x="${pl}" y="${pt}" width="${iw}" height="${ih}" fill="none" stroke="rgba(255,255,255,.14)"/>` +
+    [1, 2].map((k) => `<line x1="${pl + (k / 3) * iw}" y1="${pt}" x2="${pl + (k / 3) * iw}" y2="${pt + ih}" stroke="rgba(255,255,255,.06)"/><line x1="${pl}" y1="${pt + (k / 3) * ih}" x2="${pl + iw}" y2="${pt + (k / 3) * ih}" stroke="rgba(255,255,255,.06)"/>`).join("") +
+    band.map((b, k) => `<text x="${pl + ((k + 0.5) / 3) * iw}" y="${h - 16}" font-size="7.5" fill="var(--muted-ink)" text-anchor="middle">${b}</text>`).join("") +
+    band.map((b, k) => `<text x="${pl - 6}" y="${pt + ((2.5 - k) / 3) * ih + 3}" font-size="7.5" fill="var(--muted-ink)" text-anchor="end">${b}</text>`).join("") +
+    `<text x="${pl + iw / 2}" y="${h - 4}" font-size="8" fill="var(--muted)" text-anchor="middle">Probability →</text>` +
+    `<text x="9" y="${pt + ih / 2}" font-size="8" fill="var(--muted)" text-anchor="middle" transform="rotate(-90 9 ${pt + ih / 2})">Impact →</text>`;
+  const dots = P.map((p) => {
+    const r = p.r, hot = r.probability >= 1.9 && r.impact >= 1.9, warm = r.probability >= 1.9 || r.impact >= 1.9;
+    const col = hot ? "#c0392b" : warm ? "#c8862a" : "#2e9e6b";
+    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${R}" fill="${col}" fill-opacity="0.9"><title>${esc(r.risk)} · ${r.mentions} mentions</title></circle><text x="${p.x.toFixed(1)}" y="${(p.y + 3).toFixed(1)}" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">${p.idx + 1}</text>`;
+  }).join("");
+  return `<svg class="ecd-scatter" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${axis}${dots}</svg>`;
+}
+function ecGauge(score10) {
+  const v = Math.max(0, Math.min(10, score10 || 0));
+  const col = v >= 6.5 ? "var(--up)" : v >= 4.5 ? "var(--amber)" : "var(--down)";
+  return `<div class="ecd-gauge"><div class="ecd-gauge-v" style="color:${col}">${v.toFixed(1)}<small>/10</small></div><div class="ecd-bar" style="height:7px"><i style="width:${v * 10}%;background:${col}"></i></div></div>`;
+}
+function ecCheck(items, cls) {
+  if (!items || !items.length) return `<div class="empty-mini mono">Not detected in the transcript.</div>`;
+  return `<ul class="ecd-check ${cls || ""}">${items.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>`;
+}
+function ecSec(n, title, sub, inner) {
+  return `<div class="ecd-sec"><div class="ecd-h"><span class="ecd-n">${n}</span><h4>${esc(title)}</h4>${sub ? `<span class="ecd-sub">${esc(sub)}</span>` : ""}</div><div class="ecd-body">${inner}</div></div>`;
+}
+
 function renderEarnings(d) {
   const a = d.analysis;
-  if (a.error) return `<div class="empty-mini">${a.error}</div>`;
-  const toneCls = a.toneScore >= 60 ? "up" : a.toneScore < 45 ? "down" : "";
-  const sec = (title, sub, inner) => `<div class="ec-sec"><div class="ec-sh"><h4>${title}</h4>${sub ? `<span>${sub}</span>` : ""}</div>${inner}</div>`;
-  // headline: tone gauge + insights
-  const head = `<div class="ec-head">
-    <div class="ec-gauge"><div class="ec-g-score ${toneCls}">${a.toneScore}<small>/100</small></div><div class="ec-g-l">MANAGEMENT TONE</div><div class="ec-g-tag">${a.toneLabel}</div>
-      <div class="ec-g-meta">${a.words.toLocaleString()} words · ${a.hedges} hedges · ${a.sentimentDetail.pos}▲ ${a.sentimentDetail.neg}▼</div></div>
-    <div class="ec-insights">${a.insights.map((i) => `<div class="ec-ins">${i.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")}</div>`).join("")}</div>
+  if (a.error) return `<div class="empty-mini">${esc(a.error)}</div>`;
+  const r = a.report || {};
+  const sum = d.summary;
+  const asmt = r.assessment || {};
+  const asmtCls = /Bullish/.test(asmt.label) ? "up" : /Bearish/.test(asmt.label) ? "down" : "mid";
+  const clsV = (v) => (v == null ? "" : v >= 0 ? "up" : "down");
+  const pctT = (v, dp = 1) => (v == null ? "—" : (v >= 0 ? "+" : "") + (+v).toFixed(dp) + "%");
+  const ccy = (sum && sum.currency) || "";
+  const eps = (v) => (v == null ? "—" : (ccy === "INR" ? "₹" : ccy === "USD" ? "$" : "") + (Math.abs(v) < 10 ? v.toFixed(2) : v.toFixed(1)));
+
+  // 1 · EXECUTIVE SUMMARY
+  const s1 = `<div class="ecd-grid ecd-2c">
+    <div class="ecd-assess ${asmtCls}">
+      <div class="ecd-assess-l">Overall Assessment</div>
+      <div class="ecd-assess-v">${esc(asmt.label || "—")}</div>
+      <div class="ecd-assess-m">Momentum ${asmt.momentum != null ? asmt.momentum.toFixed(1) : "—"}/10 · confidence ${asmt.confidence != null ? asmt.confidence + "%" : "—"}</div>
+      <div class="ecd-mini"><span>Management tone</span><b class="${asmt.tone >= 60 ? "up" : asmt.tone < 45 ? "down" : ""}">${asmt.tone}/100 · ${esc(asmt.toneLabel || "")}</b></div>
+      <div class="ecd-mini"><span>Positive vs cautionary</span><b>${a.sentimentDetail.pos}▲ ${a.sentimentDetail.neg}▼</b></div>
+      <div class="ecd-mini"><span>Forward statements · risks</span><b>${a.guidance.length} · ${a.riskCount}</b></div>
+    </div>
+    <div>
+      <div class="ecd-lbl">Key Highlights</div>
+      ${ecCheck((r.highlights || []).slice(0, 6), "pos")}
+    </div>
   </div>`;
-  // API-provided sentiment — not used in paste-only mode
-  const apiBlock = "";
-  // guidance
-  const guidance = a.guidance.length ? sec("Guidance Tracking", `${a.guidance.length} forward-looking statements`,
-    `<ul class="ec-list">${a.guidance.map((g) => `<li>${g}</li>`).join("")}</ul>`)
-    : sec("Guidance Tracking", "", `<div class="empty-mini">No explicit forward-looking statements detected.</div>`);
-  // risk mentions
-  const risk = sec("Risk Mentions", `${a.riskCount} risk-related statements`,
-    a.topRisks.length ? `<div class="ec-chips">${a.topRisks.map((r) => `<span class="ec-chip">${r.cue} <b>${r.count}</b></span>`).join("")}</div>` : `<div class="empty-mini">No notable risk language detected.</div>`);
-  // competitor mentions
-  const comp = sec("Competitor Mentions", a.competitorMentions.length ? `${a.competitorMentions.length} peers referenced` : "",
-    (a.competitorMentions.length ? `<div class="ec-chips">${a.competitorMentions.map((c) => `<span class="ec-chip">${c.name} <b>${c.count}</b></span>`).join("")}</div>` : "") +
-    (a.competitiveContext.length ? `<ul class="ec-list" style="margin-top:8px">${a.competitiveContext.map((s) => `<li>${s}</li>`).join("")}</ul>` : (a.competitorMentions.length ? "" : `<div class="empty-mini">No direct competitor references detected.</div>`)));
-  // topic frequency
-  const maxT = Math.max(...a.topics.map((t) => t.count), 1);
-  const topics = a.topics.length ? sec("Topic Frequency", "what the call focused on",
-    `<div class="ec-topics">${a.topics.map((t) => `<div class="ec-topic"><span class="ec-tn">${t.topic}</span><div class="ec-tbar"><i style="width:${(t.count / maxT) * 100}%"></i></div><span class="ec-tc">${t.count}</span></div>`).join("")}</div>`) : "";
-  // speaker breakdown
-  const speakers = a.speakers && a.speakers.length ? sec("Management Sentiment by Speaker", "tone per speaker (where transcript is attributed)",
-    `<table class="frc-t"><tr><th style="text-align:left">Speaker</th><th>Turns</th><th>Words</th><th>Tone</th></tr>
-      ${a.speakers.map((s) => `<tr><td style="text-align:left">${s.speaker}</td><td>${s.turns}</td><td>${s.words.toLocaleString()}</td><td class="${s.score >= 60 ? "up" : s.score < 45 ? "down" : ""}">${s.score}/100</td></tr>`).join("")}
-    </table>`) : "";
-  const disc = `<div class="ec-disc">Tone, guidance, risk and competitor signals are computed by Meridian's deterministic lexicon engine over the transcript text (method: ${a.method}). These are directional reading aids, not investment signals. Every signal is traceable directly to the pasted text.</div>`;
-  return `<div class="ec">${head}${apiBlock}${guidance}${risk}${comp}${topics}${speakers}${disc}</div>`;
+
+  // 2 · FINANCIAL SNAPSHOT + DRIVERS
+  const snap = r.financialSnapshot || [];
+  const snapTbl = snap.length ? `<table class="ecd-t"><thead><tr><th>Metric</th><th style="text-align:right">Value</th><th style="text-align:right">YoY</th><th>Context</th></tr></thead><tbody>${snap.map((x) => `<tr><td class="b">${esc(x.metric)}</td><td class="mono" style="text-align:right">${esc(x.value || "—")}</td><td class="${clsV(x.yoy)}" style="text-align:right">${x.yoy == null ? "—" : pctT(x.yoy)}</td><td class="ecd-note">${esc(x.note || "")}${x.src === "consensus" ? ` <span class="ecd-src">est</span>` : ""}</td></tr>`).join("")}</tbody></table>` : `<div class="empty-mini mono">No quantified headline metrics detected in the transcript.</div>`;
+  const drivers = r.drivers || [];
+  const drvTbl = drivers.length ? `<div class="ecd-lbl" style="margin-top:12px">Key Drivers This Quarter</div><table class="ecd-t"><thead><tr><th>Driver</th><th style="text-align:right">Emphasis</th><th style="width:120px">Sentiment</th><th style="text-align:right">Read</th></tr></thead><tbody>${drivers.map((x) => `<tr><td>${esc(x.driver)}</td><td class="mono" style="text-align:right">${x.emphasis}</td><td>${ecBar(x.sentiment)}</td><td style="text-align:right" class="${x.sentiment >= 60 ? "up" : x.sentiment <= 42 ? "down" : ""}">${esc(x.read)}</td></tr>`).join("")}</tbody></table>` : "";
+  const s2 = snapTbl + drvTbl;
+
+  // 3 · MANAGEMENT ASSESSMENT
+  const sc = a.scorecard || {};
+  const order = [["Confidence", sc.confidence], ["Transparency", sc.transparency], ["Optimism", sc.optimism], ["Defensiveness", sc.defensiveness], ["Conservatism", sc.conservatism], ["Risk Awareness", sc.riskAwareness], ["Clarity", sc.clarity], ["Consistency", sc.consistency], ["Execution Confidence", sc.executionConfidence]];
+  const km = r.keyMessages || [];
+  const s3 = `<div class="ecd-grid ecd-2c">
+    <div>
+      <div class="ecd-lbl">Key Management Messages</div>
+      ${km.length ? `<ul class="ecd-quotes">${km.map((q) => `<li class="${q.tone === "pos" ? "q-pos" : q.tone === "neg" ? "q-neg" : ""}"><span class="ecd-qtag">${esc(q.tag || "")}</span>“${esc(q.quote)}”${q.speaker ? `<span class="ecd-qs">— ${esc(q.speaker)}</span>` : ""}</li>`).join("")}</ul>` : `<div class="empty-mini mono">No standout quotes detected.</div>`}
+    </div>
+    <div>
+      <div class="ecd-lbl">Sentiment Over the Call</div>
+      ${r.sentimentTimeline && r.sentimentTimeline.length ? ecLine(r.sentimentTimeline) : `<div class="empty-mini mono">Not enough structure to segment.</div>`}
+    </div>
+  </div>
+  <div class="ecd-lbl" style="margin-top:16px">Management Tone Scorecard <span style="color:var(--muted-ink)">· 0–100, computed from the transcript</span></div>
+  <div class="ecd-scorecard">${order.map(([k, v]) => `<div class="ecd-score"><span class="ecd-score-l">${k}</span>${ecBar(v, "var(--amber)")}<span class="ecd-score-v">${v == null ? "—" : v}</span></div>`).join("")}</div>`;
+
+  // 4 · BUSINESS SEGMENTS
+  const seg = r.segments || [];
+  const s4 = seg.length ? `<table class="ecd-t"><thead><tr><th>Segment / Business</th><th style="text-align:right">Figure</th><th>Commentary</th></tr></thead><tbody>${seg.map((x) => `<tr><td class="b">${esc(x.name)}</td><td class="mono" style="text-align:right">${esc(x.figure)}</td><td class="ecd-note">${esc(x.note)}</td></tr>`).join("")}</tbody></table>` : `<div class="empty-mini mono">No named business segments with figures were detected in the transcript.</div>`;
+
+  // 5 · GUIDANCE & OUTLOOK
+  const gi = r.guidanceItems || [];
+  const s5 = gi.length ? `<table class="ecd-t"><thead><tr><th>Guidance statement</th><th style="text-align:right">Direction</th><th style="width:130px">Confidence</th></tr></thead><tbody>${gi.map((g) => `<tr><td>${esc(g.statement)}</td><td style="text-align:right" class="${g.direction === "Upgrade" ? "up" : g.direction === "Downgrade" ? "down" : ""}">${esc(g.direction)}</td><td>${ecBar(g.confidence)}<span class="ecd-conf">${g.confidence}%</span></td></tr>`).join("")}</tbody></table>` : `<div class="empty-mini mono">No explicit forward guidance detected.</div>`;
+
+  // 6 · RISK ASSESSMENT
+  const rk = r.risks || [];
+  const lvl = (v) => (v >= 2.3 ? "High" : v >= 1.4 ? "Med" : "Low");
+  const lvlCls = (v) => (v >= 2.3 ? "down" : v >= 1.4 ? "" : "up");
+  const s6 = rk.length ? `<div class="ecd-risk2">
+    <div><div class="ecd-lbl">Risk Heat Map <span style="color:var(--muted-ink)">· probability × impact</span></div>${ecScatter(rk)}</div>
+    <div><div class="ecd-lbl">Risk Details</div><table class="ecd-t"><thead><tr><th style="width:20px">#</th><th>Risk</th><th style="text-align:right">Mentions</th><th style="text-align:right">Prob.</th><th style="text-align:right">Impact</th><th style="text-align:right">Horizon</th></tr></thead><tbody>${rk.map((x, i) => `<tr><td class="mono ecd-rn">${i + 1}</td><td class="b">${esc(x.risk)}</td><td class="mono" style="text-align:right">${x.mentions}</td><td style="text-align:right" class="${lvlCls(x.probability)}">${lvl(x.probability)}</td><td style="text-align:right" class="${lvlCls(x.impact)}">${lvl(x.impact)}</td><td style="text-align:right">${esc(x.horizon)}</td></tr>`).join("")}</tbody></table>
+    ${rk.some((x) => x.note) ? `<div class="ecd-lbl" style="margin-top:12px">Context</div><ul class="ecd-risknotes">${rk.filter((x) => x.note).slice(0, 5).map((x, i) => `<li><b>${esc(x.risk)}:</b> ${esc(x.note)}</li>`).join("")}</ul>` : ""}</div>
+  </div>` : `<div class="empty-mini mono">No notable risk language detected.</div>`;
+
+  // 7 · INVESTMENT THESIS
+  const s7 = `<div class="ecd-grid ecd-2c">
+    <div><div class="ecd-lbl up-l">Positives</div>${ecCheck(r.thesis ? r.thesis.positives : [], "pos")}</div>
+    <div><div class="ecd-lbl down-l">Watchpoints</div>${ecCheck(r.thesis ? r.thesis.watchpoints : [], "neg")}</div>
+  </div>
+  <div class="ecd-momentum"><div><div class="ecd-lbl">Transcript Momentum Score</div><div class="ecd-mini2">Composite of tone, beat history, guidance & risk load — based only on the call, not price.</div></div>${ecGauge(asmt.momentum)}</div>`;
+
+  // 8 · TRANSCRIPT EVIDENCE APPENDIX
+  const ev = r.evidence || [];
+  const s8 = ev.length ? `<div class="table-wrap"><table class="ecd-t"><thead><tr><th>#</th><th>Extracted statement</th><th>Figures</th><th>Speaker</th><th>Theme</th><th style="text-align:right">Conf.</th><th style="text-align:right">Impact</th></tr></thead><tbody>${ev.map((x) => `<tr><td class="mono">${x.n}</td><td class="ecd-note">${esc(x.extract)}</td><td class="mono">${esc(x.figures)}</td><td>${esc(x.speaker || "—")}</td><td>${esc(x.theme)}</td><td class="mono" style="text-align:right">${x.confidence}%</td><td style="text-align:right" class="${x.impact === "Positive" ? "up" : x.impact === "Negative" ? "down" : ""}">${esc(x.impact)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty-mini mono">No quantified statements to cite.</div>`;
+
+  const disc = `<div class="ecd-disc">Fully deterministic — every score, table and chart is computed from the transcript text (method: ${esc(a.method)}). Figures are extracted verbatim; a value is shown only where it appears. This is a reading aid, not investment advice.</div>`;
+
+  return `<div class="ecd">
+    ${ecSec(1, "EXECUTIVE SUMMARY", `${a.words.toLocaleString()} words`, s1)}
+    ${ecSec(2, "FINANCIAL SNAPSHOT & DRIVERS", "extracted figures", s2)}
+    ${ecSec(3, "MANAGEMENT ASSESSMENT", "tone · sentiment · messages", s3)}
+    ${ecSec(4, "BUSINESS SEGMENTS", seg.length ? seg.length + " detected" : "", s4)}
+    ${ecSec(5, "GUIDANCE & OUTLOOK", gi.length ? gi.length + " statements" : "", s5)}
+    ${ecSec(6, "RISK ASSESSMENT", rk.length ? rk.length + " risks" : "", s6)}
+    ${ecSec(7, "INVESTMENT THESIS", "", s7)}
+    ${ecSec(8, "TRANSCRIPT EVIDENCE APPENDIX", ev.length ? ev.length + " citations" : "", s8)}
+    ${disc}
+  </div>`;
 }

@@ -3,6 +3,8 @@ const router = express.Router();
 const F = require("../providers/fundamentals");
 const A = require("../lib/analytics");
 const E = require("../lib/earnings");
+const PDF = require("../lib/pdftext");
+const { buildDocx } = require("../lib/docx-report");
 const { generateNarrative, hasKey } = require("../lib/ai");
 const { cached, cachedDurable } = require("../cache");
 
@@ -798,14 +800,58 @@ router.get("/earnings/call/:symbol", async (req, res) => {
   }
 });
 
-// analyze a pasted transcript — works with no key at all
-router.post("/earnings/analyze", express.json({ limit: "2mb" }), async (req, res) => {
+// Extract clean text from an uploaded transcript PDF (keyless, no dependency).
+router.post("/earnings/extract-pdf", express.json({ limit: "30mb" }), (req, res) => {
+  try {
+    const b64 = (req.body && req.body.pdf) || "";
+    if (!b64) return res.status(400).json({ error: "No PDF provided." });
+    const buf = Buffer.from(b64, "base64");
+    if (buf.subarray(0, 5).toString("latin1") !== "%PDF-") return res.status(400).json({ error: "That does not look like a PDF file." });
+    const { text: raw, pages } = PDF.extractText(buf);
+    const text = PDF.stripBoilerplate(raw);
+    if (!text || text.length < 200) return res.status(422).json({ error: "Could not extract usable text — this looks like a scanned/image PDF. Paste the text instead." });
+    res.json({ text, pages, words: text.split(/\s+/).filter(Boolean).length });
+  } catch (e) {
+    res.status(500).json({ error: "PDF extraction failed: " + String((e && e.message) || e).slice(0, 120) });
+  }
+});
+
+// analyze a pasted/extracted transcript — works with no key at all. Boilerplate
+// (headers, footers, page numbers, legal/safe-harbour) is stripped first so it
+// never pollutes the analysis.
+router.post("/earnings/analyze", express.json({ limit: "4mb" }), async (req, res) => {
   const { transcript, symbol } = req.body || {};
-  if (!transcript || transcript.length < 100) return res.status(400).json({ error: "Paste an earnings-call transcript (at least a few paragraphs)." });
+  if (!transcript || transcript.length < 100) return res.status(400).json({ error: "Provide an earnings-call transcript (at least a few paragraphs)." });
+  const clean = PDF.stripBoilerplate(transcript);
+  const text = clean.length >= 100 ? clean : transcript;
   let peers = [];
   if (symbol) { try { const syms = await F.peerSuggestions(symbol.toUpperCase()); peers = (await Promise.all(syms.slice(0, 6).map((s) => peerRow(s).catch(() => null)))).filter(Boolean); } catch { } }
-  const analysis = E.analyzeTranscript(transcript, { source: "pasted" }, peers);
-  res.json({ meta: { source: "pasted" }, analysis, apiExtras: {}, transcript });
+  // Enrich the analysis with the live earnings numbers (schedule + reported
+  // quarters) so the report's financial tables carry real figures.
+  let summary = null;
+  if (symbol) { try { summary = await cached(`earnsum:${symbol.toUpperCase()}`, 30 * 60 * 1000, () => F.earningsSummary(symbol.toUpperCase())); } catch { } }
+  const analysis = E.analyzeTranscript(text, { source: "pasted", symbol: symbol || null, summary }, peers);
+  res.json({ meta: { source: "pasted", symbol: symbol || null, cleanedChars: transcript.length - text.length }, analysis, summary, apiExtras: {}, transcript: text });
+});
+
+// Deterministic .docx research report from a transcript (no key, no template).
+router.post("/earnings/report.docx", express.json({ limit: "4mb" }), async (req, res) => {
+  const { transcript, symbol } = req.body || {};
+  if (!transcript || transcript.length < 100) return res.status(400).json({ error: "Provide a transcript to build the report." });
+  try {
+    const text = PDF.stripBoilerplate(transcript);
+    const analysis = E.analyzeTranscript(text.length >= 100 ? text : transcript, { source: "docx", symbol: symbol || null }, []);
+    if (analysis.error) return res.status(400).json({ error: analysis.error });
+    let summary = null;
+    if (symbol) { try { summary = await cached(`earnsum:${symbol.toUpperCase()}`, 30 * 60 * 1000, () => F.earningsSummary(symbol.toUpperCase())); } catch { } }
+    const buf = await buildDocx(analysis, summary, { symbol: symbol || null, name: summary ? summary.name : null });
+    const fname = `${(symbol || "earnings").replace(/[^A-Za-z0-9.\-]/g, "_")}_earnings_call_analysis.docx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    res.setHeader("Content-Disposition", `attachment; filename="${fname}"`);
+    res.send(buf);
+  } catch (e) {
+    res.status(500).json({ error: "Report generation failed: " + String((e && e.message) || e).slice(0, 140) });
+  }
 });
 
 /* MACRO COMMAND — full macro universe: global equities, rates, FX, commodities,
