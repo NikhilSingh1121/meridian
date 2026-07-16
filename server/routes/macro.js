@@ -131,6 +131,14 @@ router.get("/macro/fiidii", async (_req, res) => {
   catch (e) { res.json({ available: false, reason: String(e.message || e).slice(0, 140) }); }
 });
 
+/* Copy-paste helper: returns the CURRENT captured FII/DII history as the exact
+   string to put in the FIIDII_SEED env var, so the chart survives redeploys. */
+router.get("/macro/fiidii/export", (_req, res) => {
+  const h = require("../lib/datastore").getBlob("fiidii_history", null);
+  const sessions = (h && Array.isArray(h.sessions)) ? h.sessions : [];
+  res.json({ count: sessions.length, FIIDII_SEED: JSON.stringify(sessions) });
+});
+
 /* ═══════════════ RATES — sovereign 10Y + policy rates ═══════════════ */
 const BONDS = [["10usy.b", "US 10Y", "US"], ["2usy.b", "US 2Y", "US"], ["10dey.b", "Germany 10Y", "DE"], ["10jpy.b", "Japan 10Y", "JP"], ["10iny.b", "India 10Y", "IN"], ["10uky.b", "UK 10Y", "GB"]];
 const POLICY = [["US", "Federal Reserve"], ["IN", "RBI"], ["XM", "ECB"], ["GB", "Bank of England"], ["JP", "Bank of Japan"]];

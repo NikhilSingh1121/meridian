@@ -15,6 +15,12 @@
 </head>
 <body>
 
+  <!-- ════ INTRO — multilingual greeting curtain (plays once per load) ════ -->
+  <div class="intro" id="intro" aria-hidden="true">
+    <p class="intro-line"><span class="intro-word" id="introWord">Hello</span><span class="intro-mark"></span></p>
+  </div>
+  <noscript><style>.intro{display:none}</style></noscript>
+
   <header class="nav" id="nav">
     <div class="nav-inner">
       <a class="brand" href="/">MERIDIAN</a>
@@ -35,14 +41,14 @@
     <div class="hero-top">
       <div class="hero-inner">
         <div class="hero-main">
-          <p class="eyebrow reveal-up">Equity research & Market Analysis &middot; AI-Based</p>
+          <p class="eyebrow reveal-up" style="--d:.2s">Equity research & Market Analysis &middot; AI-Based</p>
           <h1 class="hero-h1">
-            <span class="line reveal-up" style="--d:.05s">Institutional</span>
-            <span class="line reveal-up" style="--d:.14s">research,</span>
-            <span class="line reveal-up accent" style="--d:.24s">rebuilt.</span>
+            <span class="line reveal-up reveal-blur" style="--d:.3s">Institutional</span>
+            <span class="line reveal-up reveal-blur" style="--d:.42s">research,</span>
+            <span class="line reveal-up reveal-blur accent" style="--d:.56s">rebuilt.</span>
           </h1>
         </div>
-        <div class="hero-aside reveal-up" style="--d:.4s">
+        <div class="hero-aside reveal-up" style="--d:.72s">
           <p>From a ticker to a defensible, fully-cited research report &mdash; in minutes, for analysts, RIAs, family offices and research desks.</p>
           <a class="under-link" href="#services">What the platform does <span class="arr">&rarr;</span></a>
         </div>
@@ -52,7 +58,7 @@
       <p class="eyebrow center" style="margin-bottom:24px">The platform</p>
       <p class="reveal-words big">An AI-native research platform that computes every number, cites every claim, and generates institutional-grade equity research at scale.</p>
     </div>
-    <div class="ticker" aria-label="Live market ticker">
+    <div class="ticker reveal-up" style="--d:.2s" aria-label="Live market ticker">
       <div class="ticker-track" id="tickerTrack"></div>
     </div>
   </section>
@@ -62,7 +68,7 @@
     <div class="stats-grid">
       <div class="stats-left">
         <p class="eyebrow">By the numbers</p>
-        <h2 class="stats-statement reveal-words">Where financial data becomes investment intelligence.Track market movements in real time, analyze companies, model valuations, analyze forensic risk & financials and generate research reports — within a single platform.</h2>
+        <h2 class="stats-statement reveal-words">Where financial data becomes investment intelligence. Track market movements in real time, analyze companies, model valuations, analyze forensic risk & financials and generate research reports — within a single platform.</h2>
       </div>
       <div class="stats-right">
         <div class="stat-cell reveal-up"><span class="stat-num mono" data-to="2000" data-suf="+">0</span><span class="stat-cap">Companies covered</span></div>
@@ -103,18 +109,85 @@
     </div>
   </section>
 
-      <!-- ════ CAPABILITIES ════ -->
-  <section class="section caps">
-    <p class="eyebrow center">Capabilities</p>
-    <div class="caps-grid">
-      <article class="cap"><span class="cap-n mono">01</span><h4>Research Workspace</h4><p>A persistent analyst workstation per company, with a source drawer pinned to every claim.</p></article>
-      <article class="cap"><span class="cap-n mono">02</span><h4>Valuation Engine</h4><p>DCF, comparables and scenarios with provenance on every assumption.</p></article>
-      <article class="cap"><span class="cap-n mono">03</span><h4>Forensic Analysis</h4><p>Accruals, related-party flags, pledge and audit-qualification tracking.</p></article>
-      <article class="cap"><span class="cap-n mono">04</span><h4>Earnings Call Intelligence</h4><p>Guidance changes, tone deltas and a promise-versus-delivery tracker.</p></article>
-      <article class="cap"><span class="cap-n mono">05</span><h4>Portfolio Analytics</h4><p>Allocation, factor exposure, correlation and honest drawdown analysis.</p></article>
-      <article class="cap"><span class="cap-n mono">06</span><h4>Screener</h4><p>Institutional filtering across fundamentals, valuation history and quality.</p></article>
-      <article class="cap"><span class="cap-n mono">07</span><h4>Thesis Monitoring</h4><p>The platform remembers your thesis and flags the filing that breaks it.</p></article>
-      <article class="cap"><span class="cap-n mono">08</span><h4>Research Library</h4><p>A firm-wide, versioned record of every report, model and rating.</p></article>
+  <!-- ════ PROCESS (zig-zag numbered workflow, scroll-drawn connector) ════ -->
+  <section class="section process" id="process">
+    <div class="process-head">
+      <p class="eyebrow center reveal-up">The workflow</p>
+      <h2 class="display center reveal-up" style="--d:.08s">From ticker to defensible research<span class="accent">.</span></h2>
+      <p class="process-sub reveal-up" style="--d:.16s">Every stage of institutional research &mdash; extraction, computation, valuation, forensics, review &mdash; runs in sequence. Nothing is skipped, and every claim keeps its citation.</p>
+    </div>
+    <div class="process-flow" id="processFlow">
+      <svg class="process-line" id="processLine" aria-hidden="true"></svg>
+      <div class="pr-step reveal-up" data-side="l">
+        <span class="pr-num" aria-hidden="true">1</span>
+        <div class="pr-body">
+          <h3>Open a ticker</h3>
+          <p>Type any listed company &mdash; a persistent research workspace assembles itself from live filings in under ninety seconds.</p>
+        </div>
+      </div>
+      <div class="pr-step reveal-up" data-side="r">
+        <span class="pr-num" aria-hidden="true">2</span>
+        <div class="pr-body">
+          <h3>Read the market first</h3>
+          <p>Indices, rates, currencies, commodities and breadth on one dashboard &mdash; with a cap-weighted sector heatmap for the rotation read.</p>
+        </div>
+      </div>
+      <div class="pr-step reveal-up" data-side="l">
+        <span class="pr-num" aria-hidden="true">3</span>
+        <div class="pr-body">
+          <h3>Filings become numbers</h3>
+          <p>Reports and transcripts are extracted and standardized; every ratio is computed deterministically &mdash; never invented.</p>
+        </div>
+      </div>
+      <div class="pr-step reveal-up" data-side="r">
+        <span class="pr-num" aria-hidden="true">4</span>
+        <div class="pr-body">
+          <h3>Chart it in real time</h3>
+          <p>A full candlestick workspace on live data &mdash; fifteen-plus technical indicators, overlays and pattern intelligence across your portfolio.</p>
+        </div>
+      </div>
+      <div class="pr-step reveal-up" data-side="l">
+        <span class="pr-num" aria-hidden="true">5</span>
+        <div class="pr-body">
+          <h3>Weigh the news</h3>
+          <p>Headline flow is scored into a live sentiment gauge &mdash; company, industry or market-wide &mdash; so the news effect is measured, not guessed.</p>
+        </div>
+      </div>
+      <div class="pr-step reveal-up" data-side="r">
+        <span class="pr-num" aria-hidden="true">6</span>
+        <div class="pr-body">
+          <h3>Value it three ways</h3>
+          <p>A full FCFF working with the WACC build and sensitivity grid, cross-checked against comparables and sum-of-the-parts.</p>
+        </div>
+      </div>
+      <div class="pr-step reveal-up" data-side="l">
+        <span class="pr-num" aria-hidden="true">7</span>
+        <div class="pr-body">
+          <h3>Run forensics before trust</h3>
+          <p>Accruals, promoter pledges, related-party transactions and audit qualifications screened &mdash; each flag cited, never asserted.</p>
+        </div>
+      </div>
+      <div class="pr-step reveal-up" data-side="r">
+        <span class="pr-num" aria-hidden="true">8</span>
+        <div class="pr-body">
+          <h3>Let an adversary read it</h3>
+          <p>A bear-case agent files objections and a verifier checks every claim against its source before anything ships.</p>
+        </div>
+      </div>
+      <div class="pr-step reveal-up" data-side="l">
+        <span class="pr-num" aria-hidden="true">9</span>
+        <div class="pr-body">
+          <h3>Ship the report</h3>
+          <p>Cover page, numbered exhibits, the full DCF working &mdash; typeset to institutional standard and print-ready.</p>
+        </div>
+      </div>
+      <div class="pr-step reveal-up" data-side="r">
+        <span class="pr-num" aria-hidden="true">10</span>
+        <div class="pr-body">
+          <h3>Keep compounding</h3>
+          <p>A learning center that explains every concept in plain language, plus professional calculators &mdash; SIP to ESOP &mdash; with the math shown.</p>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -319,8 +392,8 @@
   <!-- ════ FINAL CTA + FOOTER (v58) ════ -->
   <section class="final" id="final">
     <div class="final-inner">
-      <h2 class="final-h">Research at institutional scale.</h2>
-      <a class="btn-primary lg" id="finalCta" href="/terminal">Launch Meridian <span class="arr">&rarr;</span></a>
+      <h2 class="final-h reveal-up">Research at institutional scale.</h2>
+      <a class="btn-primary lg reveal-up" style="--d:.14s" id="finalCta" href="/terminal">Launch Meridian <span class="arr">&rarr;</span></a>
     </div>
     <footer class="footer">
       <div class="footer-grid">

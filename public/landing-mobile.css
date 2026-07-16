@@ -433,3 +433,30 @@
   }
 }
 
+
+/* ═════════════════════════════════════════════════════════════════════════
+   ═════════════  V67 PREMIUM PASS — mobile refinements  ═════════════
+   Intro curtain, workflow section and ticker fade masks on small screens.
+   Every rule stays inside a mobile @media block; desktop untouched.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 640px) {
+  /* ticker edge fades: narrower so labels aren't swallowed */
+  .ticker::before, .ticker::after { width: 34px; }
+
+  /* intro greeting: centered, scaled for phones */
+  .intro-line { font-size: clamp(46px, 14vw, 66px); gap: 14px; }
+
+  /* workflow: tighter rhythm on phones */
+  .process-head .display { max-width: 14ch; }
+  .process-sub { font-size: 14.5px; padding: 0 4px; }
+  .pr-step { gap: 14px; }
+  .pr-num { font-size: 38px; min-width: 30px; }
+  .pr-body h3 { font-size: 16.5px; }
+  .pr-body p { font-size: 13px; }
+}
+
+@media (max-width: 480px) {
+  .process-flow { gap: 28px; margin-top: 40px; }
+  .pr-num { font-size: 34px; min-width: 26px; }
+}

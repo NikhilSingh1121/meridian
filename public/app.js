@@ -47,10 +47,89 @@ function setupWordReveal() {
   $$(".reveal-words").forEach((el) => io.observe(el));
 }
 
-/* ── reveal-up elements ── */
+/* ── reveal-up / rise-in elements ── */
 function setupReveal() {
-  const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("vis"); io.unobserve(e.target); } }), { threshold: 0.12 });
-  $$(".reveal-up").forEach((el) => io.observe(el));
+  const io = new IntersectionObserver((es) => es.forEach((e) => {
+    if (!e.isIntersecting) return;
+    e.target.classList.add("vis");
+    io.unobserve(e.target);
+    // stagger delay is entrance-only: clear it so hover transitions stay instant
+    setTimeout(() => e.target.style.removeProperty("--d"), 1700);
+  }), { threshold: 0.12 });
+  $$(".reveal-up, .rise-in").forEach((el) => io.observe(el));
+}
+
+/* ── entrance staggering for grouped elements ── */
+function applyStagger() {
+  // grids whose cells enter together get an index-based delay
+  const groups = [".caps-grid > .cap", ".samples-grid > .sample", ".price-grid > .price-card",
+                  ".stats-right > .stat-cell", ".trust-list > .tl-row"];
+  groups.forEach((sel) => $$(sel).forEach((el, i) => {
+    el.classList.add("reveal-up");
+    if (!el.style.getPropertyValue("--d")) el.style.setProperty("--d", (Math.min(i, 7) * 0.07) + "s");
+  }));
+  // feedback cards animate via one-shot keyframe so hover lifts never slow down
+  $$(".fb-grid > .fb-card").forEach((el, i) => {
+    el.classList.add("rise-in");
+    el.style.setProperty("--d", (i * 0.12) + "s");
+  });
+}
+
+/* ── reveal orchestration: everything waits for the intro curtain ── */
+function startReveals() {
+  if (startReveals.done) return;
+  startReveals.done = true;
+  applyStagger();
+  setupWordReveal();
+  setupReveal();
+  initCounters();
+}
+
+/* ── INTRO — multilingual greeting curtain (reference-style) ── */
+function initIntro() {
+  const el = document.getElementById("intro");
+  const word = document.getElementById("introWord");
+  if (!el || !word || reduced) { if (el) el.remove(); startReveals(); return; }
+  // the curtain choreography assumes we start at the top — don't let the
+  // browser async-restore a deep scroll offset underneath it
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+  window.scrollTo(0, 0);
+  const html = document.documentElement;
+  html.classList.add("intro-hold");
+  if (lenis) lenis.stop();
+  let lifted = false;
+  function lift() {
+    if (lifted) return;
+    lifted = true;
+    startReveals();                       // hero rises while the curtain lifts
+    el.classList.add("lift");
+    html.classList.remove("intro-hold");
+    if (lenis) lenis.start();
+    const cleanup = () => { if (el.parentNode) el.remove(); };
+    el.addEventListener("transitionend", cleanup, { once: true });
+    setTimeout(cleanup, 1400);            // safety net
+  }
+  const words = ["Hello", "नमस्ते", "Bonjour", "Hola", "Ciao", "こんにちは", "안녕하세요", "Olá"];
+  let i = 0;
+  function next() {
+    if (lifted) return;
+    i++;
+    if (i >= words.length) { lift(); return; }
+    word.textContent = words[i];
+    setTimeout(next, i === 1 ? 320 : 250);
+  }
+  // background-tab load: hold the curtain and start the sequence only once
+  // the tab is actually visible, so the choreography is never wasted
+  function begin() { setTimeout(next, 540); }
+  if (document.visibilityState === "hidden") {
+    const onVis = () => {
+      if (document.visibilityState !== "hidden") { document.removeEventListener("visibilitychange", onVis); begin(); }
+    };
+    document.addEventListener("visibilitychange", onVis);
+  } else {
+    begin();
+  }
+  el.addEventListener("pointerdown", lift, { once: true });   // click to skip
 }
 
 /* ── HERO globe: five exchange hubs on a fine dot world, market arcs ── */
@@ -686,6 +765,77 @@ function initWaveTerrain() {
   check();
 }
 
+/* ── PROCESS — dashed connector that draws itself with scroll ──
+   The path is generated from the real layout positions of the step
+   numerals, then revealed through an SVG mask whose stroke-dashoffset
+   tracks scroll progress (one cheap style write per scroll frame). */
+function initProcess() {
+  const flow = document.getElementById("processFlow");
+  const svg = document.getElementById("processLine");
+  if (!flow || !svg) return;
+  const steps = $$(".pr-step", flow);
+  if (steps.length < 2) return;
+  let maskPath = null, cursor = null, pathLen = 0, lastP = reduced ? 1 : 0;
+
+  function placeCursor(p) {
+    if (!cursor || !maskPath) return;
+    if (reduced || p < 0.015) { cursor.style.opacity = "0"; return; }
+    const L = pathLen * p;
+    const a = maskPath.getPointAtLength(Math.max(0, L - 2));
+    const b = maskPath.getPointAtLength(Math.min(pathLen, L + 2));
+    const ang = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+    const pt = maskPath.getPointAtLength(L);
+    cursor.setAttribute("transform", "translate(" + pt.x.toFixed(1) + " " + pt.y.toFixed(1) + ") rotate(" + ang.toFixed(1) + ")");
+    cursor.style.opacity = "1";
+  }
+
+  function build() {
+    if (matchMedia("(max-width: 900px)").matches) { svg.innerHTML = ""; maskPath = null; cursor = null; return; }
+    const fr = flow.getBoundingClientRect();
+    const W = Math.max(1, Math.round(flow.offsetWidth));
+    const H = Math.max(1, Math.round(flow.offsetHeight));
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    const pts = steps.map((s) => {
+      const n = s.querySelector(".pr-num").getBoundingClientRect();
+      return { x: n.left - fr.left + n.width * 0.52, y: n.top - fr.top + n.height * 0.5 };
+    });
+    let d = "M " + pts[0].x.toFixed(1) + " " + pts[0].y.toFixed(1);
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const my = ((a.y + b.y) / 2).toFixed(1);
+      d += " C " + a.x.toFixed(1) + " " + my + ", " + b.x.toFixed(1) + " " + my + ", " + b.x.toFixed(1) + " " + b.y.toFixed(1);
+    }
+    svg.innerHTML =
+      '<defs><mask id="prLineMask"><path d="' + d + '" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round"/></mask></defs>' +
+      '<path d="' + d + '" fill="none" stroke="currentColor" stroke-opacity=".55" stroke-width="1.6" stroke-dasharray="1 9" stroke-linecap="round" mask="url(#prLineMask)"/>' +
+      '<g class="pr-cursor" style="opacity:0; transition: opacity .3s ease;"><path d="M0,-5.5 L13,0 L0,5.5 L3.4,0 Z" fill="currentColor"/></g>';
+    maskPath = svg.querySelector("mask path");
+    cursor = svg.querySelector(".pr-cursor");
+    pathLen = maskPath.getTotalLength();
+    maskPath.style.strokeDasharray = pathLen + " " + pathLen;
+    maskPath.style.strokeDashoffset = String(pathLen * (1 - lastP));
+    placeCursor(lastP);
+  }
+
+  function onScroll() {
+    if (!maskPath) return;
+    const r = flow.getBoundingClientRect();
+    if (r.bottom < -100 || r.top > innerHeight + 100) return;   // off-screen guard
+    let p = reduced ? 1 : (innerHeight * 0.78 - r.top) / (r.height || 1);
+    p = Math.max(0, Math.min(1, p));
+    if (Math.abs(p - lastP) < 0.003) return;
+    lastP = p;
+    maskPath.style.strokeDashoffset = String(pathLen * (1 - p));
+    placeCursor(p);
+  }
+
+  build();
+  onScroll();
+  addEventListener("resize", () => { build(); onScroll(); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { build(); onScroll(); });
+  onScrollFrame(onScroll);
+}
+
 /* ── animated counters ── */
 function initCounters() {
   function run(el) {
@@ -737,49 +887,29 @@ function boot() {
       else el.scrollIntoView({ behavior: "smooth" });
     });
   });
-  setupWordReveal(); setupReveal(); startTerrain();
-  initServices(); initProductExperience(); initShowcase(); initCounters(); initFeedback();
+  startTerrain();
+  initServices(); initProductExperience(); initShowcase(); initFeedback();
   initSupport();
   initGoalTracker();
   initWaveTerrain();
   initMotionEnhancements();
+  initProcess();
   loadTicker(); setInterval(loadTicker, 60000);
+  initIntro();   // plays the greeting curtain, then releases all reveals
 }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 
-/* ── Motion enhancements: scroll-progress bar + staggered grid reveals ──
-   Extends the existing reveal system; respects prefers-reduced-motion. */
+/* ── Motion enhancements: scroll-progress bar ──
+   (grid stagger now lives in applyStagger, gated behind the intro) */
 function initMotionEnhancements() {
-  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  // Scroll-progress bar
-  if (!reduced) {
-    const bar = document.createElement("div");
-    bar.className = "scroll-prog";
-    document.body.appendChild(bar);
-    onScrollFrame(() => {
-      const max = document.documentElement.scrollHeight - innerHeight;
-      bar.style.transform = "scaleX(" + (max > 0 ? Math.min(1, _scrollY / max) : 0) + ")";
-    });
-  }
-
-  // Staggered reveal for card grids that aren't already tagged
-  const groups = [".caps-grid > .cap", ".samples-grid > .sample", ".price-grid > .price-card"];
-  const fresh = [];
-  groups.forEach((sel) => $$(sel).forEach((el, i) => {
-    if (!el.classList.contains("reveal-up")) {
-      el.classList.add("reveal-up");
-      el.style.setProperty("--d", (Math.min(i, 7) * 0.05) + "s");
-      fresh.push(el);
-    }
-  }));
-  if (fresh.length) {
-    if (reduced) { fresh.forEach((el) => el.classList.add("vis")); return; }
-    const io = new IntersectionObserver((es) => es.forEach((e) => {
-      if (e.isIntersecting) { e.target.classList.add("vis"); io.unobserve(e.target); }
-    }), { threshold: 0.12 });
-    fresh.forEach((el) => io.observe(el));
-  }
+  if (reduced) return;
+  const bar = document.createElement("div");
+  bar.className = "scroll-prog";
+  document.body.appendChild(bar);
+  onScrollFrame(() => {
+    const max = document.documentElement.scrollHeight - innerHeight;
+    bar.style.transform = "scaleX(" + (max > 0 ? Math.min(1, _scrollY / max) : 0) + ")";
+  });
 }
 
 /* ════ REAL PRODUCT EXPERIENCE — immersive terminal walkthrough ════
@@ -949,15 +1079,56 @@ function initProductExperience() {
     else if (e.key === "ArrowLeft") { e.preventDefault(); go(cur - 1); }
   });
 
-  /* swipe */
-  let tx = null, ty = null;
-  area.addEventListener("touchstart", (e) => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, { passive: true });
-  area.addEventListener("touchend", (e) => {
-    if (tx == null) return;
-    const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
-    if (Math.abs(dx) > 46 && Math.abs(dx) > Math.abs(dy) * 1.4) go(cur + (dx < 0 ? 1 : -1));
-    tx = ty = null;
+  /* swipe — axis-locked drag (Android fix).
+     The first significant finger movement decides the gesture's axis once:
+     · horizontal → we preventDefault() every subsequent move so the page
+       cannot scroll vertically, and the active slide follows the finger
+       (transform-only, GPU-composited);
+     · vertical → we never interfere and the page scrolls natively.
+     CSS `touch-action: pan-y` on the slide area keeps the browser from
+     claiming horizontal strokes before we do. */
+  let tx = 0, ty = 0, axis = null, dragX = 0, lastX = 0, lastT = 0, velX = 0;
+  const dragEl = () => slides[cur];
+  area.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) { axis = "y"; return; }
+    tx = lastX = e.touches[0].clientX; ty = e.touches[0].clientY;
+    lastT = performance.now(); axis = null; dragX = 0; velX = 0;
   }, { passive: true });
+  area.addEventListener("touchmove", (e) => {
+    if (axis === "y") return;
+    const t = e.touches[0];
+    const dx = t.clientX - tx, dy = t.clientY - ty;
+    if (!axis) {
+      if (Math.abs(dx) < 7 && Math.abs(dy) < 7) return;      // not decided yet
+      axis = Math.abs(dx) > Math.abs(dy) * 1.15 ? "x" : "y";
+      if (axis === "y") return;                              // vertical → native scroll
+      dragEl().classList.add("dragging");
+    }
+    if (e.cancelable) e.preventDefault();                    // lock page scroll
+    const now = performance.now();
+    if (now - lastT > 16) { velX = (t.clientX - lastX) / (now - lastT); lastX = t.clientX; lastT = now; }
+    const atEdge = (dx > 0 && cur === 0) || (dx < 0 && cur === slides.length - 1);
+    dragX = dx * (atEdge ? 0.28 : 0.9);
+    dragEl().style.transform = "translateX(" + dragX.toFixed(1) + "px)";
+  }, { passive: false });
+  const endDrag = () => {
+    if (axis !== "x") { axis = null; return; }
+    const el = dragEl();
+    el.classList.remove("dragging");
+    const w = area.offsetWidth || 1;
+    const dir = dragX < 0 ? 1 : -1;
+    const target = cur + dir;
+    const fling = Math.abs(velX) > 0.45 && Math.sign(velX) === Math.sign(dragX);
+    const far = Math.abs(dragX) > w * 0.18;
+    el.classList.add("settling");
+    void el.offsetWidth;                       // commit .settling before moving
+    el.style.transform = "";
+    if ((far || fling) && target >= 0 && target < slides.length) go(target);
+    setTimeout(() => el.classList.remove("settling"), 500);
+    axis = null; dragX = 0;
+  };
+  area.addEventListener("touchend", endDrag, { passive: true });
+  area.addEventListener("touchcancel", endDrag, { passive: true });
 
   /* immersion: enter/leave + nav re-skin over the dark chapter */
   const nav = document.getElementById("nav");

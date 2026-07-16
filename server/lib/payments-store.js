@@ -92,8 +92,13 @@ function summary() {
  * disk and point MERIDIAN_DATA_DIR at it.
  */
 function seedFromEnv() {
-  const seed = Number(process.env.SUPPORT_SEED_INR);
-  if (!Number.isFinite(seed) || seed <= 0) return;
+  const raw = process.env.SUPPORT_SEED_INR;
+  if (raw == null || String(raw).trim() === "") return;
+  const seed = Number(raw);
+  if (!Number.isFinite(seed) || seed <= 0) {
+    console.warn(`[payments] SUPPORT_SEED_INR="${raw}" is not a positive number — it must be the ₹ total, e.g. 8500 (not a random string). Ignored.`);
+    return;
+  }
   const s = read();
   if (s.count > 0 || s.total_inr > 0) return; // already has data — don't double-count
   const amt = Math.round(seed * 100) / 100;
