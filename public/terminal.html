@@ -226,42 +226,67 @@
           <span id="ecCoreStatus" class="panel-sub mono"></span>
         </div>
 
-        <!-- 50 / 50 core: recent earnings calls (left) · schedule (right) -->
+        <!-- 50 / 50 core: recent earnings calls (left) · schedule (right).
+             Initial state: a structured 3-step workflow strip instead of a
+             floating hint sentence (JS replaces this wholesale on load). -->
         <div class="ec-core" id="ecCore">
-          <div class="ec-core-empty empty-mini mono">Enter a ticker to see its earnings-call schedule and recent calls — actual vs. estimate EPS, surprise, forward consensus and transcript links. Keyless · works for any exchange (NSE · BSE · US · global).</div>
+          <div class="ec-start">
+            <div class="ec-start-step"><span class="n mono">01</span><div><h4>Load a company</h4><p>Enter any ticker for its earnings-call schedule and recent calls — actual vs. estimate EPS, surprise and transcript links. Keyless &middot; NSE &middot; BSE &middot; US &middot; global.</p></div></div>
+            <div class="ec-start-step"><span class="n mono">02</span><div><h4>Provide the transcript</h4><p>Paste the call text or import a PDF — headers, footers, page numbers and disclaimers are stripped automatically before analysis.</p></div></div>
+            <div class="ec-start-step"><span class="n mono">03</span><div><h4>Read the dashboard</h4><p>A nine-section institutional report — tone, guidance, risks, segments, per-speaker sentiment and a scorecard — computed locally.</p></div></div>
+          </div>
         </div>
 
-        <!-- analysis: input methods + institutional report -->
+        <!-- analysis: input methods (left) · report contents (right) -->
         <div class="ec-analysis">
           <div class="ec-an-head">
             <h3>EARNINGS CALL ANALYSIS</h3>
             <span class="panel-sub mono" id="ecFor">paste a transcript or import a PDF</span>
           </div>
           <div class="ec-inpanel">
-            <div class="ec-tabs" id="ecInTabs">
-              <button class="ec-tab active" data-in="text" type="button">✎ Paste text</button>
-              <button class="ec-tab" data-in="pdf" type="button">⬆ Import PDF</button>
+            <div class="ec-inrow">
+              <div class="ec-inputs">
+                <div class="ec-tabs" id="ecInTabs">
+                  <button class="ec-tab active" data-in="text" type="button">✎ Paste text</button>
+                  <button class="ec-tab" data-in="pdf" type="button">⬆ Import PDF</button>
+                </div>
+                <div class="ec-in" id="ecInText">
+                  <textarea id="ecPaste" placeholder="Paste an earnings-call transcript here — any format, any company. Non-content lines (headers, footers, page numbers, disclaimers) are stripped automatically before analysis."></textarea>
+                </div>
+                <div class="ec-in" id="ecInPdf" hidden>
+                  <label class="ec-drop" id="ecDrop">
+                    <input type="file" id="ecPdf" accept="application/pdf,.pdf" hidden>
+                    <div class="ec-drop-ic">⬆</div>
+                    <div class="ec-drop-t">Drop a transcript PDF here, or click to choose</div>
+                    <div class="ec-drop-s mono">Text is extracted in your browser context · headers, footers &amp; page numbers removed</div>
+                    <div class="ec-drop-file mono" id="ecPdfName"></div>
+                  </label>
+                </div>
+                <div class="ec-btnrow">
+                  <button class="btn btn-amber" id="ecAnalyze" type="button">Analyse transcript</button>
+                  <button class="btn" id="ecDocx" type="button" title="Download a formatted .docx research report">⬇ DOCX report</button>
+                </div>
+                <div id="ecStatus" class="panel-sub mono" style="margin-top:8px"></div>
+              </div>
+              <aside class="ec-includes" aria-label="Report contents">
+                <div class="ec-includes-t mono">REPORT INCLUDES</div>
+                <ul>
+                  <li>Overall assessment &amp; call score</li>
+                  <li>Financial snapshot — verbatim KPIs</li>
+                  <li>Management scorecard &amp; tone</li>
+                  <li>Sentiment timeline — prepared vs Q&amp;A</li>
+                  <li>Segment &amp; geography readout</li>
+                  <li>Guidance tracking</li>
+                  <li>Risk heat-map &amp; competitor mentions</li>
+                  <li>Investment thesis</li>
+                  <li>Evidence appendix — every quote traced</li>
+                </ul>
+                <div class="ec-includes-foot mono">DETERMINISTIC · COMPUTED LOCALLY · NO AI, NO EXTERNAL CALLS</div>
+              </aside>
             </div>
-            <div class="ec-in" id="ecInText">
-              <textarea id="ecPaste" placeholder="Paste an earnings-call transcript here — any format, any company. Non-content lines (headers, footers, page numbers, disclaimers) are stripped automatically before analysis."></textarea>
-            </div>
-            <div class="ec-in" id="ecInPdf" hidden>
-              <label class="ec-drop" id="ecDrop">
-                <input type="file" id="ecPdf" accept="application/pdf,.pdf" hidden>
-                <div class="ec-drop-ic">⬆</div>
-                <div class="ec-drop-t">Drop a transcript PDF here, or click to choose</div>
-                <div class="ec-drop-s mono">Text is extracted in your browser context · headers, footers &amp; page numbers removed</div>
-                <div class="ec-drop-file mono" id="ecPdfName"></div>
-              </label>
-            </div>
-            <div class="ec-btnrow">
-              <button class="btn btn-amber" id="ecAnalyze" type="button">Analyse transcript</button>
-              <button class="btn" id="ecDocx" type="button" title="Download a formatted .docx research report">⬇ DOCX report</button>
-            </div>
-            <div id="ecStatus" class="panel-sub mono" style="margin-top:8px"></div>
-            <div class="note ec-an-note">Fully deterministic — a 9-section institutional dashboard (assessment, financial snapshot, management scorecard, sentiment timeline, segments, guidance, risk heat-map, thesis, evidence appendix) is computed locally from the transcript. No AI, no external calls. Every figure is extracted verbatim and every score traces to the text. Use <b>⬇ DOCX report</b> for a formatted download.</div>
+            <div class="note ec-an-note">Every figure is extracted verbatim and every score traces to the transcript text. Use <b>⬇ DOCX report</b> for a formatted download.</div>
           </div>
-          <div id="ecOut"><div class="empty-mini mono">Load a company above for its schedule &amp; recent calls, then paste a transcript or import a PDF to generate the analysis — management tone, guidance tracking, risk &amp; competitor intelligence, topic frequency, per-speaker sentiment and an institutional scorecard.</div></div>
+          <div id="ecOut"></div>
         </div>
       </div>
     </section>

@@ -3302,3 +3302,40 @@ kbd {
 .ecd-gauge-v small { font-size: 13px; color: var(--muted); }
 .ecd-momentum { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hairline); }
 .ecd-disc { font-size: 10px; color: var(--muted-ink); line-height: 1.6; padding: 4px 2px; }
+
+/* ════ EARNINGS CALL — structured initial state (v67 polish) ════
+   The empty tab now reads as a workflow: a 3-step strip where the data
+   panels will appear, and a balanced input row with the report contents
+   listed beside the transcript input instead of floating hint sentences. */
+.ec-start {
+  grid-column: 1 / -1;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline); border-radius: var(--r); overflow: hidden;
+}
+.ec-start-step { background: var(--ink-2); padding: 20px 22px; display: flex; gap: 14px; align-items: flex-start; }
+.ec-start-step .n { font-size: 22px; color: var(--amber); line-height: 1; padding-top: 1px; }
+.ec-start-step h4 { font-size: 11px; letter-spacing: .12em; color: var(--fg); margin-bottom: 6px; }
+.ec-start-step p { font-size: 11px; color: var(--muted-ink); line-height: 1.6; }
+@media (max-width: 960px) { .ec-start { grid-template-columns: 1fr; } }
+
+/* input row: transcript input (left) · report contents (right) */
+.ec-inrow { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+@media (max-width: 960px) { .ec-inrow { grid-template-columns: 1fr; } }
+.ec-includes { border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--ink); padding: 12px 14px 10px; display: flex; flex-direction: column; }
+.ec-includes-t { font-size: 10px; letter-spacing: .16em; color: var(--muted); margin-bottom: 6px; }
+.ec-includes ul { list-style: none; margin: 0; padding: 0; flex: 1; }
+.ec-includes li { font-size: 10.5px; color: var(--muted-ink); line-height: 1.5; padding: 4px 0 4px 15px; position: relative; border-bottom: 1px dashed rgba(138,147,160,.14); }
+.ec-includes li:last-child { border-bottom: 0; }
+.ec-includes li::before { content: "▸"; position: absolute; left: 0; top: 4px; color: var(--amber); font-size: 9px; }
+.ec-includes-foot { font-size: 8.5px; letter-spacing: .1em; color: var(--muted); border-top: 1px solid var(--hairline); padding-top: 8px; margin-top: 8px; }
+
+/* balanced controls: the primary action no longer spans the full panel */
+.ec-btnrow .btn-amber { flex: 0 0 auto; padding: 9px 28px; }
+#ecPaste { height: 150px; }
+.ec-drop { height: 150px; }
+
+/* the report area only takes space once there is a report */
+.ec-inpanel { border-bottom: 0; }
+#ecOut:empty { display: none; }
+#ecOut:not(:empty) { border-top: 1px solid var(--hairline); }

@@ -460,3 +460,26 @@
   .process-flow { gap: 28px; margin-top: 40px; }
   .pr-num { font-size: 34px; min-width: 26px; }
 }
+
+/* ═════════════  V67 RESTRUCTURE — mobile refinements  ═════════════ */
+
+@media (max-width: 640px) {
+  .ch-head { gap: 12px; margin-bottom: 32px; }
+  .ch-meta { display: none; }
+  .ch-overlay { left: 22px; right: 22px; top: 20px; }
+
+  /* dark workflow chapter — tighten the panel + soften the corner radius so
+     the light→dark→light transition still reads on a narrow screen */
+  .process-wrap { margin-top: -28px; }
+  .process { padding: 64px 22px 70px; border-radius: 22px; }
+  .process-wrap + .section { padding-top: 64px; margin-top: -28px; }
+  .process-wrap + .section::before { border-radius: 22px 22px 0 0; }
+
+  /* methodology cards: tighter rhythm on phones too */
+  .stack-card { margin-bottom: 10px; }
+}
+
+@media (max-width: 480px) {
+  .process { padding: 56px 20px 60px; border-radius: 18px; }
+  .process-wrap + .section::before { border-radius: 18px 18px 0 0; }
+}

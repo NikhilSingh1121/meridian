@@ -719,12 +719,9 @@ a:hover .arr { transform: translateX(4px); }
 }
 .wave-terrain.on { opacity: 1; transform: none; }
 .wave-terrain-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.wave-terrain-svg .wt-plane { will-change: transform; }
-.wt-p0 { animation: wtDrift 48s ease-in-out infinite alternate; }
-.wt-p1 { animation: wtDrift 26s ease-in-out infinite alternate-reverse; }
-.wt-p2 { animation: wtDrift 34s ease-in-out infinite alternate; }
-.wt-p3 { animation: wtDrift 42s ease-in-out infinite alternate-reverse; }
-@keyframes wtDrift { from { transform: translateX(-0.6%); } to { transform: translateX(0.6%); } }
+/* drift animations removed (v67 perf pass): SVG group transforms are not
+   compositor-driven, so the 0.6% drift forced continuous repaints of two
+   gaussian-blurred 64vh planes. Static waves rasterize once and cost nothing. */
 /* ensure the feedback/final content sits above the wave */
 .feedback, .final { position: relative; z-index: 1; }
 /* soft fade from paper into the wave */
@@ -734,7 +731,6 @@ a:hover .arr { transform: translateX(4px); }
   pointer-events: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  .wt-p0, .wt-p1, .wt-p2, .wt-p3 { animation: none; }
   .wave-terrain { transition: opacity .01s; }
 }
 .side-row { display: flex; gap: 14px; align-items: flex-start; }
@@ -912,8 +908,8 @@ html.intro-hold, html.intro-hold body { overflow: hidden; height: 100%; }
   display: flex; justify-content: center; align-items: center;
   transform: translateY(0) translateZ(0);
   will-change: transform;
-  transition: transform .95s cubic-bezier(.76, 0, .24, 1),
-              border-radius .95s cubic-bezier(.76, 0, .24, 1);
+  transition: transform .48s cubic-bezier(.76, 0, .24, 1),
+              border-radius .48s cubic-bezier(.76, 0, .24, 1);
 }
 .intro.lift {
   transform: translateY(-100.5%) translateZ(0);
@@ -926,9 +922,9 @@ html.intro-hold, html.intro-hold body { overflow: hidden; height: 100%; }
   font-family: var(--sans); font-weight: 500;
   font-size: clamp(57px, 9vw, 108px);
   letter-spacing: -0.03em; line-height: 1.1;
-  opacity: 0; animation: introWordIn .5s ease .12s both;
+  opacity: 0; animation: introWordIn .25s ease .06s both;
 }
-.intro.lift .intro-line { opacity: 0; transition: opacity .3s ease; animation: none; }
+.intro.lift .intro-line { opacity: 0; transition: opacity .15s ease; animation: none; }
 @keyframes introWordIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 .intro-word { display: inline-block; min-width: 1ch; }
 .intro-mark {
@@ -965,6 +961,17 @@ html.intro-hold, html.intro-hold body { overflow: hidden; height: 100%; }
   position: absolute; inset: 0; width: 100%; height: 100%;
   pointer-events: none; color: var(--accent);
   z-index: 0;
+}
+/* the traveling arrow is an HTML overlay (not an SVG child) so its motion
+   is pure compositor transform — zero paint per scroll frame */
+.pr-cursor-el {
+  position: absolute; left: 0; top: 0;
+  width: 46px; height: 40px; margin: -20px 0 0 -23px;
+  color: var(--accent);
+  pointer-events: none; z-index: 2;
+  will-change: transform;
+  filter: drop-shadow(0 0 11px rgba(194,24,27,.6));
+  opacity: 0; transition: opacity .3s ease;
 }
 .pr-step {
   position: relative; z-index: 1;
@@ -1040,3 +1047,313 @@ html.intro-hold, html.intro-hold body { overflow: hidden; height: 100%; }
 .px-slidearea { touch-action: pan-y; overscroll-behavior-x: contain; }
 .px-slide.dragging { transition: none !important; }
 .px-slide.settling { transition: opacity .45s cubic-bezier(.2,.7,.2,1), transform .45s cubic-bezier(.2,.7,.2,1); }
+
+/* ── SHINY TEXT (CSS port of React Bits <ShinyText/>) ──
+   Periodic warm shine sweeping across the gallery chapter title.
+   Pure CSS: gradient + background-clip, no per-frame JS. */
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .px-title {
+    background-image: linear-gradient(120deg, #f2f3f5 0%, #f2f3f5 38%, #ffe3b0 50%, #f2f3f5 62%, #f2f3f5 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: #f2f3f5;
+    animation: pxShine 5s linear infinite;
+  }
+  @keyframes pxShine {
+    0%   { background-position: 150% center; }
+    42%  { background-position: -50% center; }
+    100% { background-position: -50% center; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .px-title { animation: none; background-position: -50% center; }
+  }
+}
+
+/* ── OPTION WHEEL (vanilla port of React Bits <OptionWheel/>) ──
+   The services nav curves around the left edge of its column and rotates
+   with the pinned section's scroll progress. Desktop pinned mode only;
+   below 1025px the plain list from the base styles is untouched. */
+@media (min-width: 1025px) {
+  #svcNav.svc-wheel { position: relative; height: 40vh; }
+  #svcNav.svc-wheel li {
+    position: absolute; top: 50%; left: 0;
+    padding: 0; white-space: nowrap;
+    transform-origin: left center;
+    will-change: transform, opacity, filter;
+    transition: color .35s ease;   /* opacity/filter are driven per-frame */
+  }
+}
+
+/* ── SCROLL STACK (vanilla port of React Bits <ScrollStackItem/>) ──
+   Methodology principles pin at ~22% viewport height and stack over one
+   another while the section copy stays sticky beside them. */
+.trust-stack { position: relative; }
+.stack-card {
+  display: flex; gap: 22px;
+  background: #fff; border: 1px solid var(--line); border-radius: 16px;
+  padding: 28px 30px 30px;
+  margin-bottom: 18px;
+  box-shadow: 0 24px 60px -30px rgba(16,16,18,.22);
+  transform-origin: top center;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+.stack-card:last-of-type { margin-bottom: 0; }
+.stack-card h4 { font-size: 17px; font-weight: 600; }
+.stack-card p { font-size: 14.5px; color: var(--ink-soft); margin-top: 6px; line-height: 1.55; }
+.stack-card .tl-n { padding-top: 3px; }
+.stack-end { height: 1px; }
+@media (min-width: 901px) {
+  .trust-grid { align-items: start; }
+  .trust-copy { position: sticky; top: clamp(90px, 16vh, 150px); }
+}
+@media (max-width: 900px) {
+  .stack-card { margin-bottom: 10px; padding: 22px 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stack-card { margin-bottom: 14px; }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   V67 POLISH PASS 2 — scrollspy, back-to-top, live chip, scrollbar,
+   magnetic CTA, accent details. Transform/opacity only.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── themed thin scrollbar ── */
+html { scrollbar-width: thin; scrollbar-color: #cfccc4 transparent; }
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cfccc4; border-radius: 8px; border: 3px solid var(--paper); }
+::-webkit-scrollbar-thumb:hover { background: #a9a69e; }
+
+/* ── nav scrollspy: the section in view keeps its underline ── */
+.nav-links a.current { color: var(--ink); }
+.nav-links a.current::after { right: 0; }
+.nav.over-dark .nav-links a::after { background: #e8eaed; }
+
+/* ── back-to-top ── */
+.to-top {
+  position: fixed; right: 26px; bottom: calc(26px + env(safe-area-inset-bottom, 0px));
+  z-index: 290; width: 46px; height: 46px; border-radius: 50%;
+  background: var(--ink); color: var(--paper);
+  display: grid; place-items: center;
+  box-shadow: 0 14px 34px -14px rgba(11,11,12,.5);
+  opacity: 0; transform: translateY(14px); pointer-events: none;
+  transition: opacity .4s ease, transform .45s cubic-bezier(.2,.7,.2,1), background .25s ease;
+}
+.to-top.on { opacity: 1; transform: none; pointer-events: auto; }
+.to-top:hover { background: var(--accent); }
+@media (max-width: 640px) { .to-top { width: 42px; height: 42px; right: 18px; } }
+@media (prefers-reduced-motion: reduce) { .to-top { transition: opacity .2s ease; transform: none; } }
+
+/* ── ticker LIVE chip ── */
+.tk-live {
+  position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+  z-index: 3; display: inline-flex; align-items: center; gap: 7px;
+  font-size: 10px; font-weight: 600; letter-spacing: .22em; color: var(--ink-soft);
+}
+.tk-live i { position: relative; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.tk-live i::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--accent);
+  animation: livePing 2.2s cubic-bezier(0, 0, .2, 1) infinite;
+}
+@keyframes livePing { 0% { transform: scale(1); opacity: .5; } 70%, 100% { transform: scale(2.6); opacity: 0; } }
+@media (max-width: 640px) { .tk-live { display: none; } }
+@media (prefers-reduced-motion: reduce) { .tk-live i::after { animation: none; opacity: 0; } }
+
+/* ── hero: brand square lands after "rebuilt." + editorial aside rule ── */
+.hero-h1 .line.accent::after {
+  content: ""; display: inline-block;
+  width: clamp(10px, 1.2vw, 16px); height: clamp(10px, 1.2vw, 16px);
+  background: var(--accent); margin-left: 18px;
+  opacity: 0; transform: scale(.3);
+  transition: opacity .5s ease .8s, transform .6s cubic-bezier(.2,.7,.2,1) .8s;
+}
+.hero-h1 .line.accent.vis::after { opacity: 1; transform: none; }
+.hero-aside { border-left: 1px solid var(--line); padding-left: 20px; }
+@media (prefers-reduced-motion: reduce) { .hero-h1 .line.accent::after { opacity: 1; transform: none; } }
+
+/* ── stats: crimson hairline draws under each number on reveal ── */
+.stat-num::after {
+  content: ""; display: block; width: 30px; height: 2px;
+  background: var(--accent); margin-top: 12px;
+  transform: scaleX(0); transform-origin: left center;
+  transition: transform .8s cubic-bezier(.2,.7,.2,1) .35s;
+}
+.stat-cell.vis .stat-num::after { transform: scaleX(1); }
+@media (prefers-reduced-motion: reduce) { .stat-num::after { transform: scaleX(1); } }
+
+/* ── workflow: quiet hover acknowledgement ── */
+@media (hover: hover) { .pr-step:hover .pr-num { color: #d2cec4; } }
+
+/* ════════════════════════════════════════════════════════════════════
+   V67 RESTRUCTURE — numbered chapter system + animated chapter headers,
+   dark workflow chapter as a rounded transition panel, micro-motion polish.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── CHAPTER HEADERS — every section opens like a numbered exhibit ── */
+.ch-head {
+  display: flex; align-items: baseline; gap: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  margin-bottom: clamp(40px, 7vh, 64px);
+}
+.ch-no { font-size: 12px; font-weight: 500; color: var(--accent); letter-spacing: .08em; }
+.ch-label { font-size: 12px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-soft); }
+.ch-meta { margin-left: auto; font-size: 10px; letter-spacing: .14em; color: var(--muted); }
+
+/* services: the chapter header floats over the pinned stage.
+   (.ch-head.ch-overlay — double class so this always beats the generic
+   `.ch-head { position: relative }` rule regardless of source order) */
+.ch-head.ch-overlay {
+  position: absolute; top: 26px; left: 40px; right: 40px;
+  z-index: 4; margin-bottom: 0;
+  max-width: 1320px; margin-left: auto; margin-right: auto;
+}
+/* feedback: align with its wider grid */
+.feedback .ch-head { max-width: 1640px; margin-left: auto; margin-right: auto; }
+/* dark chapters */
+.process .ch-head { border-top-color: rgba(247,246,243,.16); }
+.process .ch-label { color: #d6d6d2; }
+.process .ch-meta { color: #85858a; }
+.px .ch-head { border-top-color: rgba(138,147,160,.24); margin-bottom: 20px; }
+.px .ch-no { color: #e8a33d; }
+.px .ch-label { color: #c9d1d9; }
+.px .ch-meta { color: #8a93a0; }
+
+/* ── PROCESS — dark ink chapter as a rounded panel that rises over the
+   light section above and lets the light section below curve back over it,
+   so the page reads: light → (transition) dark → (transition) light ── */
+.process-wrap {
+  position: relative; z-index: 6;
+  margin-top: clamp(-64px, -6vh, -44px);
+}
+.process {
+  position: relative; z-index: 6;
+  background: var(--ink); color: var(--paper);
+  padding: clamp(100px, 13vh, 150px) 40px;
+  border-radius: clamp(28px, 4vw, 56px);
+  box-shadow: 0 -26px 70px -46px rgba(0,0,0,.5), 0 44px 100px -58px rgba(0,0,0,.62);
+}
+/* the light section that follows curves up over the dark panel,
+   completing the return to light. The section box is max-width-constrained,
+   so the full-bleed paper + rounded top is painted by a 100vw pseudo. */
+.process-wrap + .section {
+  position: relative; z-index: 7;
+  margin-top: clamp(-64px, -6vh, -44px);
+  padding-top: clamp(96px, 13vh, 140px);
+  border-top: 0;
+}
+.process-wrap + .section::before {
+  content: ""; position: absolute; z-index: -1;
+  left: 50%; transform: translateX(-50%);
+  top: 0; bottom: 0; width: 100vw;
+  background: var(--paper);
+  border-radius: clamp(28px, 4vw, 56px) clamp(28px, 4vw, 56px) 0 0;
+}
+.process-inner { max-width: 1320px; margin: 0 auto; }
+.process .display { color: var(--paper); }
+.process .process-sub { color: #b3b3af; }
+.process .pr-num { color: #232328; }
+.process .pr-step.vis .pr-num { color: #2e2e34; }
+.process .pr-body h3 { color: var(--paper); }
+.process .pr-body p { color: #a6a6a3; }
+@media (hover: hover) { .process .pr-step:hover .pr-num { color: #3a3a41; } }
+/* faint word behind the reveal for dark ground */
+.process .reveal-words .word { color: #3a3a3e; }
+.process .reveal-words .word.lit { color: var(--paper); }
+
+/* ── CHAPTER HEADER — crimson accent line draws along the top rule, and
+   the three items stagger up. Cheap: one transform per element, one-shot. ── */
+.ch-head { position: relative; }
+.ch-head::before {
+  content: ""; position: absolute; left: 0; top: -1px; height: 2px; width: 44px;
+  background: var(--accent);
+  transform: scaleX(0); transform-origin: left center;
+  transition: transform .7s cubic-bezier(.2,.7,.2,1) .08s;
+}
+/* headers that are gated by reveal-up draw once they enter; static ones
+   (services overlay, gallery) draw immediately */
+.ch-head.reveal-up.vis::before,
+.ch-head:not(.reveal-up)::before { transform: scaleX(1); }
+.ch-head.reveal-up .ch-no,
+.ch-head.reveal-up .ch-label,
+.ch-head.reveal-up .ch-meta {
+  opacity: 0; transform: translateY(9px);
+  transition: opacity .6s cubic-bezier(.2,.7,.2,1), transform .6s cubic-bezier(.2,.7,.2,1);
+}
+.ch-head.reveal-up.vis .ch-no    { opacity: 1; transform: none; transition-delay: .10s; }
+.ch-head.reveal-up.vis .ch-label { opacity: 1; transform: none; transition-delay: .17s; }
+.ch-head.reveal-up.vis .ch-meta  { opacity: .999; transform: none; transition-delay: .24s; }
+@media (prefers-reduced-motion: reduce) {
+  .ch-head::before { transform: scaleX(1); transition: none; }
+  .ch-head.reveal-up .ch-no, .ch-head.reveal-up .ch-label, .ch-head.reveal-up .ch-meta {
+    opacity: 1; transform: none; transition: none;
+  }
+}
+
+/* ── GLOBAL POLISH — smoother, more premium micro-motion ── */
+/* under-links: the arrow already slides; add a growing crimson underline
+   sweep beneath the existing rule (no overflow clip — the arrow must be free) */
+.under-link { position: relative; }
+.under-link::after {
+  content: ""; position: absolute; left: 0; bottom: -1px; height: 2px; width: 100%;
+  background: var(--accent);
+  transform: scaleX(0); transform-origin: right center;
+  transition: transform .4s cubic-bezier(.2,.7,.2,1);
+}
+.under-link:hover::after { transform: scaleX(1); transform-origin: left center; }
+
+/* stat cells: a soft crimson wash rises on hover */
+.stat-cell { position: relative; overflow: hidden; }
+.stat-cell::before {
+  content: ""; position: absolute; inset: 0; z-index: 0;
+  background: linear-gradient(180deg, transparent, rgba(194,24,27,.05));
+  opacity: 0; transition: opacity .4s ease;
+}
+.stat-cell:hover::before { opacity: 1; }
+.stat-cell > * { position: relative; z-index: 1; }
+
+/* the fixed scroll-progress bar gets a subtle glow so it reads as premium */
+.scroll-prog { box-shadow: 0 0 10px rgba(194,24,27,.5); }
+
+/* ── COVER TRANSITIONS (desktop) ──
+   03 (dark workflow) pops up fully OVER the pinned platform stage: the
+   services section gets 100vh of extra scroll range, during which its
+   sticky stage stays frozen while the dark panel slides over it (z 6 > 5).
+   Then 04 (methodology) pops up fully over the dark panel's featureless
+   ink tail (z 7 > 6) — light → dark → light, each a card covering the last. */
+@media (min-width: 1025px) {
+  .services { height: 560vh; }                 /* +100vh hosts 03's cover */
+  .process-wrap { margin-top: -100vh; }        /* 03 slides over the pinned stage */
+  /* the wrapper runs 70vh taller than the panel; the panel pins at its final
+     screen (JS sets --proc-pin = -(panelHeight - 100vh)) so 04 slides fully
+     over a FROZEN 03 — the same cover mechanic as 03 over 02 */
+  .process-wrap::after { content: ""; display: block; height: 70vh; }
+  .process.pin-ready { position: sticky; top: var(--proc-pin, 0px); }
+  .process-wrap + .section { margin-top: -70vh; }   /* 04 rises over the pinned panel */
+}
+
+/* ── 01 BY THE NUMBERS — full-bleed surface + terrain dissolve ──
+   The hero terrain is a fixed full-viewport render; the stats surface only
+   spanned its 1320px content box, so on wide screens it read as a narrower
+   "sheet" floating on the render. The surface is now full-bleed, and a
+   gradient band above the section dissolves the terrain into it — page 1
+   transitions into chapter 01 as one continuous surface, render intact. */
+.section.stats { border-top: 0; }
+.section.stats::before {
+  content: ""; position: absolute; z-index: -1;
+  left: 50%; transform: translateX(-50%);
+  top: 0; bottom: 0; width: 100vw;
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+}
+.section.stats::after {
+  content: ""; position: absolute;
+  left: 50%; transform: translateX(-50%);
+  bottom: 100%; width: 100vw; height: 120px;
+  background: linear-gradient(180deg, rgba(247,246,243,0), var(--paper));
+  pointer-events: none;
+}

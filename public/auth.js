@@ -19,6 +19,12 @@
     busy: false,
   };
   const GATED = ["portfolio", "library"];
+  /* tabs that can be used without an account (data stays in this browser's
+     localStorage; server sync simply stays off until the user signs in) */
+  const SKIPPABLE = ["portfolio"];
+  const SKIP_KEY = "m_skip_auth_";   // plain key — never mirrored by MSTORE
+  const skipAllowed = (tab) => SKIPPABLE.indexOf(tab) !== -1;
+  const hasSkipped = (tab) => { try { return localStorage.getItem(SKIP_KEY + tab) === "1"; } catch { return false; } };
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
@@ -251,7 +257,7 @@
       const sec = document.getElementById("tab-" + tab);
       if (!sec) return;
       let gate = sec.querySelector(":scope > .auth-gate");
-      if (M.user) { if (gate) gate.remove(); return; }
+      if (M.user || (skipAllowed(tab) && hasSkipped(tab))) { if (gate) gate.remove(); return; }
       if (!gate) { gate = buildGate(tab); sec.appendChild(gate); }
     });
     renderGsiButtons();
@@ -261,6 +267,9 @@
     const blurb = tab === "portfolio"
       ? "Build watchlists and run technical scans that are saved to your account and synced across devices."
       : "Save research reports to your account and reopen them from anywhere.";
+    const skipHTML = skipAllowed(tab) ? `
+        <button class="ag-skip" data-skip type="button">Continue without an account <span aria-hidden="true">→</span></button>
+        <p class="ag-skip-note">Your ${label.toLowerCase()} stays on this device only — sign in anytime to sync it across devices.</p>` : "";
     const g = document.createElement("div");
     g.className = "auth-gate";
     g.innerHTML = `
@@ -272,9 +281,15 @@
         <p class="ag-blurb">${blurb}</p>
         <div class="gsi-slot" data-gsi></div>
         <button class="sp-google ag-google" data-signin><span class="sp-g">G</span> Continue with Google</button>
+        ${skipHTML}
         <div class="sp-err" data-err hidden></div>
       </div>`;
     g.querySelector("[data-signin]").addEventListener("click", promptSignIn);
+    const skipBtn = g.querySelector("[data-skip]");
+    if (skipBtn) skipBtn.addEventListener("click", () => {
+      try { localStorage.setItem(SKIP_KEY + tab, "1"); } catch { }
+      g.remove();
+    });
     return g;
   }
 

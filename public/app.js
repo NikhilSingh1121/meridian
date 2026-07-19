@@ -16,7 +16,10 @@ function _flushScroll() {
 addEventListener("scroll", () => {
   if (_scrollQueued) return;
   _scrollQueued = true;
-  requestAnimationFrame(_flushScroll);
+  // rAF is frozen in hidden tabs; fall back to a timer so scroll-driven
+  // state can never wedge waiting on a frame that will not arrive
+  if (document.hidden) setTimeout(_flushScroll, 32);
+  else requestAnimationFrame(_flushScroll);
 }, { passive: true });
 
 /* ── nav scrolled state ── */
@@ -56,7 +59,9 @@ function setupReveal() {
     // stagger delay is entrance-only: clear it so hover transitions stay instant
     setTimeout(() => e.target.style.removeProperty("--d"), 1700);
   }), { threshold: 0.12 });
-  $$(".reveal-up, .rise-in").forEach((el) => io.observe(el));
+  // workflow steps are revealed by the traveling cursor (initProcess), not the
+  // viewport — so their text "arrives" exactly as the cursor reaches them
+  $$(".reveal-up, .rise-in").forEach((el) => { if (!el.classList.contains("pr-step")) io.observe(el); });
 }
 
 /* ── entrance staggering for grouped elements ── */
@@ -107,7 +112,7 @@ function initIntro() {
     if (lenis) lenis.start();
     const cleanup = () => { if (el.parentNode) el.remove(); };
     el.addEventListener("transitionend", cleanup, { once: true });
-    setTimeout(cleanup, 1400);            // safety net
+    setTimeout(cleanup, 800);             // safety net
   }
   const words = ["Hello", "नमस्ते", "Bonjour", "Hola", "Ciao", "こんにちは", "안녕하세요", "Olá"];
   let i = 0;
@@ -116,11 +121,11 @@ function initIntro() {
     i++;
     if (i >= words.length) { lift(); return; }
     word.textContent = words[i];
-    setTimeout(next, i === 1 ? 320 : 250);
+    setTimeout(next, i === 1 ? 160 : 125);
   }
   // background-tab load: hold the curtain and start the sequence only once
   // the tab is actually visible, so the choreography is never wasted
-  function begin() { setTimeout(next, 540); }
+  function begin() { setTimeout(next, 270); }
   if (document.visibilityState === "hidden") {
     const onVis = () => {
       if (document.visibilityState !== "hidden") { document.removeEventListener("visibilitychange", onVis); begin(); }
@@ -435,16 +440,72 @@ function initServices() {
   }
   const isPinned = () => matchMedia("(min-width: 1025px)").matches && !reduced;
   const shapeEl = $("#svcShape");
+
+  /* OptionWheel-style curved nav: the list bends around the left edge and
+     rotates with the pinned section's scroll progress. Position is eased in
+     a tiny self-stopping rAF loop; clicks and .active styling are untouched. */
+  const navUl = $("#svcNav");
+  let wPos = 0, wTarget = 0, wRaf = 0, wRowH = 48, wOn = false;
+  const wFilt = [];
+  const W_TILT = (10 * Math.PI) / 180, W_CURVE = 1, W_FADE = 0.3, W_BLUR = 1.4;
+  function wheelLayout() {
+    const R = wRowH / W_TILT;
+    for (let i = 0; i < nav.length; i++) {
+      const d = i - wPos;
+      const dist = Math.abs(d);
+      const ang = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, d * W_TILT));
+      const x = -R * (1 - Math.cos(ang)) * W_CURVE;
+      const y = R * Math.sin(ang);
+      // no rotation: every item stays horizontal; the wheel reads through
+      // the vertical arc, the slight x recession, and the fade/blur falloff
+      nav[i].style.transform = "translate(" + x.toFixed(2) + "px, calc(" + y.toFixed(2) + "px - 50%))";
+      nav[i].style.opacity = String(Math.max(0.18, 1 - dist * W_FADE));
+      // blur quantized to 0.5px steps and cached: filter changes re-rasterize
+      // the text layer, so we only write when the step actually changes
+      const bl = Math.min(Math.round(dist * W_BLUR * 2) / 2, 4);
+      const f = bl > 0 ? "blur(" + bl + "px)" : "none";
+      if (wFilt[i] !== f) { wFilt[i] = f; nav[i].style.filter = f; }
+    }
+  }
+  function wheelFrame() {
+    wRaf = 0;
+    const diff = wTarget - wPos;
+    wPos = Math.abs(diff) < 0.002 ? wTarget : wPos + diff * 0.14;
+    wheelLayout();
+    if (wPos !== wTarget) wRaf = requestAnimationFrame(wheelFrame);
+  }
+  function wheelKick() { if (!wRaf) wRaf = requestAnimationFrame(wheelFrame); }
+  function wheelMode() {
+    const on = isPinned() && !!navUl;
+    if (on === wOn) return;
+    wOn = on;
+    if (on) {
+      navUl.classList.add("svc-wheel");
+      wRowH = (parseFloat(getComputedStyle(nav[0]).fontSize) || 26) * 1.85;
+      wheelLayout();
+    } else {
+      if (navUl) navUl.classList.remove("svc-wheel");
+      if (wRaf) { cancelAnimationFrame(wRaf); wRaf = 0; }
+      wFilt.length = 0;
+      nav.forEach((li) => { li.style.transform = ""; li.style.opacity = ""; li.style.filter = ""; });
+    }
+  }
+
   function onScroll() {
+    wheelMode();
     if (!isPinned()) { if (cur < 0) show(0); return; }
     const rect = section.getBoundingClientRect();
     // off-screen guard: skip all work unless the pinned section is in/near viewport
     if (rect.bottom < 0 || rect.top > window.innerHeight) return;
-    const total = section.offsetHeight - window.innerHeight;
+    // the last 100vh of the pinned range hosts the dark chapter's cover
+    // transition, so the four slides complete before it begins
+    const total = section.offsetHeight - window.innerHeight * 2;
     const scrolled = Math.min(Math.max(-rect.top, 0), total);
     const p = total > 0 ? scrolled / total : 0;
     const idx = Math.min(SVC.length - 1, Math.floor(p * SVC.length));
     show(idx);
+    wTarget = Math.min(SVC.length - 1, Math.max(0, p * SVC.length - 0.5));
+    wheelKick();
     // subtle parallax drift on the shape + ghost as you move within a slide
     const within = (p * SVC.length) % 1;
     if (shapeEl) shapeEl.style.transform = "translate(-50%, " + (-50 + (within - 0.5) * 6) + "%) rotate(" + (within - 0.5) * 4 + "deg)";
@@ -453,7 +514,7 @@ function initServices() {
     li.addEventListener("click", function () {
       const i = +li.dataset.s;
       if (!isPinned()) { show(i); return; }
-      const total = section.offsetHeight - window.innerHeight;
+      const total = section.offsetHeight - window.innerHeight * 2;
       const targetTop = section.offsetTop + (total * (i + 0.5) / SVC.length);
       if (lenis) lenis.scrollTo(targetTop, { duration: 1.1 });
       else window.scrollTo({ top: targetTop, behavior: "smooth" });
@@ -775,22 +836,54 @@ function initProcess() {
   if (!flow || !svg) return;
   const steps = $$(".pr-step", flow);
   if (steps.length < 2) return;
-  let maskPath = null, cursor = null, pathLen = 0, lastP = reduced ? 1 : 0;
+  let pathEl = null, cursorEl = null, pathLen = 0, lastP = reduced ? 1 : 0, stepFrac = [];
+
+  function ensureCursor() {
+    if (cursorEl) return;
+    cursorEl = document.createElement("div");
+    cursorEl.className = "pr-cursor-el";
+    // larger arrow with a soft halo disc behind it — reads as a real "cursor"
+    cursorEl.innerHTML = '<svg viewBox="-16 -14 32 28" width="100%" height="100%" aria-hidden="true"><circle cx="0" cy="0" r="13" fill="currentColor" opacity=".16"/><path d="M-8,-7.5 L10,0 L-8,7.5 L-3.4,0 Z" fill="currentColor"/></svg>';
+    flow.appendChild(cursorEl);
+  }
 
   function placeCursor(p) {
-    if (!cursor || !maskPath) return;
-    if (reduced || p < 0.015) { cursor.style.opacity = "0"; return; }
+    if (!cursorEl || !pathEl) return;
+    if (reduced || p < 0.012) { cursorEl.style.opacity = "0"; return; }
     const L = pathLen * p;
-    const a = maskPath.getPointAtLength(Math.max(0, L - 2));
-    const b = maskPath.getPointAtLength(Math.min(pathLen, L + 2));
+    const a = pathEl.getPointAtLength(Math.max(0, L - 2));
+    const b = pathEl.getPointAtLength(Math.min(pathLen, L + 2));
     const ang = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
-    const pt = maskPath.getPointAtLength(L);
-    cursor.setAttribute("transform", "translate(" + pt.x.toFixed(1) + " " + pt.y.toFixed(1) + ") rotate(" + ang.toFixed(1) + ")");
-    cursor.style.opacity = "1";
+    const pt = pathEl.getPointAtLength(L);
+    cursorEl.style.transform = "translate3d(" + pt.x.toFixed(1) + "px," + pt.y.toFixed(1) + "px,0) rotate(" + ang.toFixed(1) + "deg)";
+    cursorEl.style.opacity = "1";
+  }
+
+  // reveal a step's text as the cursor closes in on it (lead-in so the text
+  // is already animating up by the time the arrow arrives)
+  function revealByCursor(p) {
+    for (let i = 0; i < steps.length; i++) {
+      if (steps[i].classList.contains("vis")) continue;
+      if (p >= stepFrac[i] - 0.05) steps[i].classList.add("vis");
+    }
+  }
+  function revealByViewport() {
+    const y0 = innerHeight * 0.82;
+    for (let i = 0; i < steps.length; i++) {
+      if (steps[i].classList.contains("vis")) continue;
+      if (steps[i].getBoundingClientRect().top < y0) steps[i].classList.add("vis");
+    }
   }
 
   function build() {
-    if (matchMedia("(max-width: 900px)").matches) { svg.innerHTML = ""; maskPath = null; cursor = null; return; }
+    if (matchMedia("(max-width: 900px)").matches) {
+      svg.innerHTML = ""; pathEl = null;
+      // display:none, not just opacity — a stale desktop transform would
+      // otherwise park the invisible arrow past the viewport edge and
+      // inflate the document's horizontal scroll width on phones
+      if (cursorEl) { cursorEl.style.opacity = "0"; cursorEl.style.display = "none"; }
+      return;
+    }
     const fr = flow.getBoundingClientRect();
     const W = Math.max(1, Math.round(flow.offsetWidth));
     const H = Math.max(1, Math.round(flow.offsetHeight));
@@ -805,35 +898,128 @@ function initProcess() {
       const my = ((a.y + b.y) / 2).toFixed(1);
       d += " C " + a.x.toFixed(1) + " " + my + ", " + b.x.toFixed(1) + " " + my + ", " + b.x.toFixed(1) + " " + b.y.toFixed(1);
     }
-    svg.innerHTML =
-      '<defs><mask id="prLineMask"><path d="' + d + '" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round"/></mask></defs>' +
-      '<path d="' + d + '" fill="none" stroke="currentColor" stroke-opacity=".55" stroke-width="1.6" stroke-dasharray="1 9" stroke-linecap="round" mask="url(#prLineMask)"/>' +
-      '<g class="pr-cursor" style="opacity:0; transition: opacity .3s ease;"><path d="M0,-5.5 L13,0 L0,5.5 L3.4,0 Z" fill="currentColor"/></g>';
-    maskPath = svg.querySelector("mask path");
-    cursor = svg.querySelector(".pr-cursor");
-    pathLen = maskPath.getTotalLength();
-    maskPath.style.strokeDasharray = pathLen + " " + pathLen;
-    maskPath.style.strokeDashoffset = String(pathLen * (1 - lastP));
+    // static dashed line: painted once; only the HTML arrow moves per frame
+    svg.innerHTML = '<path d="' + d + '" fill="none" stroke="currentColor" stroke-opacity=".5" stroke-width="1.6" stroke-dasharray="1 9" stroke-linecap="round"/>';
+    pathEl = svg.querySelector("path");
+    pathLen = pathEl.getTotalLength();
+    if (cursorEl) cursorEl.style.display = "";   // restore after a mobile pass
+    // map each step numeral to its arc-length fraction on the path (sample
+    // once, nearest-match) so cursor progress can drive per-step reveals
+    const SAMP = 200, samp = [];
+    for (let s = 0; s <= SAMP; s++) { const f = s / SAMP; const q = pathEl.getPointAtLength(pathLen * f); samp.push({ f, x: q.x, y: q.y }); }
+    stepFrac = pts.map((pt) => {
+      let best = Infinity, bf = 0;
+      for (const q of samp) { const dx = q.x - pt.x, dy = q.y - pt.y, dd = dx * dx + dy * dy; if (dd < best) { best = dd; bf = q.f; } }
+      return bf;
+    });
+    ensureCursor();
     placeCursor(lastP);
   }
 
   function onScroll() {
-    if (!maskPath) return;
+    if (reduced) { for (const s of steps) s.classList.add("vis"); return; }
+    if (!pathEl) {
+      // self-heal: layout may have crossed the 900px boundary without a
+      // rebuild (e.g. viewport settled after load) — try once per frame
+      if (!matchMedia("(max-width: 900px)").matches) build();
+      if (!pathEl) { revealByViewport(); return; }   // mobile: reveal on entry
+    }
     const r = flow.getBoundingClientRect();
     if (r.bottom < -100 || r.top > innerHeight + 100) return;   // off-screen guard
-    let p = reduced ? 1 : (innerHeight * 0.78 - r.top) / (r.height || 1);
+    let p = (innerHeight * 0.78 - r.top) / (r.height || 1);
     p = Math.max(0, Math.min(1, p));
-    if (Math.abs(p - lastP) < 0.003) return;
+    revealByCursor(p);
+    if (Math.abs(p - lastP) < 0.002) return;
     lastP = p;
-    maskPath.style.strokeDashoffset = String(pathLen * (1 - p));
     placeCursor(p);
   }
 
+  /* pin the panel at its final screen so 04 covers a FROZEN 03: sticky
+     needs a fixed negative top of (panelHeight − viewport), set here */
+  const panel = document.getElementById("process");
+  function setPin() {
+    if (!panel) return;
+    if (matchMedia("(max-width: 1024px)").matches) {
+      panel.classList.remove("pin-ready");
+      panel.style.removeProperty("--proc-pin");
+      return;
+    }
+    panel.style.setProperty("--proc-pin", (-(panel.offsetHeight - innerHeight)).toFixed(0) + "px");
+    panel.classList.add("pin-ready");
+  }
+
   build();
+  setPin();
   onScroll();
-  addEventListener("resize", () => { build(); onScroll(); });
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { build(); onScroll(); });
+  addEventListener("resize", () => { build(); setPin(); onScroll(); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { build(); setPin(); onScroll(); });
   onScrollFrame(onScroll);
+}
+
+/* ── TRUST — ScrollStack (vanilla port of React Bits <ScrollStack/>) ──
+   Methodology cards pin at ~22% viewport height and stack over each other,
+   each settling at a slightly deeper scale, releasing at the end marker.
+   Rides the shared scroll dispatcher — no extra listeners or Lenis. */
+function initTrustStack() {
+  const zone = document.getElementById("trustStack");
+  if (!zone || reduced) return;
+  const cards = $$(".stack-card", zone);
+  const endEl = zone.querySelector(".stack-end");
+  if (cards.length < 2 || !endEl) return;
+
+  const CFG = { stackPos: 0.22, scaleEnd: 0.10, dist: 26, baseScale: 0.88, itemScale: 0.03 };
+  let tops = [], endTop = 0, active = false, last = [];
+
+  function measure() {
+    if (matchMedia("(max-width: 900px)").matches) {
+      if (active) cards.forEach((c) => { c.style.transform = ""; });
+      active = false;
+      return;
+    }
+    active = true;
+    cards.forEach((c) => { c.style.transform = ""; });   // measure untransformed
+    const y = window.scrollY;
+    tops = cards.map((c) => c.getBoundingClientRect().top + y);
+    endTop = endEl.getBoundingClientRect().top + y;
+    last = cards.map(() => "");
+    onScroll();
+  }
+
+  const prog = (v, a, b) => (v <= a ? 0 : v >= b ? 1 : (v - a) / (b - a));
+
+  function onScroll() {
+    if (!active) {
+      // self-heal (mirrors initProcess): re-measure if the viewport is now
+      // desktop-sized but the stack was built while it was narrow
+      if (!matchMedia("(max-width: 900px)").matches) { measure(); }
+      if (!active) return;
+    }
+    const y = window.scrollY, vh = innerHeight;
+    if (tops[0] - vh - 300 > y) return;                  // far above: untouched
+    const stackPos = vh * CFG.stackPos;
+    const scaleEnd = vh * CFG.scaleEnd;
+    const pinEnd = endTop - vh / 2;
+    for (let i = 0; i < cards.length; i++) {
+      const top = tops[i];
+      const start = top - stackPos - CFG.dist * i;
+      const sp = prog(y, start, top - scaleEnd);
+      const target = CFG.baseScale + i * CFG.itemScale;
+      const scale = 1 - sp * (1 - target);
+      let ty = 0;
+      if (y >= start && y <= pinEnd) ty = y - top + stackPos + CFG.dist * i;
+      else if (y > pinEnd) ty = pinEnd - top + stackPos + CFG.dist * i;
+      const key = ty.toFixed(1) + ":" + scale.toFixed(3);
+      if (last[i] !== key) {
+        last[i] = key;
+        cards[i].style.transform = "translate3d(0," + ty.toFixed(1) + "px,0) scale(" + scale.toFixed(3) + ")";
+      }
+    }
+  }
+
+  measure();
+  onScrollFrame(onScroll);
+  addEventListener("resize", measure);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
 }
 
 /* ── animated counters ── */
@@ -893,7 +1079,11 @@ function boot() {
   initGoalTracker();
   initWaveTerrain();
   initMotionEnhancements();
+  initScrollSpy();
+  initBackToTop();
+  initMagnetic();
   initProcess();
+  initTrustStack();
   loadTicker(); setInterval(loadTicker, 60000);
   initIntro();   // plays the greeting curtain, then releases all reveals
 }
@@ -909,6 +1099,64 @@ function initMotionEnhancements() {
   onScrollFrame(() => {
     const max = document.documentElement.scrollHeight - innerHeight;
     bar.style.transform = "scaleX(" + (max > 0 ? Math.min(1, _scrollY / max) : 0) + ")";
+  });
+}
+
+/* ── nav scrollspy: underline follows the section in view ── */
+function initScrollSpy() {
+  const links = $$(".nav-links a[href^='#']");
+  const map = links
+    .map((a) => ({ a, el: document.querySelector(a.getAttribute("href")) }))
+    .filter((m) => m.el);
+  if (!map.length) return;
+  let curIdx = -1;
+  onScrollFrame(() => {
+    let best = -1;
+    for (let i = 0; i < map.length; i++) {
+      const r = map[i].el.getBoundingClientRect();
+      if (r.top <= innerHeight * 0.42 && r.bottom > innerHeight * 0.25) best = i;
+    }
+    if (best === curIdx) return;
+    curIdx = best;
+    map.forEach((m, i) => m.a.classList.toggle("current", i === best));
+  });
+}
+
+/* ── back-to-top: appears after ~1.5 viewports ── */
+function initBackToTop() {
+  const btn = document.createElement("button");
+  btn.className = "to-top";
+  btn.setAttribute("aria-label", "Back to top");
+  btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  document.body.appendChild(btn);
+  btn.addEventListener("click", () => {
+    if (lenis) lenis.scrollTo(0, { duration: 1.1 });
+    else window.scrollTo({ top: 0, behavior: reduced ? "auto" : "smooth" });
+  });
+  let on = false;
+  onScrollFrame((y) => {
+    const want = y > innerHeight * 1.5;
+    if (want !== on) { on = want; btn.classList.toggle("on", on); }
+  });
+}
+
+/* ── magnetic CTA: the button leans toward the cursor (fine pointers only) ── */
+function initMagnetic() {
+  if (reduced || matchMedia("(pointer: coarse)").matches) return;
+  $$("[data-magnetic]").forEach((el) => {
+    let raf = 0, tx = 0, ty = 0;
+    const apply = () => { raf = 0; el.style.transform = tx || ty ? "translate(" + tx.toFixed(1) + "px," + ty.toFixed(1) + "px)" : ""; };
+    el.addEventListener("mousemove", (e) => {
+      if (el.classList.contains("reveal-up") && !el.classList.contains("vis")) return;
+      const r = el.getBoundingClientRect();
+      tx = Math.max(-6, Math.min(6, (e.clientX - r.left - r.width / 2) * 0.16));
+      ty = Math.max(-5, Math.min(5, (e.clientY - r.top - r.height / 2) * 0.22));
+      if (!raf) raf = requestAnimationFrame(apply);
+    });
+    el.addEventListener("mouseleave", () => {
+      tx = ty = 0;
+      if (!raf) raf = requestAnimationFrame(apply);
+    });
   });
 }
 
@@ -1139,11 +1387,19 @@ function initProductExperience() {
     }), { threshold: 0.14 }).observe(root);
   } else { root.classList.add("in"); ensure(cur); }
 
+  const darkEls = [root, document.getElementById("process")].filter(Boolean);
   const navSync = () => {
     const r = root.getBoundingClientRect();
     const navH = nav ? nav.offsetHeight : 64;
     inView = r.top < innerHeight * 0.7 && r.bottom > innerHeight * 0.3;
-    if (nav) nav.classList.toggle("over-dark", r.top <= navH && r.bottom >= navH);
+    if (nav) {
+      let over = false;
+      for (const el of darkEls) {
+        const dr = el.getBoundingClientRect();
+        if (dr.top <= navH && dr.bottom >= navH) { over = true; break; }
+      }
+      nav.classList.toggle("over-dark", over);
+    }
   };
   let rafPending = false;
   addEventListener("scroll", () => {

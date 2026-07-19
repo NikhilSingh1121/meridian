@@ -121,3 +121,15 @@
   .auth-gate { padding: 16px; }
   .auth-gate-card { padding: 24px 18px; }
 }
+
+/* ── skip-login (guest mode) on the Portfolio gate ── */
+.ag-skip {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 18px;
+  font-size: 12px; font-family: var(--sans); color: var(--muted);
+  background: none; border: 0; border-bottom: 1px solid var(--hairline);
+  padding: 0 0 3px; cursor: pointer;
+  transition: color .2s ease, border-color .2s ease;
+}
+.ag-skip:hover { color: var(--amber-bright); border-color: var(--amber); }
+.ag-skip-note { font-size: 10.5px; color: var(--muted-ink); line-height: 1.55; margin-top: 8px; max-width: 320px; margin-left: auto; margin-right: auto; }

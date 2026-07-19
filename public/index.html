@@ -26,7 +26,7 @@
       <a class="brand" href="/">MERIDIAN</a>
       <nav class="nav-links">
         <a href="#services">Platform</a>
-        <a href="#showcase">Research</a>
+        <a href="#process">Research</a>
         <a href="#trust">Methodology</a>
         <a href="#feedback">Feedback</a>
       </nav>
@@ -59,15 +59,20 @@
       <p class="reveal-words big">An AI-native research platform that computes every number, cites every claim, and generates institutional-grade equity research at scale.</p>
     </div>
     <div class="ticker reveal-up" style="--d:.2s" aria-label="Live market ticker">
+      <span class="tk-live mono" aria-hidden="true"><i></i>LIVE</span>
       <div class="ticker-track" id="tickerTrack"></div>
     </div>
   </section>
 
   <!-- ════ STATS (immediately after hero, like reference) ════ -->
   <section class="section stats" id="stats">
+    <div class="ch-head reveal-up">
+      <span class="ch-no mono">01</span>
+      <span class="ch-label">By the numbers</span>
+      <span class="ch-meta mono">LIVE COVERAGE</span>
+    </div>
     <div class="stats-grid">
       <div class="stats-left">
-        <p class="eyebrow">By the numbers</p>
         <h2 class="stats-statement reveal-words">Where financial data becomes investment intelligence. Track market movements in real time, analyze companies, model valuations, analyze forensic risk & financials and generate research reports — within a single platform.</h2>
       </div>
       <div class="stats-right">
@@ -83,6 +88,11 @@
   <!-- ════ SERVICES (Tres Mares-style pinned sequence) ════ -->
   <section class="services" id="services">
     <div class="services-sticky">
+      <div class="ch-head ch-overlay">
+        <span class="ch-no mono">02</span>
+        <span class="ch-label">The platform</span>
+        <span class="ch-meta mono">CORE MODULES · 04</span>
+      </div>
       <div class="services-stage-full">
         <canvas id="svcCanvas" class="svc-canvas" aria-hidden="true"></canvas>
         <svg id="svcShape" class="svc-shape" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
@@ -92,7 +102,6 @@
       </div>
       <div class="services-inner">
         <div class="services-nav">
-          <p class="eyebrow">The platform</p>
           <ul id="svcNav">
             <li class="active" data-s="0">Research Workspace</li>
             <li data-s="1">Valuation &amp; DCF Engine</li>
@@ -109,10 +118,19 @@
     </div>
   </section>
 
-  <!-- ════ PROCESS (zig-zag numbered workflow, scroll-drawn connector) ════ -->
-  <section class="section process" id="process">
+  <!-- ════ PROCESS (dark ink chapter — zig-zag workflow, traveling cursor).
+       The wrapper is 70vh taller than the panel; the panel pins at its final
+       screen (sticky, negative top set by JS) so 04 slides fully OVER it —
+       the same cover mechanic as 03 over the pinned platform stage. ════ -->
+  <div class="process-wrap">
+  <section class="process" id="process">
+    <div class="process-inner">
+    <div class="ch-head reveal-up">
+      <span class="ch-no mono">03</span>
+      <span class="ch-label">The workflow</span>
+      <span class="ch-meta mono">TICKER &rarr; REPORT</span>
+    </div>
     <div class="process-head">
-      <p class="eyebrow center reveal-up">The workflow</p>
       <h2 class="display center reveal-up" style="--d:.08s">From ticker to defensible research<span class="accent">.</span></h2>
       <p class="process-sub reveal-up" style="--d:.16s">Every stage of institutional research &mdash; extraction, computation, valuation, forensics, review &mdash; runs in sequence. Nothing is skipped, and every claim keeps its citation.</p>
     </div>
@@ -189,22 +207,29 @@
         </div>
       </div>
     </div>
+    </div>
   </section>
+  </div>
 
   <!-- ════ TRUST ════ -->
   <section class="section trust" id="trust">
+    <div class="ch-head reveal-up">
+      <span class="ch-no mono">04</span>
+      <span class="ch-label">Methodology</span>
+      <span class="ch-meta mono">AUDIT TRAIL</span>
+    </div>
     <div class="trust-grid">
       <div class="trust-copy">
-        <p class="eyebrow">Methodology</p>
-        <h2 class="display">Built for <span class="accent">auditability.</span></h2>
-        <p class="trust-lead">Trust in research is earned through transparency, not endorsements. So we publish how the engine works &mdash; and refuse to let a model invent a number.</p>
-        <a class="under-link dark" href="#">Read the methodology <span class="arr">&rarr;</span></a>
+        <h2 class="display reveal-up">Built for <span class="accent">auditability.</span></h2>
+        <p class="trust-lead reveal-up" style="--d:.08s">Trust in research is earned through transparency, not endorsements. So we publish how the engine works &mdash; and refuse to let a model invent a number.</p>
+        <a class="under-link dark reveal-up" style="--d:.16s" href="#">Read the methodology <span class="arr">&rarr;</span></a>
       </div>
-      <div class="trust-list">
-        <div class="tl-row reveal-up"><span class="tl-n mono">01</span><div><h4>Every number traceable</h4><p>Each figure resolves to a calculation reading a point-in-time database.</p></div></div>
-        <div class="tl-row reveal-up"><span class="tl-n mono">02</span><div><h4>Every claim cited</h4><p>Qualitative statements resolve to a span in a filing or transcript.</p></div></div>
-        <div class="tl-row reveal-up"><span class="tl-n mono">03</span><div><h4>Versioned research history</h4><p>Reports, models and ratings are immutable and timestamped.</p></div></div>
-        <div class="tl-row reveal-up"><span class="tl-n mono">04</span><div><h4>Deterministic calculations</h4><p>The model never computes &mdash; it writes around numbers it is handed.</p></div></div>
+      <div class="trust-stack" id="trustStack">
+        <div class="stack-card"><span class="tl-n mono">01</span><div><h4>Every number traceable</h4><p>Each figure resolves to a calculation reading a point-in-time database.</p></div></div>
+        <div class="stack-card"><span class="tl-n mono">02</span><div><h4>Every claim cited</h4><p>Qualitative statements resolve to a span in a filing or transcript.</p></div></div>
+        <div class="stack-card"><span class="tl-n mono">03</span><div><h4>Versioned research history</h4><p>Reports, models and ratings are immutable and timestamped.</p></div></div>
+        <div class="stack-card"><span class="tl-n mono">04</span><div><h4>Deterministic calculations</h4><p>The model never computes &mdash; it writes around numbers it is handed.</p></div></div>
+        <div class="stack-end" aria-hidden="true"></div>
       </div>
     </div>
   </section>
@@ -237,6 +262,11 @@
 
   <!-- ════ FEEDBACK & SUPPORT (v58) ════ -->
   <section class="feedback" id="feedback">
+    <div class="ch-head reveal-up">
+      <span class="ch-no mono">05</span>
+      <span class="ch-label">Feedback &amp; support</span>
+      <span class="ch-meta mono">COMMUNITY</span>
+    </div>
     <div class="fb-grid">
 
       <!-- feedback form -->
@@ -393,7 +423,7 @@
   <section class="final" id="final">
     <div class="final-inner">
       <h2 class="final-h reveal-up">Research at institutional scale.</h2>
-      <a class="btn-primary lg reveal-up" style="--d:.14s" id="finalCta" href="/terminal">Launch Meridian <span class="arr">&rarr;</span></a>
+      <a class="btn-primary lg reveal-up" style="--d:.14s" id="finalCta" href="/terminal" data-magnetic>Launch Meridian <span class="arr">&rarr;</span></a>
     </div>
     <footer class="footer">
       <div class="footer-grid">
@@ -420,8 +450,12 @@
   <section class="px" id="experience" aria-label="Real product experience">
     <div class="px-stage">
       <div class="px-glow" aria-hidden="true"></div>
+      <div class="ch-head">
+        <span class="ch-no mono">06</span>
+        <span class="ch-label">Real product experience</span>
+        <span class="ch-meta mono">18 SCREENS &middot; REAL DATA</span>
+      </div>
       <header class="px-head">
-        <p class="px-eyebrow mono">REAL PRODUCT EXPERIENCE</p>
         <h2 class="px-title">See Meridian Terminal in action</h2>
         <p class="px-sub">Real interface. Real data. Real workflows. Institutional-grade financial intelligence.</p>
       </header>
