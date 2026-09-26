@@ -33,7 +33,36 @@ async function quoteSummary(symbol, modules = MODULES) {
   const summary = await y.quoteSummary(symbol, { modules }, { validateResult: false });
   // attach normalized annual statements from the time-series API
   summary.__statements = await annualStatements(symbol).catch(() => ({ income: [], balance: [], cashflow: [] }));
+  fillShareCount(summary);
   return summary;
+}
+
+/* Shares outstanding drives market cap, per-share DCF value and every
+   price-multiple. Yahoo sometimes omits it (seen from cloud-host IPs, e.g.
+   RELIANCE.NS on Render), so fall back through other disclosed figures and
+   derive market cap from it. The source is recorded in __sharesSource. */
+function fillShareCount(summary) {
+  const ks = (summary.defaultKeyStatistics = summary.defaultKeyStatistics || {});
+  const sd = (summary.summaryDetail = summary.summaryDetail || {});
+  const pr = (summary.price = summary.price || {});
+  const num = (v) => (v != null && Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null);
+  const st = summary.__statements || {};
+  const li = (st.income || []).at(-1) || {}, lb = (st.balance || []).at(-1) || {};
+  const price = num(pr.regularMarketPrice) ?? num(sd.previousClose);
+  const mcap = num(sd.marketCap) ?? num(pr.marketCap);
+  const candidates = [
+    ["reported", num(ks.sharesOutstanding)],
+    ["implied", num(ks.impliedSharesOutstanding)],
+    ["market cap / price", mcap && price ? mcap / price : null],
+    ["balance sheet", num(lb.sharesIssued)],
+    ["average shares", num(li.basicAvgShares)],
+    ["net profit / EPS", num(li.netIncome) && num(li.basicEPS) ? li.netIncome / li.basicEPS : null],
+  ];
+  const hit = candidates.find(([, v]) => v != null);
+  summary.__sharesSource = hit ? hit[0] : null;
+  if (!hit) return;
+  if (hit[0] !== "reported") ks.sharesOutstanding = Math.round(hit[1]);
+  if (mcap == null && price) sd.marketCap = Math.round(hit[1] * price);
 }
 
 /** Annual statements via fundamentalsTimeSeries (current Yahoo API). */
@@ -57,6 +86,7 @@ async function annualStatements(symbol, years = 5) {
     otherOpExp: pick(r, "otherOperatingExpenses", "otherGandA", "otherOperatingIncomeExpenseNet"),
     interestIncome: pick(r, "interestIncome", "interestIncomeNonOperating") !== null ? Math.abs(pick(r, "interestIncome", "interestIncomeNonOperating")) : null,
     basicEPS: pick(r, "basicEPS", "dilutedEPS"),
+    basicAvgShares: pick(r, "basicAverageShares", "dilutedAverageShares"),
     dilutedEPS: pick(r, "dilutedEPS", "basicEPS"),
     // ── PAT-correct mapping fields (per user spec) ─────────────────────────
     // netIncomeIncludingNoncontrollingInterests = total Profit After Tax for
@@ -84,6 +114,7 @@ async function annualStatements(symbol, years = 5) {
     otherNCA: pick(r, "otherNonCurrentAssets", "otherAssets"),
     otherCL: pick(r, "otherCurrentLiabilities"),
     shareCapital: pick(r, "commonStock", "capitalStock"),
+    sharesIssued: pick(r, "ordinarySharesNumber", "shareIssued"),
     retainedEarnings: pick(r, "retainedEarnings"),
     otherEquity: pick(r, "gainsLossesNotAffectingRetainedEarnings", "otherStockholdersEquity", "AOCIIncludingNoncontrollingInterests"),
     // ── Reconciliation-critical fields (for BS to balance) ────────────────
@@ -348,4 +379,4 @@ async function pool(items, limit, fn) {
   return out;
 }
 
-module.exports = { batchQuotes, quoteSummary, miniSummary, chartCloses, peerSuggestions, newsFor, searchSymbols, sectorApi, earningsSummary, UNIVERSE, pool };
+module.exports = { batchQuotes, quoteSummary, miniSummary, chartCloses, peerSuggestions, newsFor, searchSymbols, sectorApi, earningsSummary, fillShareCount, UNIVERSE, pool };

@@ -928,5 +928,9 @@ ${v} ${UNIT}`)}"></i></span></td></tr>`;
   }
 
   // shared with the report renderer so both show identical year-wise ratios
-  return { render, show, yearRatios, spark, ratioFmt, RATIO_GROUPS, get state() { return S; } };
+  return {
+    render, show, yearRatios, spark, ratioFmt, RATIO_GROUPS, get state() { return S; },
+    // the workstation's building blocks, shared by the Earnings Call page so both look identical
+    kit: { panel, row, chart, drawCharts, wireTips, legend, spark, ic, PAL },
+  };
 })();

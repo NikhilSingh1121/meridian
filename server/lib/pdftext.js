@@ -155,11 +155,17 @@ function stripBoilerplate(text) {
   const freq = {};
   for (const ln of lines) { const k = ln.trim(); if (k && k.length <= 90) freq[k] = (freq[k] || 0) + 1; }
   const repeated = new Set(Object.entries(freq).filter(([k, c]) => c >= 3 && k.length <= 90 && !/[.?!]$/.test(k)).map(([k]) => k));
+  // running headers / footers that differ only by the page number ("18 Reliance Industries Limited 2020")
+  const dfreq = {};
+  const dkey = (k) => k.replace(/\d+/g, "#");
+  for (const ln of lines) { const k = ln.trim(); if (k && k.length <= 90 && /\d/.test(k) && !/^\[\[p\d+\]\]$/.test(k)) dfreq[dkey(k)] = (dfreq[dkey(k)] || 0) + 1; }
+  for (const ln of lines) { const k = ln.trim(); if (k && /\d/.test(k) && dfreq[dkey(k)] >= 4 && k.length <= 90 && !/[.?!]$/.test(k) && /[A-Za-z]{3}/.test(k)) repeated.add(k); }
 
   const kept = [];
   for (const ln of lines) {
     const t = ln.trim();
     if (!t) { if (kept.length && kept[kept.length - 1] !== "") kept.push(""); continue; }
+    if (/^\[\[p\d+\]\]$/.test(t)) { kept.push(t); continue; }   // page marks survive for citations
     if (repeated.has(t)) continue;
     if (JUNK_PATTERNS.some((re) => re.test(t))) continue;
     kept.push(ln);
@@ -205,4 +211,46 @@ function readableText(text, { minRatio = 0.08, minWords = 300 } = {}) {
   return readability(t) >= minRatio && words >= minWords ? t : null;
 }
 
-module.exports = { extractText, stripBoilerplate, readability, proseOnly, readableText };
+/* ── PDF.js extraction (preferred) ────────────────────────────────────────
+   Mozilla's PDF.js (bundled by `unpdf`) decodes embedded / CID fonts through
+   their ToUnicode maps, which the hand-rolled reader above cannot — many
+   exchange-filed transcripts (TCS, HDFC Bank, Eicher…) are only readable this
+   way. Pages are marked "[[p7]]" on their own line so the analysis can cite
+   pages; link annotations are returned for cover letters that only point to
+   the transcript on the company's website. Falls back to extractText(). */
+let _pdfjs = null;
+async function pdfjs() { if (!_pdfjs) _pdfjs = import("unpdf").then((m) => m.getDocumentProxy); return _pdfjs; }
+async function extractPdf(buffer, { maxPages = 120 } = {}) {
+  try {
+    const getDocumentProxy = await pdfjs();
+    const doc = await getDocumentProxy(new Uint8Array(Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer)));
+    const pages = [], links = [];
+    const n = Math.min(doc.numPages, maxPages);
+    for (let p = 1; p <= n; p++) {
+      const page = await doc.getPage(p);
+      const tc = await page.getTextContent();
+      let out = "", lastY = null;
+      for (const it of tc.items) {
+        if (!("str" in it)) continue;
+        const y = it.transform[5];
+        if (lastY != null && Math.abs(y - lastY) > 2 && !out.endsWith("\n")) out += "\n";
+        out += it.str;
+        if (it.hasEOL) out += "\n";
+        lastY = y;
+      }
+      pages.push(`[[p${p}]]\n${out}`);
+      if (doc.numPages <= 4) {
+        try { for (const a of await page.getAnnotations()) if (a && a.url) links.push(a.url); } catch { /* annotations are optional */ }
+      }
+    }
+    try { await doc.destroy(); } catch { }
+    const text = pages.join("\n\n").replace(/\r/g, "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+    return { text, pages: doc.numPages, links, engine: "pdfjs" };
+  } catch (e) {
+    const r = extractText(buffer);
+    return { ...r, links: [], engine: "basic", error: String((e && e.message) || e).slice(0, 120) };
+  }
+}
+const stripPageMarks = (t) => String(t || "").replace(/^\[\[p\d+\]\]\s*$/gm, "").replace(/\n{3,}/g, "\n\n");
+
+module.exports = { extractText, extractPdf, stripPageMarks, stripBoilerplate, readability, proseOnly, readableText };

@@ -38,7 +38,10 @@ async function filings(symbol, cutoff) {
   return list
     .filter((a) => a.date <= cutoff && a.date >= from)
     .map((a) => {
-      const k = FILING_KIND.find(([, re]) => re.test(a.category));
+      // some companies file the call transcript under the generic "Updates" category
+      // ("Earnings Call Transcript", "Transcript of the Earnings Call Q1FY27")
+      const txByText = /transcript/i.test(a.text) && /\b(earnings|conference|con\.? ?call|analysts?|results|investors?'? call|quarter)\b/i.test(a.text) && !/\b(agm|annual general meeting|egm|postal ballot|ai day|investor day)\b/i.test(a.text);
+      const k = txByText ? ["call"] : FILING_KIND.find(([, re]) => re.test(a.category));
       // a call-update filing matters only when it carries the transcript / recording
       const kind = k ? k[0] : null;
       if (kind === "call" && !/transcript/i.test(a.text)) return null;

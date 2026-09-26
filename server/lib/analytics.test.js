@@ -249,3 +249,23 @@ test("ruleNarrative: earnings-quality factor with forensic data and consensus re
   assert.ok(poor.factorBreakdown.find((f) => f.name === "Earnings Quality").score < eq.score - 40);
   assert.ok(!/Grade/.test(good.factorBreakdown.find((f) => f.name === "Forensic Health").evidence), "grade is not double-counted in forensic health");
 });
+
+/* ── share count fallback: a provider response without sharesOutstanding / marketCap
+      (seen for RELIANCE.NS from a cloud host) must still yield shares, market cap and a DCF ── */
+test("fillShareCount: falls back to disclosed figures and derives market cap", () => {
+  const { fillShareCount } = require("../providers/fundamentals");
+  const mk = (bal, inc) => ({ defaultKeyStatistics: { beta: 0.15 }, summaryDetail: {}, price: { regularMarketPrice: 1226 }, __statements: { income: [inc], balance: [bal], cashflow: [] } });
+  const a = mk({ sharesIssued: 13532472634 }, { netIncome: 7e11, basicEPS: 51.5 });
+  fillShareCount(a);
+  assert.equal(a.defaultKeyStatistics.sharesOutstanding, 13532472634);
+  assert.equal(a.__sharesSource, "balance sheet");
+  assert.equal(a.summaryDetail.marketCap, Math.round(13532472634 * 1226));
+  const b = mk({}, { netIncome: 6.9648e11, basicEPS: 51.47 });
+  fillShareCount(b);
+  assert.equal(b.__sharesSource, "net profit / EPS");
+  assert.ok(Math.abs(b.defaultKeyStatistics.sharesOutstanding / 13.532e9 - 1) < 0.01);
+  const c = mk({ sharesIssued: 1 }, {}); c.defaultKeyStatistics.sharesOutstanding = 5e9; c.summaryDetail.marketCap = 6e12;
+  fillShareCount(c);
+  assert.equal(c.defaultKeyStatistics.sharesOutstanding, 5e9, "a reported figure is never overwritten");
+  assert.equal(c.summaryDetail.marketCap, 6e12);
+});

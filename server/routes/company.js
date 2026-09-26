@@ -32,6 +32,9 @@ const getBundle = (symbol) => {
 async function getCo(symbol) {
   const s = String(symbol).toUpperCase();
   const co = await cachedDurable(`co:${s}`, BUNDLE_TTL, () => buildCompany(s));
+  // an incomplete provider response (no share count → no market cap or DCF)
+  // must not be pinned for a day: keep it for 10 minutes, then rebuild
+  if (co && co.keyStats && co.keyStats.sharesOut == null && !co.__retrySoon) cacheSet(`co:${s}`, { ...co, __retrySoon: true }, 10 * 60 * 1000);
   try {
     const q = await cachedDurable(`q:${s}`, QUOTE_TTL, () => Y.getQuote(s));
     if (q && q.price != null) {
@@ -98,7 +101,7 @@ async function buildCompany(symbol) {
     keyStats: {
       mcap, ev, debt, high52: bundle.summaryDetail?.fiftyTwoWeekHigh ?? null, low52: bundle.summaryDetail?.fiftyTwoWeekLow ?? null, beta: bundle.defaultKeyStatistics?.beta ?? null,
       volume: bundle.summaryDetail?.volume ?? pr.regularMarketVolume ?? null, avgVolume: bundle.summaryDetail?.averageVolume ?? null,
-      avgVolume10d: bundle.summaryDetail?.averageDailyVolume10Day ?? null, sharesOut: bundle.defaultKeyStatistics?.sharesOutstanding ?? null,
+      avgVolume10d: bundle.summaryDetail?.averageDailyVolume10Day ?? null, sharesOut: bundle.defaultKeyStatistics?.sharesOutstanding ?? null, sharesSource: bundle.__sharesSource || null,
       marketTime: pr.regularMarketTime ? new Date(pr.regularMarketTime).toISOString() : null,
     },
     statements: st, quarterly: qInc,
@@ -1022,80 +1025,142 @@ router.get("/earnings/call/:symbol", async (req, res) => {
   }
 });
 
-// Extract clean text from an uploaded transcript PDF (keyless, no dependency).
-/* the latest earnings-call transcript filed with NSE, extracted to text — the
-   same extraction as an uploaded PDF, so the analysis is identical */
+/* ── Earnings-call transcripts: fetch, extract, analyse, export ───────────
+   Extraction uses PDF.js (embedded / CID fonts decode correctly) with page
+   marks for citations. The analysis is deterministic; the model-assisted
+   modules run once per transcript and are cached (callAI). */
+const CallAI = require("../lib/callAI");
+const CallStore = require("../lib/callStore");
 const TX_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const txWords = (t) => PDF.stripPageMarks(t).split(/\s+/).filter(Boolean).length;
+// only public http(s) hosts — a link inside a filing must never reach the server's own network
+function publicUrl(u) {
+  try {
+    const x = new URL(u);
+    if (!/^https?:$/.test(x.protocol)) return null;
+    if (/^(localhost|0\.|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)|^\[|\.local$|\.internal$/i.test(x.hostname) || !/\./.test(x.hostname)) return null;
+    return x.toString();
+  } catch { return null; }
+}
+async function pdfFrom(url) {
+  const u = publicUrl(url); if (!u) return null;
+  const r = await fetch(u, { headers: { "User-Agent": TX_UA }, signal: AbortSignal.timeout(30000), redirect: "follow" }).catch(() => null);
+  if (!r || !r.ok) return null;
+  const buf = Buffer.from(await r.arrayBuffer());
+  return buf.length <= 25 * 1024 * 1024 && buf.subarray(0, 5).toString("latin1") === "%PDF-" ? buf : null;
+}
+async function transcriptFromPdf(buf, minWords = 300) {
+  const x = await PDF.extractPdf(buf);
+  const text = PDF.readableText(PDF.stripBoilerplate(x.text), { minWords });
+  return { text, pages: x.pages, links: x.links, engine: x.engine, raw: x.text };
+}
+// cover letters point to the transcript on the company website — collect those links
+function linksIn(x) {
+  const flat = PDF.stripPageMarks(x.raw || "").replace(/\s*\n\s*/g, "");
+  // a wrapped URL is re-joined with the next word ("…call.pdfKindly") — a PDF link ends at ".pdf"
+  const pdfs = flat.match(/https?:\/\/[^\s"'<>]+?\.pdf/gi) || [];
+  return [...new Set([...(x.links || []), ...pdfs, ...(flat.match(/https?:\/\/[^\s"'<>]+/gi) || [])])].map((u) => u.replace(/[).,;]+$/, ""));
+}
+
 router.get("/earnings/nse-transcript/:symbol", async (req, res) => {
   const s = req.params.symbol.toUpperCase();
   if (!/\.(NS|BO)$/.test(s)) return res.status(400).json({ error: "Exchange transcripts are available for NSE/BSE-listed companies (e.g. MARICO.NS)." });
   const today = new Date().toISOString().slice(0, 10);
   try {
-    const out = await cachedDurable(`nsetx2:${s}:${today}`, 12 * 60 * 60 * 1000, async () => {
+    const out = await cachedDurable(`nsetx3:${s}:${today}`, 12 * 60 * 60 * 1000, async () => {
       const f = await nseFilings(s, today);
       if (!f) throw Object.assign(new Error("The exchange did not return the company filings — try again shortly."), { status: 502 });
-      const t = f.find((x) => x.kind === "call" && x.url && /\.pdf$/i.test(x.url));
-      if (!t) throw Object.assign(new Error("No earnings-call transcript was filed with the exchange in the last year."), { status: 404 });
-      const r = await fetch(t.url, { headers: { "User-Agent": TX_UA }, signal: AbortSignal.timeout(30000) });
-      if (!r.ok) throw Object.assign(new Error("The transcript file could not be downloaded from the exchange archive."), { status: 502 });
-      const buf = Buffer.from(await r.arrayBuffer());
-      if (buf.length > 25 * 1024 * 1024 || buf.subarray(0, 5).toString("latin1") !== "%PDF-") throw Object.assign(new Error("The filed transcript is not a readable PDF."), { status: 422 });
-      const { text: raw, pages } = PDF.extractText(buf);
-      const text = PDF.readableText(PDF.stripBoilerplate(raw));
-      if (!text) throw Object.assign(new Error("This filed transcript has no extractable text layer (encoded fonts or a scan). Its key points are still read in Equity Research › Management commentary."), { status: 422 });
-      return { symbol: s, date: t.date, url: t.url, title: t.category, text, pages, words: text.split(/\s+/).filter(Boolean).length };
+      const calls = f.filter((x) => x.kind === "call" && x.url && /\.pdf$/i.test(x.url)).slice(0, 4);
+      if (!calls.length) throw Object.assign(new Error("No earnings-call transcript was filed with the exchange in the last year."), { status: 404 });
+      const notes = [];
+      for (const t of calls) {
+        const buf = await pdfFrom(t.url);
+        if (!buf) { notes.push(`The ${t.date} filing could not be downloaded.`); continue; }
+        const x = await transcriptFromPdf(buf);
+        if (x.text && txWords(x.text) >= 1200) return { symbol: s, date: t.date, url: t.url, title: t.category, text: x.text, pages: x.pages, words: txWords(x.text), notice: notes.length ? notes.join(" ") + ` Showing the transcript filed on ${t.date}.` : null };
+        // a cover letter: follow a direct PDF link to the transcript on the company's website
+        const links = linksIn(x), pdfLink = links.find((u) => /\.pdf(\?|$)/i.test(u) && publicUrl(u));
+        if (pdfLink) {
+          const b2 = await pdfFrom(pdfLink);
+          const y = b2 ? await transcriptFromPdf(b2) : null;
+          if (y && y.text && txWords(y.text) >= 1200) return { symbol: s, date: t.date, url: pdfLink, filingUrl: t.url, title: t.category, text: y.text, pages: y.pages, words: txWords(y.text), notice: `The exchange filing of ${t.date} is a cover letter; the transcript was read from the company's website.` };
+        }
+        const site = links.find((u) => publicUrl(u) && !/^mailto:/i.test(u));
+        notes.push(`The ${t.date} filing is only a cover letter${site ? ` pointing to ${site}` : ""}.`);
+      }
+      throw Object.assign(new Error(`${notes.join(" ")} No transcript text could be read from the exchange filings — paste it or import the PDF from the company's website.`), { status: 422 });
     });
     res.json(out);
   } catch (e) {
-    res.status(e.status || 502).json({ error: String((e && e.message) || e).slice(0, 160) });
+    res.status(e.status || 502).json({ error: String((e && e.message) || e).slice(0, 300) });
   }
 });
 
-router.post("/earnings/extract-pdf", express.json({ limit: "30mb" }), (req, res) => {
+router.post("/earnings/extract-pdf", express.json({ limit: "30mb" }), async (req, res) => {
   try {
     const b64 = (req.body && req.body.pdf) || "";
     if (!b64) return res.status(400).json({ error: "No PDF provided." });
     const buf = Buffer.from(b64, "base64");
     if (buf.subarray(0, 5).toString("latin1") !== "%PDF-") return res.status(400).json({ error: "That does not look like a PDF file." });
-    const { text: raw, pages } = PDF.extractText(buf);
-    const text = PDF.readableText(PDF.stripBoilerplate(raw), { minWords: 60 });
-    if (!text) return res.status(422).json({ error: "Could not extract usable text — this looks like a scanned/image PDF. Paste the text instead." });
-    res.json({ text, pages, words: text.split(/\s+/).filter(Boolean).length });
+    const x = await transcriptFromPdf(buf, 60);
+    if (!x.text) return res.status(422).json({ error: "Could not extract usable text — this looks like a scanned/image PDF. Paste the text instead." });
+    res.json({ text: x.text, pages: x.pages, words: txWords(x.text), engine: x.engine });
   } catch (e) {
     res.status(500).json({ error: "PDF extraction failed: " + String((e && e.message) || e).slice(0, 120) });
   }
 });
 
-// analyze a pasted/extracted transcript — works with no key at all. Boilerplate
-// (headers, footers, page numbers, legal/safe-harbour) is stripped first so it
-// never pollutes the analysis.
+/* one analysis path for the dashboard and the DOCX export */
+async function analyseTranscript(transcript, symbol, { withPeers = false } = {}) {
+  const clean = PDF.stripBoilerplate(transcript);
+  const text = clean.length >= 100 ? clean : transcript;
+  const SYM = symbol ? String(symbol).toUpperCase() : null;
+  const [summary, co, peers] = await Promise.all([
+    SYM ? cached(`earnsum:${SYM}`, STATIC_TTL, () => F.earningsSummary(SYM)).catch(() => null) : null,
+    SYM ? getCo(SYM).catch(() => null) : null,
+    SYM && withPeers ? F.peerSuggestions(SYM).then((syms) => Promise.all(syms.slice(0, 6).map((x) => peerRow(x).catch(() => null)))).then((r) => r.filter(Boolean)).catch(() => []) : [],
+  ]);
+  const meta = { symbol: SYM, company: (co && co.name) || (summary && summary.name) || null, sector: co && co.profile ? [co.profile.sector, co.profile.industry].filter(Boolean).join(" › ") : null, currency: (summary && summary.currency) || (co && co.currency) || null };
+  const analysis = E.analyzeTranscript(text, meta, peers);
+  if (analysis.error) return { error: analysis.error };
+  // context store: last call's guidance → revisions and credibility; then remember this call
+  if (SYM && analysis.meta.period) { CallStore.applyPrior(analysis, CallStore.prior(SYM, analysis.meta.period)); CallStore.save(SYM, analysis.meta.period, analysis); }
+  return { analysis, summary, text };
+}
+
 router.post("/earnings/analyze", express.json({ limit: "4mb" }), async (req, res) => {
   const { transcript, symbol } = req.body || {};
   if (!transcript || transcript.length < 100) return res.status(400).json({ error: "Provide an earnings-call transcript (at least a few paragraphs)." });
-  const clean = PDF.stripBoilerplate(transcript);
-  const text = clean.length >= 100 ? clean : transcript;
-  let peers = [];
-  if (symbol) { try { const syms = await F.peerSuggestions(symbol.toUpperCase()); peers = (await Promise.all(syms.slice(0, 6).map((s) => peerRow(s).catch(() => null)))).filter(Boolean); } catch { } }
-  // Enrich the analysis with the live earnings numbers (schedule + reported
-  // quarters) so the report's financial tables carry real figures.
-  let summary = null;
-  if (symbol) { try { summary = await cached(`earnsum:${symbol.toUpperCase()}`, STATIC_TTL, () => F.earningsSummary(symbol.toUpperCase())); } catch { } }
-  const analysis = E.analyzeTranscript(text, { source: "pasted", symbol: symbol || null, summary }, peers);
-  res.json({ meta: { source: "pasted", symbol: symbol || null, cleanedChars: transcript.length - text.length }, analysis, summary, apiExtras: {}, transcript: text });
+  try {
+    const r = await analyseTranscript(transcript, symbol, { withPeers: true });
+    if (r.error) return res.status(400).json({ error: r.error });
+    // model-assisted modules: cached per transcript, otherwise started in the background
+    const ai = CallAI.ensure(r.text, r.analysis);
+    r.analysis.ai = ai.result || null;
+    res.json({ meta: { source: "pasted", symbol: symbol || null }, analysis: r.analysis, summary: r.summary, ai: { key: ai.key, status: ai.status, reason: ai.reason || null } });
+  } catch (e) {
+    res.status(500).json({ error: "Analysis failed: " + String((e && e.message) || e).slice(0, 140) });
+  }
+});
+// poll the model-assisted modules for a transcript
+router.get("/earnings/ai/:key", (req, res) => {
+  if (!/^[a-f0-9]{24}$/.test(req.params.key)) return res.status(400).json({ error: "bad key" });
+  res.set("Cache-Control", "no-store").json(CallAI.status(req.params.key));
 });
 
-// Deterministic .docx research report from a transcript (no key, no template).
+// .docx research report — the same analysis, plus the AI modules when available
 router.post("/earnings/report.docx", express.json({ limit: "4mb" }), async (req, res) => {
   const { transcript, symbol } = req.body || {};
   if (!transcript || transcript.length < 100) return res.status(400).json({ error: "Provide a transcript to build the report." });
   try {
-    const text = PDF.stripBoilerplate(transcript);
-    const analysis = E.analyzeTranscript(text.length >= 100 ? text : transcript, { source: "docx", symbol: symbol || null }, []);
-    if (analysis.error) return res.status(400).json({ error: analysis.error });
-    let summary = null;
-    if (symbol) { try { summary = await cached(`earnsum:${symbol.toUpperCase()}`, STATIC_TTL, () => F.earningsSummary(symbol.toUpperCase())); } catch { } }
-    const buf = await buildDocx(analysis, summary, { symbol: symbol || null, name: summary ? summary.name : null });
-    const fname = `${(symbol || "earnings").replace(/[^A-Za-z0-9.\-]/g, "_")}_earnings_call_analysis.docx`;
+    const r = await analyseTranscript(transcript, symbol);
+    if (r.error) return res.status(400).json({ error: r.error });
+    const ai = CallAI.ensure(r.text, r.analysis);
+    let aiResult = ai.result || null;
+    if (!aiResult && ai.promise) aiResult = await Promise.race([ai.promise, new Promise((ok) => setTimeout(() => ok(null), 75_000))]);
+    r.analysis.ai = aiResult;
+    const buf = await buildDocx(r.analysis, r.summary, { symbol: symbol || null, name: r.analysis.meta.company || (r.summary ? r.summary.name : null) });
+    const fname = `${(symbol || r.analysis.meta.company || "earnings").replace(/[^A-Za-z0-9.\-]/g, "_")}_${(r.analysis.meta.period || "call").replace(/\s+/g, "")}_earnings_call_analysis.docx`;
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     res.setHeader("Content-Disposition", `attachment; filename="${fname}"`);
     res.send(buf);

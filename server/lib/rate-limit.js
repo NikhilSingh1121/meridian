@@ -65,6 +65,7 @@ const HEAVY_PATTERNS = [
   /^\/report$/,
   /^\/company\/[^/]+\/workbook$/,
   /^\/earnings\/analyze$/,
+  /^\/earnings\/report\.docx$/,
   /^\/idcf\/[^/]+\/excel$/,
 ];
 
