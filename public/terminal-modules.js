@@ -3535,6 +3535,10 @@ const IDCF = {
         ? await api(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(mergedOverrides) })
         : await api(url);
       if (data.error) { this.setStatus(data.error); this.busy = false; return; }
+      if (!data.idcf || data.idcf.error) {
+        this.setStatus(data.idcf?.error || `Not enough reported data to build a DCF for ${symbol} (latest revenue or share count unavailable).`);
+        this.busy = false; return;
+      }
 
       // Stamp meta for downstream
       data.meta.symbol = symbol;

@@ -249,3 +249,25 @@ test("ruleNarrative: earnings-quality factor with forensic data and consensus re
   assert.ok(poor.factorBreakdown.find((f) => f.name === "Earnings Quality").score < eq.score - 40);
   assert.ok(!/Grade/.test(good.factorBreakdown.find((f) => f.name === "Forensic Health").evidence), "grade is not double-counted in forensic health");
 });
+
+test("fiscalYearRows: drops balance-sheet-only half-year rows (NSE issuers like RELIANCE.NS)", () => {
+  const { fiscalYearRows } = require("../providers/fundamentals");
+  const rows = [
+    { date: new Date("2024-03-31"), totalRevenue: 9e12, netIncome: 7e11, totalAssets: 17e12 },
+    { date: new Date("2025-03-31"), totalRevenue: 9.6e12, netIncome: 8e11, totalAssets: 19e12 },
+    { date: new Date("2025-09-30"), totalAssets: 20e12, stockholdersEquity: 9e12 },
+  ];
+  const kept = fiscalYearRows(rows);
+  assert.equal(kept.length, 2);
+  assert.equal(kept.at(-1).totalRevenue, 9.6e12, "latest row carries revenue so the DCF can build");
+  const bsOnly = [{ date: new Date("2025-09-30"), totalAssets: 1 }];
+  assert.deepEqual(fiscalYearRows(bsOnly), bsOnly, "no income rows at all → unchanged");
+});
+
+test("dcfDefaults: share count falls back when Yahoo omits sharesOutstanding", () => {
+  const st = { income: [], balance: [], cashflow: [] };
+  const implied = A.dcfDefaults({ defaultKeyStatistics: { impliedSharesOutstanding: 1.35e10 }, price: {} }, st, {}, {});
+  assert.equal(implied.sharesOut, 1.35e10);
+  const fromCap = A.dcfDefaults({ defaultKeyStatistics: {}, price: { marketCap: 2e13, regularMarketPrice: 1000 } }, st, {}, {});
+  assert.equal(fromCap.sharesOut, 2e10);
+});

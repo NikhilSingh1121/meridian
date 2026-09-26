@@ -142,7 +142,10 @@ function dcfDefaults(bundle, st, ratios, growth) {
   const g1 = Math.min(Math.max(growth.revCagr ?? 10, 2), 25);
   return {
     baseFcf, currency: pr.currency || "",
-    sharesOut: n(ks.sharesOutstanding),
+    // Yahoo omits sharesOutstanding for some NSE issuers — fall back to the
+    // implied count, then market cap ÷ price.
+    sharesOut: n(ks.sharesOutstanding) ?? n(ks.impliedSharesOutstanding)
+      ?? (n(pr.marketCap) && n(pr.regularMarketPrice) ? n(pr.marketCap) / n(pr.regularMarketPrice) : null),
     netDebt: (ratios.debt ?? 0) - (st.balance.at(-1)?.cash ?? 0),
     growthY1_5: +g1.toFixed(1), fade: +(Math.min(g1, 8) / 2).toFixed(1),
     terminalG: isIndia ? 4.5 : 2.5, wacc: +costEquity.toFixed(1),

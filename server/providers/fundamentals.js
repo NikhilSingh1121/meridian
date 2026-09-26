@@ -36,12 +36,24 @@ async function quoteSummary(symbol, modules = MODULES) {
   return summary;
 }
 
+/** yahoo-finance2 emits one row per timestamp that ANY series reports. Indian
+    issuers (e.g. RELIANCE.NS) file half-yearly balance sheets, so the newest
+    "annual" row is often a Sept-30 balance-sheet-only row with no income
+    statement. Left in, it becomes income.at(-1) with revenue null, which
+    silently breaks the DCF. Keep only rows that carry income-statement data;
+    if none do, return the rows unchanged. */
+function fiscalYearRows(rows) {
+  const has = (v) => v !== undefined && v !== null;
+  const fy = (rows || []).filter((r) => has(r.totalRevenue) || has(r.operatingRevenue) || has(r.netIncome) || has(r.netIncomeCommonStockholders));
+  return fy.length ? fy : (rows || []);
+}
+
 /** Annual statements via fundamentalsTimeSeries (current Yahoo API). */
 async function annualStatements(symbol, years = 5) {
   const y = await yf();
   const period2 = new Date();
   const period1 = new Date(); period1.setFullYear(period2.getFullYear() - years - 1);
-  const rows = await y.fundamentalsTimeSeries(symbol, { period1, period2, type: "annual", module: "all" });
+  const rows = fiscalYearRows(await y.fundamentalsTimeSeries(symbol, { period1, period2, type: "annual", module: "all" }));
   // rows: [{ date, totalRevenue, netIncome, ... }] oldest→newest
   const yr = (d) => (d ? new Date(d).getFullYear() : null);
   const pick = (r, ...keys) => { for (const k of keys) if (r[k] !== undefined && r[k] !== null) return Number(r[k]); return null; };
@@ -348,4 +360,4 @@ async function pool(items, limit, fn) {
   return out;
 }
 
-module.exports = { batchQuotes, quoteSummary, miniSummary, chartCloses, peerSuggestions, newsFor, searchSymbols, sectorApi, earningsSummary, UNIVERSE, pool };
+module.exports = { batchQuotes, quoteSummary, fiscalYearRows, miniSummary, chartCloses, peerSuggestions, newsFor, searchSymbols, sectorApi, earningsSummary, UNIVERSE, pool };
