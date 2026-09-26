@@ -1,0 +1,214 @@
+/* ════════════════════════════════════════════════
+   MERIDIAN — QUANT LAB
+   Layers on terminal.css tokens; loaded after it.
+   ════════════════════════════════════════════════ */
+
+#quantRoot { display: block; }
+
+/* ── header ─────────────────────────────────────────────────────────────── */
+.ql-head { padding: 26px 4px 20px; border-bottom: 1px solid var(--hairline); margin-bottom: 0; }
+.ql-eyebrow { font-size: 10px; letter-spacing: 0.2em; color: var(--amber); margin-bottom: 10px; }
+.ql-head h2 { font-family: var(--serif); font-size: 27px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 9px; }
+.ql-head p { font-size: 13.5px; line-height: 1.65; color: var(--muted); max-width: 860px; }
+
+/* ── desk switcher ──────────────────────────────────────────────────────── */
+.ql-nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-bottom: 1px solid var(--hairline); margin-bottom: 18px; }
+.ql-nav button { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left; padding: 13px 16px; border-right: 1px solid var(--hairline); transition: background 0.16s ease; position: relative; }
+.ql-nav button:last-child { border-right: none; }
+.ql-nav button:hover { background: var(--ink-2); }
+.ql-nav button.active { background: var(--ink-2); box-shadow: inset 0 -2px 0 var(--amber); }
+.ql-nav-t { font-size: 13px; font-weight: 600; color: var(--muted); }
+.ql-nav button.active .ql-nav-t { color: var(--fg); }
+.ql-nav-s { font-size: 10px; color: var(--muted-ink); letter-spacing: 0.02em; }
+.ql-nav button.active .ql-nav-s { color: var(--amber); }
+
+/* ── control bar ────────────────────────────────────────────────────────── */
+.ql-ctl { background: var(--ink-2); border: 1px solid var(--hairline); border-radius: var(--r); padding: 14px 16px; margin-bottom: 12px; }
+.ql-ctl-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.ql-ctl-thin { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hairline); align-items: center; }
+.ql-f { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.ql-f > span { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted-ink); }
+
+/* Field geometry — height, padding, font-size, line-height, border, radius,
+   focus ring — belongs to the UNIFIED CONTROL SYSTEM in terminal.css, which
+   derives line-height from --ctl-h. mobile.css raises that token to 40px
+   (44px on touch), so hardcoding a height here while leaving the inherited
+   line-height alone clipped the text. Only width behaviour is local. */
+.ql-f input, .ql-f select { width: 100%; }
+.ql-f-sym { flex: 1 1 210px; min-width: 190px; }
+.ql-f-sym input { text-transform: uppercase; }
+.ql-f-wide { flex: 1 1 270px; min-width: 240px; }
+.ql-f-sm { width: 122px; flex: 0 0 auto; }
+/* selects lose ~28px to the chevron, so a select with word-length options
+   needs more room than a two-character range picker */
+.ql-f-md { width: 162px; flex: 0 0 auto; }
+.ql-search { position: relative; }
+.ql-drop { top: calc(100% + 3px); }
+/* centre the "vs" against the control, whatever height the token resolves to */
+.ql-vs { color: var(--muted-ink); font-size: 11px; padding-bottom: calc((var(--ctl-h) - 13px) / 2); }
+.ql-run { padding: 0 20px; white-space: nowrap; flex: 0 0 auto; }
+
+/* strategy parameter sliders */
+.ql-params { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--hairline); }
+.ql-param { flex: 1; min-width: 175px; }
+.ql-param label { display: flex; justify-content: space-between; align-items: baseline; font-size: 11.5px; color: var(--muted); margin-bottom: 5px; }
+.ql-param label b { font-family: var(--mono); font-size: 12.5px; color: var(--amber-bright); font-weight: 600; }
+.ql-param input[type="range"] { width: 100%; height: 3px; background: var(--hairline); border-radius: 2px; -webkit-appearance: none; appearance: none; outline: none; cursor: pointer; }
+.ql-param input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%; background: var(--amber); cursor: pointer; border: 2px solid var(--ink-2); }
+.ql-param input[type="range"]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: var(--amber); cursor: pointer; border: 2px solid var(--ink-2); }
+
+.ql-rule { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+.ql-rule-r { font-family: var(--mono); font-size: 11.5px; color: var(--fg); line-height: 1.55; }
+.ql-rule-r b { color: var(--amber); letter-spacing: 0.1em; font-size: 9.5px; margin-right: 8px; }
+.ql-rule-t { font-size: 12px; color: var(--muted); line-height: 1.6; margin-top: 6px; max-width: 900px; }
+
+.ql-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.ql-preset { font-size: 10.5px; padding: 6px 10px; border: 1px solid var(--hairline); border-radius: var(--r-sm); color: var(--muted); background: var(--ink); transition: all 0.15s ease; }
+.ql-preset:hover { color: var(--amber-bright); border-color: var(--amber); }
+
+.ql-status { font-size: 10.5px; color: var(--muted-ink); letter-spacing: 0.04em; padding: 0 2px 10px; min-height: 16px; }
+
+/* ── verdict banner ─────────────────────────────────────────────────────── */
+.ql-verdict { border: 1px solid var(--hairline); border-left-width: 3px; border-radius: var(--r); padding: 15px 18px; margin-bottom: 14px; background: var(--ink-2); }
+.ql-verdict.good { border-left-color: var(--up); }
+.ql-verdict.warn { border-left-color: var(--amber); }
+.ql-verdict.bad { border-left-color: var(--down); }
+.ql-verdict-h { font-size: 15px; font-weight: 600; margin-bottom: 7px; letter-spacing: -0.005em; }
+.ql-verdict.good .ql-verdict-h { color: var(--up); }
+.ql-verdict.warn .ql-verdict-h { color: var(--amber-bright); }
+.ql-verdict.bad .ql-verdict-h { color: var(--down); }
+.ql-verdict-b { font-size: 12.5px; line-height: 1.7; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.ql-verdict-b b { color: var(--fg); font-weight: 600; }
+.ql-chk { font-family: var(--mono); font-size: 11px; white-space: nowrap; }
+.ql-chk.ok { color: var(--up); }
+.ql-chk.no { color: var(--muted-ink); }
+
+/* ── stat cards ─────────────────────────────────────────────────────────── */
+.ql-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 1px; background: var(--hairline); border: 1px solid var(--hairline); border-radius: var(--r); overflow: hidden; margin-bottom: 14px; }
+.ql-card { background: var(--ink-2); padding: 12px 14px; }
+.ql-card-l { font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em; color: var(--muted-ink); margin-bottom: 7px; }
+.ql-card-v { font-family: var(--mono); font-size: 19px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.15; }
+.ql-card-s { font-size: 10.5px; color: var(--muted-ink); margin-top: 5px; line-height: 1.4; }
+.ql-card.up { box-shadow: inset 3px 0 0 var(--up); }
+.ql-card.down { box-shadow: inset 3px 0 0 var(--down); }
+
+/* ── sections ───────────────────────────────────────────────────────────── */
+.ql-sec { background: var(--ink-2); border: 1px solid var(--hairline); border-radius: var(--r); margin-bottom: 14px; overflow: hidden; }
+.ql-sec-h { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 11px 16px; border-bottom: 1px solid var(--hairline); flex-wrap: wrap; }
+.ql-sec-h h4 { font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.18em; color: var(--amber); text-transform: uppercase; }
+.ql-sec-h span { font-family: var(--mono); font-size: 10.5px; color: var(--muted-ink); }
+.ql-sec > *:not(.ql-sec-h) { margin: 0; }
+.ql-note { padding: 11px 16px; border-top: 1px solid var(--hairline); font-size: 11.5px; line-height: 1.7; color: var(--muted-ink); background: rgba(0, 0, 0, 0.16); }
+.ql-note b { color: var(--muted); }
+.ql-sub-l { padding: 13px 16px 6px; font-size: 9px; letter-spacing: 0.14em; color: var(--muted-ink); }
+.ql-prose { padding: 12px 16px; font-size: 12.5px; line-height: 1.75; color: var(--muted); }
+.ql-prose p + p { margin-top: 9px; }
+.ql-prose b { color: var(--fg); font-weight: 600; }
+.ql-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--hairline); }
+.ql-grid2 > * { background: var(--ink-2); }
+.ql-disc { font-size: 11px; line-height: 1.75; color: var(--muted-ink); padding: 14px 16px; border: 1px solid var(--hairline); border-radius: var(--r); background: rgba(0, 0, 0, 0.2); margin-bottom: 20px; }
+.ql-warn { font-size: 11.5px; line-height: 1.65; color: var(--amber-bright); padding: 11px 15px; border: 1px solid var(--amber); border-radius: var(--r); background: rgba(200, 134, 42, 0.07); margin-bottom: 14px; }
+
+/* ── tables ─────────────────────────────────────────────────────────────── */
+.ql-scroll { overflow-x: auto; }
+.ql-t { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ql-t th { font-family: var(--mono); font-size: 9px; letter-spacing: 0.11em; text-transform: uppercase; color: var(--muted-ink); text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--hairline); white-space: nowrap; font-weight: 500; }
+.ql-t td { padding: 8px 12px; border-bottom: 1px solid rgba(35, 42, 51, 0.55); color: var(--muted); vertical-align: top; line-height: 1.5; }
+.ql-t tbody tr:last-child td { border-bottom: none; }
+.ql-t tbody tr:hover td { background: rgba(255, 255, 255, 0.018); }
+.ql-t td b { color: var(--fg); font-weight: 600; }
+.ql-t th.r, .ql-t td.r { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ql-t td.r { color: var(--fg); }
+.ql-t .mono { font-family: var(--mono); font-size: 11.5px; }
+.ql-t tr.ql-tot td { border-top: 1px solid var(--hairline); font-weight: 600; color: var(--fg); }
+.ql-dim { color: var(--muted-ink) !important; }
+.ql-legs { font-family: var(--mono); font-size: 10px; margin-top: 2px; }
+.ql-fdesc { font-size: 11px; line-height: 1.5; max-width: 320px; }
+.ql-open { color: var(--amber); font-size: 10px; letter-spacing: 0.06em; }
+
+/* ── charts ─────────────────────────────────────────────────────────────── */
+.ql-canvas-wrap { position: relative; padding: 8px 12px 12px; }
+.ql-canvas-wrap canvas { width: 100%; display: block; cursor: crosshair; }
+.ql-legend { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 11px 16px 0; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+.ql-legend i { display: inline-block; width: 12px; height: 2px; margin-right: 6px; vertical-align: middle; }
+.ql-toggle { display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--muted-ink); margin-left: auto; }
+.ql-toggle input { accent-color: var(--amber); cursor: pointer; }
+.ql-tip { position: absolute; z-index: 5; background: var(--ink); border: 1px solid var(--hairline); border-radius: var(--r-sm); padding: 7px 10px; font-family: var(--mono); font-size: 10.5px; pointer-events: none; min-width: 130px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); }
+.ql-tip-d { color: var(--amber); margin-bottom: 4px; letter-spacing: 0.05em; }
+.ql-tip-r { display: flex; align-items: center; gap: 6px; color: var(--muted); line-height: 1.7; }
+.ql-tip-r i { width: 8px; height: 2px; flex: 0 0 auto; }
+.ql-tip-r b { margin-left: auto; color: var(--fg); font-weight: 600; }
+
+/* ── horizontal bar rows (betas, risk shares, weekday returns) ──────────── */
+.ql-bars { padding: 12px 16px; }
+.ql-bar-row { display: grid; grid-template-columns: 110px 1fr 84px; gap: 12px; align-items: center; padding: 4px 0; }
+.ql-bar-l { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ql-bar-track { position: relative; height: 15px; background: var(--ink); border-radius: 2px; overflow: hidden; }
+.ql-bar-fill { position: absolute; top: 0; bottom: 0; }
+.ql-bar-fill.pos { background: linear-gradient(90deg, rgba(46, 158, 107, 0.75), rgba(46, 158, 107, 0.4)); }
+.ql-bar-fill.neg { background: linear-gradient(270deg, rgba(200, 75, 60, 0.75), rgba(200, 75, 60, 0.4)); }
+.ql-bar-mid { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--hairline); }
+.ql-bar-v { font-family: var(--mono); font-size: 11.5px; text-align: right; color: var(--fg); }
+.ql-loadwrap { display: block; }
+
+/* ── heatmaps ───────────────────────────────────────────────────────────── */
+.ql-heat-wrap { overflow-x: auto; padding: 12px 16px; }
+.ql-heat { border-collapse: collapse; font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.ql-heat th { color: var(--muted-ink); font-weight: 500; padding: 5px 7px; text-align: center; white-space: nowrap; font-size: 9.5px; letter-spacing: 0.04em; }
+.ql-heat th:first-child { text-align: right; padding-right: 10px; }
+.ql-heat-corner { color: var(--muted) !important; text-align: right !important; font-size: 9px !important; }
+.ql-heat td { padding: 5px 8px; text-align: center; color: var(--fg); border: 1px solid rgba(10, 12, 16, 0.55); min-width: 44px; cursor: default; transition: outline 0.1s ease; }
+.ql-heat td:hover { outline: 1px solid var(--amber); outline-offset: -1px; position: relative; z-index: 2; }
+.ql-heat td.cur { outline: 2px solid var(--amber-bright); outline-offset: -2px; font-weight: 700; }
+.ql-heat-corr td { min-width: 54px; }
+.ql-heat-seas td { min-width: 40px; font-size: 10px; }
+.ql-heat-tot { border-left: 2px solid var(--hairline) !important; font-weight: 600; }
+.ql-surface-foot { border-top: 1px solid var(--hairline); }
+.ql-surface-foot > div:first-child { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--hairline); }
+.ql-wf-foot { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--hairline); border-top: 1px solid var(--hairline); }
+
+/* ── pair signal banner ─────────────────────────────────────────────────── */
+.ql-signal { display: flex; align-items: center; justify-content: space-between; gap: 24px; background: var(--ink-2); border: 1px solid var(--hairline); border-radius: var(--r); padding: 16px 20px; margin-bottom: 14px; flex-wrap: wrap; }
+.ql-signal.up { border-color: rgba(46, 158, 107, 0.5); }
+.ql-signal.down { border-color: rgba(200, 75, 60, 0.5); }
+.ql-signal-lbl { font-size: 9px; letter-spacing: 0.18em; color: var(--muted-ink); margin-bottom: 8px; }
+.ql-signal-v { font-family: var(--mono); font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.ql-signal.up .ql-signal-v { color: var(--up); }
+.ql-signal.down .ql-signal-v { color: var(--down); }
+.ql-signal-s { font-size: 11.5px; color: var(--muted); margin-top: 7px; }
+.ql-signal-s b { color: var(--fg); font-family: var(--mono); }
+.ql-signal-r { display: flex; gap: 26px; }
+.ql-signal-r > div { display: flex; flex-direction: column; gap: 4px; }
+.ql-signal-r span { font-size: 9px; letter-spacing: 0.12em; color: var(--muted-ink); }
+.ql-signal-r b { font-family: var(--mono); font-size: 15px; font-weight: 600; }
+
+/* ── responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .ql-nav { grid-template-columns: repeat(2, 1fr); }
+  .ql-nav button:nth-child(2) { border-right: none; }
+  .ql-nav button:nth-child(1), .ql-nav button:nth-child(2) { border-bottom: 1px solid var(--hairline); }
+}
+@media (max-width: 860px) {
+  .ql-grid2 { grid-template-columns: 1fr; }
+  .ql-signal-r { width: 100%; justify-content: space-between; gap: 12px; }
+}
+@media (max-width: 768px) {
+  .ql-head { padding: 18px 2px 14px; }
+  .ql-head h2 { font-size: 21px; }
+  .ql-head p { font-size: 12.5px; }
+  .ql-nav { grid-template-columns: 1fr; }
+  .ql-nav button { border-right: none; border-bottom: 1px solid var(--hairline); }
+  .ql-nav button.active { box-shadow: inset 3px 0 0 var(--amber); }
+  .ql-ctl-row { gap: 10px; }
+  .ql-f-sym, .ql-f-wide { flex: 1 1 100%; min-width: 100%; }
+  .ql-f-sm, .ql-f-md { width: calc(50% - 5px); }
+  .ql-run { width: 100%; flex: 1 1 100%; }
+  .ql-vs { display: none; }
+  .ql-presets { margin-left: 0; width: 100%; }
+  .ql-cards { grid-template-columns: repeat(2, 1fr); }
+  .ql-card-v { font-size: 16px; }
+  .ql-verdict-h { font-size: 13.5px; }
+  .ql-bar-row { grid-template-columns: 78px 1fr 68px; gap: 8px; }
+  .ql-signal-v { font-size: 15px; }
+  .ql-fdesc { display: none; }
+}
