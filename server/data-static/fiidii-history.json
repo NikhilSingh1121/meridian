@@ -1,0 +1,1596 @@
+{
+ "meta": {
+  "unit": "₹ Crore",
+  "source": "NSE/BSE provisional FII-DII reports (compiled via 5paisa and an open NSE daily-report mirror)",
+  "sourceUrl": "https://www.5paisa.com/share-market-today/fii-dii-data",
+  "prepared": "2026-07-26",
+  "latest": "2026-07-24",
+  "generatedAt": "2026-07-25T22:26:50.780Z",
+  "coverage": {
+   "daily": "2026-06-01 → 2026-07-24 (39 sessions)",
+   "monthly": "2015-09 → 2026-06 (120 months)",
+   "fno": "2026-07-01 → 2026-07-24 (18 sessions)"
+  },
+  "monthlyGaps": [
+   "2016-07",
+   "2017-07",
+   "2018-07",
+   "2019-07",
+   "2020-07",
+   "2021-07",
+   "2022-07",
+   "2023-07",
+   "2024-07",
+   "2025-07"
+  ],
+  "caveats": [
+   "Provisional exchange data — the exchanges publish these same-day and revise them; final SEBI/FPI figures can differ.",
+   "The monthly archive has no row for July in any year from 2016 through 2025, so trailing windows can span more than twelve calendar months.",
+   "Day-level FII/DII figures are only published for a rolling recent window, so weekly detail cannot be reconstructed before June 2026.",
+   "Index and stock option gross figures are notional turnover in lakhs of crore and are not comparable in magnitude to cash flows — read the net."
+  ]
+ },
+ "daily": [
+  {
+   "date": "2026-06-01",
+   "fiiBuy": 17725.89,
+   "fiiSell": 21637.57,
+   "fiiNet": -3911.68,
+   "diiBuy": 15226.29,
+   "diiSell": 10117.16,
+   "diiNet": 5109.13
+  },
+  {
+   "date": "2026-06-02",
+   "fiiBuy": 16955.9,
+   "fiiSell": 25318.82,
+   "fiiNet": -8362.92,
+   "diiBuy": 22508.77,
+   "diiSell": 12919.45,
+   "diiNet": 9589.32
+  },
+  {
+   "date": "2026-06-03",
+   "fiiBuy": 17053.63,
+   "fiiSell": 22670.19,
+   "fiiNet": -5616.56,
+   "diiBuy": 17530,
+   "diiSell": 11789.11,
+   "diiNet": 5740.89
+  },
+  {
+   "date": "2026-06-04",
+   "fiiBuy": 14012.52,
+   "fiiSell": 18459.58,
+   "fiiNet": -4447.06,
+   "diiBuy": 16824.35,
+   "diiSell": 12464.21,
+   "diiNet": 4360.14
+  },
+  {
+   "date": "2026-06-05",
+   "fiiBuy": 11044.57,
+   "fiiSell": 19820.82,
+   "fiiNet": -8776.25,
+   "diiBuy": 22779.32,
+   "diiSell": 13645.75,
+   "diiNet": 9133.57
+  },
+  {
+   "date": "2026-06-08",
+   "fiiBuy": 8842.08,
+   "fiiSell": 14397.75,
+   "fiiNet": -5555.67,
+   "diiBuy": 16683.18,
+   "diiSell": 11517.94,
+   "diiNet": 5165.24
+  },
+  {
+   "date": "2026-06-09",
+   "fiiBuy": 14735.47,
+   "fiiSell": 19301.5,
+   "fiiNet": -4566.03,
+   "diiBuy": 17664.98,
+   "diiSell": 11505.5,
+   "diiNet": 6159.48
+  },
+  {
+   "date": "2026-06-10",
+   "fiiBuy": 14047.79,
+   "fiiSell": 16172.77,
+   "fiiNet": -2124.98,
+   "diiBuy": 17396.4,
+   "diiSell": 14272.45,
+   "diiNet": 3123.95
+  },
+  {
+   "date": "2026-06-11",
+   "fiiBuy": 14000.58,
+   "fiiSell": 15987.67,
+   "fiiNet": -1987.09,
+   "diiBuy": 16822.57,
+   "diiSell": 12598.06,
+   "diiNet": 4224.51
+  },
+  {
+   "date": "2026-06-12",
+   "fiiBuy": 12064.61,
+   "fiiSell": 13146.79,
+   "fiiNet": -1082.18,
+   "diiBuy": 18877.03,
+   "diiSell": 13535.74,
+   "diiNet": 5341.29
+  },
+  {
+   "date": "2026-06-15",
+   "fiiBuy": 15650.2,
+   "fiiSell": 15450.15,
+   "fiiNet": 200.05,
+   "diiBuy": 21080.9,
+   "diiSell": 17891.64,
+   "diiNet": 3189.26
+  },
+  {
+   "date": "2026-06-16",
+   "fiiBuy": 13887.15,
+   "fiiSell": 14636.33,
+   "fiiNet": -749.18,
+   "diiBuy": 13553.36,
+   "diiSell": 13553.3,
+   "diiNet": 0.06
+  },
+  {
+   "date": "2026-06-17",
+   "fiiBuy": 14806.3,
+   "fiiSell": 14704.71,
+   "fiiNet": 101.59,
+   "diiBuy": 16611.87,
+   "diiSell": 15050.47,
+   "diiNet": 1561.4
+  },
+  {
+   "date": "2026-06-18",
+   "fiiBuy": 14611.83,
+   "fiiSell": 15637.03,
+   "fiiNet": -1025.2,
+   "diiBuy": 16163.18,
+   "diiSell": 12646.37,
+   "diiNet": 3516.81
+  },
+  {
+   "date": "2026-06-19",
+   "fiiBuy": 31442.87,
+   "fiiSell": 26583.8,
+   "fiiNet": 4859.07,
+   "diiBuy": 18020.49,
+   "diiSell": 19180.13,
+   "diiNet": -1159.64
+  },
+  {
+   "date": "2026-06-22",
+   "fiiBuy": 10082.08,
+   "fiiSell": 10717.99,
+   "fiiNet": -635.91,
+   "diiBuy": 17391.78,
+   "diiSell": 16356.06,
+   "diiNet": 1035.72
+  },
+  {
+   "date": "2026-06-23",
+   "fiiBuy": 15396.07,
+   "fiiSell": 15378.21,
+   "fiiNet": 17.86,
+   "diiBuy": 16863.04,
+   "diiSell": 16182.83,
+   "diiNet": 680.21
+  },
+  {
+   "date": "2026-06-24",
+   "fiiBuy": 16744.73,
+   "fiiSell": 18588.13,
+   "fiiNet": -1843.4,
+   "diiBuy": 17274.01,
+   "diiSell": 13636.75,
+   "diiNet": 3637.26
+  },
+  {
+   "date": "2026-06-25",
+   "fiiBuy": 18988.03,
+   "fiiSell": 18604.27,
+   "fiiNet": 383.76,
+   "diiBuy": 24844.03,
+   "diiSell": 19096.28,
+   "diiNet": 5747.75
+  },
+  {
+   "date": "2026-06-29",
+   "fiiBuy": 24754.26,
+   "fiiSell": 26104.36,
+   "fiiNet": -1350.1,
+   "diiBuy": 55273.85,
+   "diiSell": 52472.4,
+   "diiNet": 2801.45
+  },
+  {
+   "date": "2026-06-30",
+   "fiiBuy": 23273.71,
+   "fiiSell": 25830.46,
+   "fiiNet": -2556.75,
+   "diiBuy": 23432.58,
+   "diiSell": 16590.24,
+   "diiNet": 6842.34
+  },
+  {
+   "date": "2026-07-01",
+   "fiiBuy": 11623.31,
+   "fiiSell": 12763.81,
+   "fiiNet": -1140.5,
+   "diiBuy": 17136.57,
+   "diiSell": 13977.33,
+   "diiNet": 3159.24
+  },
+  {
+   "date": "2026-07-02",
+   "fiiBuy": 14018.4,
+   "fiiSell": 14330.22,
+   "fiiNet": -311.82,
+   "diiBuy": 17391.61,
+   "diiSell": 15607.21,
+   "diiNet": 1784.4
+  },
+  {
+   "date": "2026-07-03",
+   "fiiBuy": 13337.33,
+   "fiiSell": 11982,
+   "fiiNet": 1355.33,
+   "diiBuy": 18676.35,
+   "diiSell": 20630.24,
+   "diiNet": -1953.89
+  },
+  {
+   "date": "2026-07-06",
+   "fiiBuy": 11686.1,
+   "fiiSell": 11443.07,
+   "fiiNet": 243.03,
+   "diiBuy": 19727.56,
+   "diiSell": 15936.14,
+   "diiNet": 3791.42
+  },
+  {
+   "date": "2026-07-07",
+   "fiiBuy": 18414.01,
+   "fiiSell": 18020.82,
+   "fiiNet": 393.19,
+   "diiBuy": 18897.44,
+   "diiSell": 19280.87,
+   "diiNet": -383.43
+  },
+  {
+   "date": "2026-07-08",
+   "fiiBuy": 17463.95,
+   "fiiSell": 15501.15,
+   "fiiNet": 1962.8,
+   "diiBuy": 19165.13,
+   "diiSell": 18374.97,
+   "diiNet": 790.16
+  },
+  {
+   "date": "2026-07-09",
+   "fiiBuy": 14388.41,
+   "fiiSell": 14921.27,
+   "fiiNet": -532.86,
+   "diiBuy": 18302.87,
+   "diiSell": 16245.08,
+   "diiNet": 2057.79
+  },
+  {
+   "date": "2026-07-10",
+   "fiiBuy": 15318.07,
+   "fiiSell": 12714.35,
+   "fiiNet": 2603.72,
+   "diiBuy": 17171.75,
+   "diiSell": 15152.07,
+   "diiNet": 2019.68
+  },
+  {
+   "date": "2026-07-13",
+   "fiiBuy": 10386.48,
+   "fiiSell": 13448.75,
+   "fiiNet": -3062.27,
+   "diiBuy": 17393.46,
+   "diiSell": 15221.76,
+   "diiNet": 2171.7
+  },
+  {
+   "date": "2026-07-14",
+   "fiiBuy": 12763.43,
+   "fiiSell": 13503.12,
+   "fiiNet": -739.69,
+   "diiBuy": 20420.87,
+   "diiSell": 17493.16,
+   "diiNet": 2927.71
+  },
+  {
+   "date": "2026-07-15",
+   "fiiBuy": 13207.46,
+   "fiiSell": 13943.29,
+   "fiiNet": -735.83,
+   "diiBuy": 16226.42,
+   "diiSell": 15521.49,
+   "diiNet": 704.93
+  },
+  {
+   "date": "2026-07-16",
+   "fiiBuy": 13576.08,
+   "fiiSell": 17781.64,
+   "fiiNet": -4205.56,
+   "diiBuy": 19236.8,
+   "diiSell": 16250.39,
+   "diiNet": 2986.41
+  },
+  {
+   "date": "2026-07-17",
+   "fiiBuy": 14393.77,
+   "fiiSell": 14770.18,
+   "fiiNet": -376.41,
+   "diiBuy": 17180.08,
+   "diiSell": 16162.19,
+   "diiNet": 1017.89
+  },
+  {
+   "date": "2026-07-20",
+   "fiiBuy": 13312.67,
+   "fiiSell": 14433.71,
+   "fiiNet": -1121.04,
+   "diiBuy": 16187.84,
+   "diiSell": 14875.81,
+   "diiNet": 1312.03
+  },
+  {
+   "date": "2026-07-21",
+   "fiiBuy": 16327.88,
+   "fiiSell": 14677.72,
+   "fiiNet": 1650.16,
+   "diiBuy": 14638.54,
+   "diiSell": 15295.42,
+   "diiNet": -656.88
+  },
+  {
+   "date": "2026-07-22",
+   "fiiBuy": 12889.82,
+   "fiiSell": 13709.02,
+   "fiiNet": -819.2,
+   "diiBuy": 13665.69,
+   "diiSell": 14083.95,
+   "diiNet": -418.26
+  },
+  {
+   "date": "2026-07-23",
+   "fiiBuy": 11472.08,
+   "fiiSell": 14471.31,
+   "fiiNet": -2999.23,
+   "diiBuy": 16575.3,
+   "diiSell": 13628.16,
+   "diiNet": 2947.14
+  },
+  {
+   "date": "2026-07-24",
+   "fiiBuy": 11123.86,
+   "fiiSell": 15016.63,
+   "fiiNet": -3892.77,
+   "diiBuy": 18959.43,
+   "diiSell": 13505.88,
+   "diiNet": 5453.55
+  }
+ ],
+ "monthly": [
+  {
+   "month": "2015-09",
+   "fiiBuy": 81805.27,
+   "fiiSell": 93084.59,
+   "fiiNet": -11279.32,
+   "diiBuy": 39091.63,
+   "diiSell": 28818.57,
+   "diiNet": 10273.06
+  },
+  {
+   "month": "2015-10",
+   "fiiBuy": 77250.13,
+   "fiiSell": 74223.47,
+   "fiiNet": 3026.66,
+   "diiBuy": 32159.62,
+   "diiSell": 33678.48,
+   "diiNet": -1518.86
+  },
+  {
+   "month": "2015-11",
+   "fiiBuy": 75013.31,
+   "fiiSell": 84043.12,
+   "fiiNet": -9029.81,
+   "diiBuy": 33828.14,
+   "diiSell": 25328.16,
+   "diiNet": 8499.98
+  },
+  {
+   "month": "2015-12",
+   "fiiBuy": 69530.14,
+   "fiiSell": 71890.16,
+   "fiiNet": -2360.02,
+   "diiBuy": 37088.08,
+   "diiSell": 30760.44,
+   "diiNet": 6327.64
+  },
+  {
+   "month": "2016-01",
+   "fiiBuy": 71491.92,
+   "fiiSell": 85847.93,
+   "fiiNet": -14356.01,
+   "diiBuy": 43075.94,
+   "diiSell": 30201.04,
+   "diiNet": 12874.9
+  },
+  {
+   "month": "2016-02",
+   "fiiBuy": 74262.92,
+   "fiiSell": 86776.04,
+   "fiiNet": -12513.12,
+   "diiBuy": 40129.01,
+   "diiSell": 29637.4,
+   "diiNet": 10491.61
+  },
+  {
+   "month": "2016-03",
+   "fiiBuy": 108002.95,
+   "fiiSell": 83801.44,
+   "fiiNet": 24201.51,
+   "diiBuy": 31576.15,
+   "diiSell": 48468.05,
+   "diiNet": -16891.9
+  },
+  {
+   "month": "2016-04",
+   "fiiBuy": 69963.65,
+   "fiiSell": 67027.37,
+   "fiiNet": 2936.28,
+   "diiBuy": 24467.25,
+   "diiSell": 27021.61,
+   "diiNet": -2554.36
+  },
+  {
+   "month": "2016-05",
+   "fiiBuy": 97116.2,
+   "fiiSell": 97077.81,
+   "fiiNet": 38.39,
+   "diiBuy": 38877.32,
+   "diiSell": 32119.24,
+   "diiNet": 6758.08
+  },
+  {
+   "month": "2016-06",
+   "fiiBuy": 89373.04,
+   "fiiSell": 85415.09,
+   "fiiNet": 3957.95,
+   "diiBuy": 35927.95,
+   "diiSell": 38101.5,
+   "diiNet": -2173.55
+  },
+  {
+   "month": "2016-08",
+   "fiiBuy": 110195.16,
+   "fiiSell": 101416.89,
+   "fiiNet": 8778.27,
+   "diiBuy": 45174.03,
+   "diiSell": 49580.34,
+   "diiNet": -4406.31
+  },
+  {
+   "month": "2016-09",
+   "fiiBuy": 101165.89,
+   "fiiSell": 97836.27,
+   "fiiNet": 3329.62,
+   "diiBuy": 51440.2,
+   "diiSell": 49440.98,
+   "diiNet": 1999.22
+  },
+  {
+   "month": "2016-10",
+   "fiiBuy": 72661.2,
+   "fiiSell": 78431.39,
+   "fiiNet": -5770.19,
+   "diiBuy": 45294.51,
+   "diiSell": 37388.16,
+   "diiNet": 7906.35
+  },
+  {
+   "month": "2016-11",
+   "fiiBuy": 110863.2,
+   "fiiSell": 130845.57,
+   "fiiNet": -19982.37,
+   "diiBuy": 66379.78,
+   "diiSell": 48102.75,
+   "diiNet": 18277.03
+  },
+  {
+   "month": "2016-12",
+   "fiiBuy": 74545.48,
+   "fiiSell": 85870.76,
+   "fiiNet": -11325.28,
+   "diiBuy": 42473.11,
+   "diiSell": 33337.02,
+   "diiNet": 9136.09
+  },
+  {
+   "month": "2017-01",
+   "fiiBuy": 76909.72,
+   "fiiSell": 78811.04,
+   "fiiNet": -1901.32,
+   "diiBuy": 50855.74,
+   "diiSell": 46351.8,
+   "diiNet": 4503.94
+  },
+  {
+   "month": "2017-02",
+   "fiiBuy": 107722.25,
+   "fiiSell": 99017.79,
+   "fiiNet": 8704.46,
+   "diiBuy": 61116.21,
+   "diiSell": 60180.95,
+   "diiNet": 935.26
+  },
+  {
+   "month": "2017-03",
+   "fiiBuy": 153101.24,
+   "fiiSell": 126628.07,
+   "fiiNet": 26473.17,
+   "diiBuy": 65535.41,
+   "diiSell": 69931.02,
+   "diiNet": -4395.61
+  },
+  {
+   "month": "2017-04",
+   "fiiBuy": 81594.59,
+   "fiiSell": 88222.15,
+   "fiiNet": -6627.56,
+   "diiBuy": 60188.82,
+   "diiSell": 50941.39,
+   "diiNet": 9247.43
+  },
+  {
+   "month": "2017-05",
+   "fiiBuy": 123004.66,
+   "fiiSell": 123457.2,
+   "fiiNet": -452.54,
+   "diiBuy": 69117.29,
+   "diiSell": 64840.23,
+   "diiNet": 4277.06
+  },
+  {
+   "month": "2017-06",
+   "fiiBuy": 99619.25,
+   "fiiSell": 103670.68,
+   "fiiNet": -4051.43,
+   "diiBuy": 60330.87,
+   "diiSell": 53654.76,
+   "diiNet": 6676.11
+  },
+  {
+   "month": "2017-08",
+   "fiiBuy": 95588.51,
+   "fiiSell": 111584.14,
+   "fiiNet": -15995.63,
+   "diiBuy": 70219.04,
+   "diiSell": 54013.82,
+   "diiNet": 16205.22
+  },
+  {
+   "month": "2017-09",
+   "fiiBuy": 95431.19,
+   "fiiSell": 119401.16,
+   "fiiNet": -23969.97,
+   "diiBuy": 79160.5,
+   "diiSell": 58134.97,
+   "diiNet": 21025.53
+  },
+  {
+   "month": "2017-10",
+   "fiiBuy": 103827.67,
+   "fiiSell": 111654.2,
+   "fiiNet": -7826.53,
+   "diiBuy": 74713.94,
+   "diiSell": 64623.03,
+   "diiNet": 10090.91
+  },
+  {
+   "month": "2017-11",
+   "fiiBuy": 132245.68,
+   "fiiSell": 145760.46,
+   "fiiNet": -13514.78,
+   "diiBuy": 89605.94,
+   "diiSell": 80362.73,
+   "diiNet": 9243.21
+  },
+  {
+   "month": "2017-12",
+   "fiiBuy": 96087.52,
+   "fiiSell": 102499.09,
+   "fiiNet": -6411.57,
+   "diiBuy": 76814.06,
+   "diiSell": 68671.18,
+   "diiNet": 8142.88
+  },
+  {
+   "month": "2018-01",
+   "fiiBuy": 134222.01,
+   "fiiSell": 124654.01,
+   "fiiNet": 9568,
+   "diiBuy": 93029.54,
+   "diiSell": 92630.81,
+   "diiNet": 398.73
+  },
+  {
+   "month": "2018-02",
+   "fiiBuy": 101881.52,
+   "fiiSell": 120500.67,
+   "fiiNet": -18619.15,
+   "diiBuy": 82216.56,
+   "diiSell": 64403.55,
+   "diiNet": 17813.01
+  },
+  {
+   "month": "2018-03",
+   "fiiBuy": 118876.79,
+   "fiiSell": 110971.94,
+   "fiiNet": 7904.85,
+   "diiBuy": 79303.18,
+   "diiSell": 72609.27,
+   "diiNet": 6693.91
+  },
+  {
+   "month": "2018-04",
+   "fiiBuy": 92062.09,
+   "fiiSell": 101682.65,
+   "fiiNet": -9620.56,
+   "diiBuy": 70705.51,
+   "diiSell": 62041.63,
+   "diiNet": 8663.88
+  },
+  {
+   "month": "2018-05",
+   "fiiBuy": 120914.92,
+   "fiiSell": 133274.63,
+   "fiiNet": -12359.71,
+   "diiBuy": 87103.11,
+   "diiSell": 72048.63,
+   "diiNet": 15054.48
+  },
+  {
+   "month": "2018-06",
+   "fiiBuy": 109343.1,
+   "fiiSell": 119592.27,
+   "fiiNet": -10249.17,
+   "diiBuy": 78930.3,
+   "diiSell": 64784.15,
+   "diiNet": 14146.15
+  },
+  {
+   "month": "2018-08",
+   "fiiBuy": 101173.63,
+   "fiiSell": 103402.16,
+   "fiiNet": -2228.53,
+   "diiBuy": 75784.39,
+   "diiSell": 72961.67,
+   "diiNet": 2822.72
+  },
+  {
+   "month": "2018-09",
+   "fiiBuy": 113805.99,
+   "fiiSell": 123274.67,
+   "fiiNet": -9468.68,
+   "diiBuy": 82989.11,
+   "diiSell": 70485.07,
+   "diiNet": 12504.04
+  },
+  {
+   "month": "2018-10",
+   "fiiBuy": 111037.68,
+   "fiiSell": 140238.88,
+   "fiiNet": -29201.2,
+   "diiBuy": 100992.39,
+   "diiSell": 74958.49,
+   "diiNet": 26033.9
+  },
+  {
+   "month": "2018-11",
+   "fiiBuy": 101299.44,
+   "fiiSell": 96365.33,
+   "fiiNet": 4934.11,
+   "diiBuy": 65526.96,
+   "diiSell": 64217.49,
+   "diiNet": 1309.47
+  },
+  {
+   "month": "2018-12",
+   "fiiBuy": 82545.46,
+   "fiiSell": 83648.83,
+   "fiiNet": -1103.37,
+   "diiBuy": 64671.03,
+   "diiSell": 64295.48,
+   "diiNet": 375.55
+  },
+  {
+   "month": "2019-01",
+   "fiiBuy": 101801.24,
+   "fiiSell": 101673.57,
+   "fiiNet": 127.67,
+   "diiBuy": 76616.16,
+   "diiSell": 74469.29,
+   "diiNet": 2146.87
+  },
+  {
+   "month": "2019-02",
+   "fiiBuy": 109909.66,
+   "fiiSell": 96345.09,
+   "fiiNet": 13564.57,
+   "diiBuy": 67192.45,
+   "diiSell": 67758.34,
+   "diiNet": -565.89
+  },
+  {
+   "month": "2019-03",
+   "fiiBuy": 143577.58,
+   "fiiSell": 111206.15,
+   "fiiNet": 32371.43,
+   "diiBuy": 74638.29,
+   "diiSell": 88568.54,
+   "diiNet": -13930.25
+  },
+  {
+   "month": "2019-04",
+   "fiiBuy": 102562.51,
+   "fiiSell": 89812.96,
+   "fiiNet": 12749.55,
+   "diiBuy": 66294.61,
+   "diiSell": 70514.07,
+   "diiNet": -4219.46
+  },
+  {
+   "month": "2019-05",
+   "fiiBuy": 131468.97,
+   "fiiSell": 133604.82,
+   "fiiNet": -2135.85,
+   "diiBuy": 85285.17,
+   "diiSell": 79968.83,
+   "diiNet": 5316.34
+  },
+  {
+   "month": "2019-06",
+   "fiiBuy": 98712.03,
+   "fiiSell": 99400.53,
+   "fiiNet": -688.5,
+   "diiBuy": 58637.91,
+   "diiSell": 54994.6,
+   "diiNet": 3643.31
+  },
+  {
+   "month": "2019-08",
+   "fiiBuy": 108529.84,
+   "fiiSell": 123358.6,
+   "fiiNet": -14828.76,
+   "diiBuy": 87205.37,
+   "diiSell": 66271.78,
+   "diiNet": 20933.59
+  },
+  {
+   "month": "2019-09",
+   "fiiBuy": 103760.72,
+   "fiiSell": 110384.77,
+   "fiiNet": -6624.05,
+   "diiBuy": 84873.73,
+   "diiSell": 72382.92,
+   "diiNet": 12490.81
+  },
+  {
+   "month": "2019-10",
+   "fiiBuy": 116236.18,
+   "fiiSell": 107640.52,
+   "fiiNet": 8595.66,
+   "diiBuy": 81036.58,
+   "diiSell": 76278.1,
+   "diiNet": 4758.48
+  },
+  {
+   "month": "2019-11",
+   "fiiBuy": 149792.41,
+   "fiiSell": 136867.48,
+   "fiiNet": 12924.93,
+   "diiBuy": 76227.97,
+   "diiSell": 84198.26,
+   "diiNet": -7970.29
+  },
+  {
+   "month": "2019-12",
+   "fiiBuy": 99178.1,
+   "fiiSell": 98483.98,
+   "fiiNet": 694.12,
+   "diiBuy": 65743.09,
+   "diiSell": 66483.85,
+   "diiNet": -740.76
+  },
+  {
+   "month": "2020-01",
+   "fiiBuy": 107812.65,
+   "fiiSell": 113172.16,
+   "fiiNet": -5359.51,
+   "diiBuy": 91361.34,
+   "diiSell": 90287.85,
+   "diiNet": 1073.49
+  },
+  {
+   "month": "2020-02",
+   "fiiBuy": 114891.25,
+   "fiiSell": 127575.55,
+   "fiiNet": -12684.3,
+   "diiBuy": 93843.52,
+   "diiSell": 76910.49,
+   "diiNet": 16933.03
+  },
+  {
+   "month": "2020-03",
+   "fiiBuy": 154904.51,
+   "fiiSell": 220721.21,
+   "fiiNet": -65816.7,
+   "diiBuy": 157856.93,
+   "diiSell": 102261.75,
+   "diiNet": 55595.18
+  },
+  {
+   "month": "2020-04",
+   "fiiBuy": 122483.01,
+   "fiiSell": 127691.51,
+   "fiiNet": -5208.5,
+   "diiBuy": 75066.03,
+   "diiSell": 75183.03,
+   "diiNet": -117
+  },
+  {
+   "month": "2020-05",
+   "fiiBuy": 155977.41,
+   "fiiSell": 142062.92,
+   "fiiNet": 13914.49,
+   "diiBuy": 87531.66,
+   "diiSell": 75238.47,
+   "diiNet": 12293.19
+  },
+  {
+   "month": "2020-06",
+   "fiiBuy": 155215.8,
+   "fiiSell": 149722.85,
+   "fiiNet": 5492.95,
+   "diiBuy": 100174.07,
+   "diiSell": 97739.67,
+   "diiNet": 2434.4
+  },
+  {
+   "month": "2020-08",
+   "fiiBuy": 131434.85,
+   "fiiSell": 115684.99,
+   "fiiNet": 15749.86,
+   "diiBuy": 77599.64,
+   "diiSell": 88646.42,
+   "diiNet": -11046.78
+  },
+  {
+   "month": "2020-09",
+   "fiiBuy": 127201.38,
+   "fiiSell": 138612.07,
+   "fiiNet": -11410.69,
+   "diiBuy": 91029.48,
+   "diiSell": 90919.18,
+   "diiNet": 110.3
+  },
+  {
+   "month": "2020-10",
+   "fiiBuy": 136822.19,
+   "fiiSell": 122284.79,
+   "fiiNet": 14537.4,
+   "diiBuy": 69356.56,
+   "diiSell": 86675,
+   "diiNet": -17318.44
+  },
+  {
+   "month": "2020-11",
+   "fiiBuy": 259779.42,
+   "fiiSell": 194462.29,
+   "fiiNet": 65317.13,
+   "diiBuy": 71778.07,
+   "diiSell": 120097.24,
+   "diiNet": -48319.17
+  },
+  {
+   "month": "2020-12",
+   "fiiBuy": 182528.47,
+   "fiiSell": 134304.53,
+   "fiiNet": 48223.94,
+   "diiBuy": 84739.8,
+   "diiSell": 122033.33,
+   "diiNet": -37293.53
+  },
+  {
+   "month": "2021-01",
+   "fiiBuy": 168241.42,
+   "fiiSell": 159260.61,
+   "fiiNet": 8980.81,
+   "diiBuy": 105747.49,
+   "diiSell": 117718.03,
+   "diiNet": -11970.54
+  },
+  {
+   "month": "2021-02",
+   "fiiBuy": 223030.67,
+   "fiiSell": 180986.21,
+   "fiiNet": 42044.46,
+   "diiBuy": 104175.16,
+   "diiSell": 120533.26,
+   "diiNet": -16358.1
+  },
+  {
+   "month": "2021-03",
+   "fiiBuy": 190759.51,
+   "fiiSell": 189514.29,
+   "fiiNet": 1245.22,
+   "diiBuy": 113745.81,
+   "diiSell": 108541.39,
+   "diiNet": 5204.42
+  },
+  {
+   "month": "2021-04",
+   "fiiBuy": 140103.66,
+   "fiiSell": 152796.6,
+   "fiiNet": -12692.94,
+   "diiBuy": 103109.44,
+   "diiSell": 92020.82,
+   "diiNet": 11088.62
+  },
+  {
+   "month": "2021-05",
+   "fiiBuy": 166976.74,
+   "fiiSell": 172992.08,
+   "fiiNet": -6015.34,
+   "diiBuy": 105544.29,
+   "diiSell": 103477.06,
+   "diiNet": 2067.23
+  },
+  {
+   "month": "2021-06",
+   "fiiBuy": 170188.95,
+   "fiiSell": 170214.84,
+   "fiiNet": -25.89,
+   "diiBuy": 114289.67,
+   "diiSell": 107246.16,
+   "diiNet": 7043.51
+  },
+  {
+   "month": "2021-08",
+   "fiiBuy": 175168.36,
+   "fiiSell": 177736.88,
+   "fiiNet": -2568.52,
+   "diiBuy": 131185.18,
+   "diiSell": 124290.49,
+   "diiNet": 6894.69
+  },
+  {
+   "month": "2021-09",
+   "fiiBuy": 217636.41,
+   "fiiSell": 216722.64,
+   "fiiNet": 913.77,
+   "diiBuy": 144147.33,
+   "diiSell": 138198.48,
+   "diiNet": 5948.85
+  },
+  {
+   "month": "2021-10",
+   "fiiBuy": 185566.83,
+   "fiiSell": 211139.02,
+   "fiiNet": -25572.19,
+   "diiBuy": 151607.74,
+   "diiSell": 147136.75,
+   "diiNet": 4470.99
+  },
+  {
+   "month": "2021-11",
+   "fiiBuy": 204204.04,
+   "fiiSell": 244105.96,
+   "fiiNet": -39901.92,
+   "diiBuy": 136049.58,
+   "diiSell": 105489.31,
+   "diiNet": 30560.27
+  },
+  {
+   "month": "2021-12",
+   "fiiBuy": 146073.9,
+   "fiiSell": 181567.49,
+   "fiiNet": -35493.59,
+   "diiBuy": 136077.68,
+   "diiSell": 104846.63,
+   "diiNet": 31231.05
+  },
+  {
+   "month": "2022-01",
+   "fiiBuy": 141177.65,
+   "fiiSell": 182524,
+   "fiiNet": -41346.35,
+   "diiBuy": 141934.87,
+   "diiSell": 120006.47,
+   "diiNet": 21928.4
+  },
+  {
+   "month": "2022-02",
+   "fiiBuy": 136263.82,
+   "fiiSell": 181983.89,
+   "fiiNet": -45720.07,
+   "diiBuy": 145477.51,
+   "diiSell": 103393.44,
+   "diiNet": 42084.07
+  },
+  {
+   "month": "2022-03",
+   "fiiBuy": 203610.95,
+   "fiiSell": 246892.26,
+   "fiiNet": -43281.31,
+   "diiBuy": 171963.59,
+   "diiSell": 132286.56,
+   "diiNet": 39677.03
+  },
+  {
+   "month": "2022-04",
+   "fiiBuy": 147478.45,
+   "fiiSell": 188131.2,
+   "fiiNet": -40652.75,
+   "diiBuy": 141994.63,
+   "diiSell": 111152.1,
+   "diiNet": 30842.53
+  },
+  {
+   "month": "2022-05",
+   "fiiBuy": 184378.97,
+   "fiiSell": 238671.44,
+   "fiiNet": -54292.47,
+   "diiBuy": 148569.75,
+   "diiSell": 97734.21,
+   "diiNet": 50835.54
+  },
+  {
+   "month": "2022-06",
+   "fiiBuy": 120951.61,
+   "fiiSell": 179063.98,
+   "fiiNet": -58112.37,
+   "diiBuy": 134086.34,
+   "diiSell": 87487.11,
+   "diiNet": 46599.23
+  },
+  {
+   "month": "2022-08",
+   "fiiBuy": 193337.27,
+   "fiiSell": 171311.65,
+   "fiiNet": 22025.62,
+   "diiBuy": 117263.25,
+   "diiSell": 124331.88,
+   "diiNet": -7068.63
+  },
+  {
+   "month": "2022-09",
+   "fiiBuy": 191146.65,
+   "fiiSell": 209454.95,
+   "fiiNet": -18308.3,
+   "diiBuy": 161757.96,
+   "diiSell": 147638.21,
+   "diiNet": 14119.75
+  },
+  {
+   "month": "2022-10",
+   "fiiBuy": 178270.46,
+   "fiiSell": 178759.52,
+   "fiiNet": -489.06,
+   "diiBuy": 101182.03,
+   "diiSell": 91905.06,
+   "diiNet": 9276.97
+  },
+  {
+   "month": "2022-11",
+   "fiiBuy": 221844.65,
+   "fiiSell": 199298.31,
+   "fiiNet": 22546.34,
+   "diiBuy": 127432.18,
+   "diiSell": 133733.5,
+   "diiNet": -6301.32
+  },
+  {
+   "month": "2022-12",
+   "fiiBuy": 139091.4,
+   "fiiSell": 153322.49,
+   "fiiNet": -14231.09,
+   "diiBuy": 136300.97,
+   "diiSell": 112141.84,
+   "diiNet": 24159.13
+  },
+  {
+   "month": "2023-01",
+   "fiiBuy": 155345.35,
+   "fiiSell": 196810.08,
+   "fiiNet": -41464.73,
+   "diiBuy": 143909.7,
+   "diiSell": 110497.85,
+   "diiNet": 33411.85
+  },
+  {
+   "month": "2023-02",
+   "fiiBuy": 162167.67,
+   "fiiSell": 173258.31,
+   "fiiNet": -11090.64,
+   "diiBuy": 130472.45,
+   "diiSell": 111233.17,
+   "diiNet": 19239.28
+  },
+  {
+   "month": "2023-03",
+   "fiiBuy": 175539.06,
+   "fiiSell": 173541.36,
+   "fiiNet": 1997.7,
+   "diiBuy": 139074.82,
+   "diiSell": 108526.05,
+   "diiNet": 30548.77
+  },
+  {
+   "month": "2023-04",
+   "fiiBuy": 129039.75,
+   "fiiSell": 123327.95,
+   "fiiNet": 5711.8,
+   "diiBuy": 107083.72,
+   "diiSell": 104867.15,
+   "diiNet": 2216.57
+  },
+  {
+   "month": "2023-05",
+   "fiiBuy": 236945.55,
+   "fiiSell": 209089.07,
+   "fiiNet": 27856.48,
+   "diiBuy": 135524.29,
+   "diiSell": 138830.64,
+   "diiNet": -3306.35
+  },
+  {
+   "month": "2023-06",
+   "fiiBuy": 235250.76,
+   "fiiSell": 208000.75,
+   "fiiNet": 27250.01,
+   "diiBuy": 152605.69,
+   "diiSell": 148147.46,
+   "diiNet": 4458.23
+  },
+  {
+   "month": "2023-08",
+   "fiiBuy": 270587.17,
+   "fiiSell": 291207.82,
+   "fiiNet": -20620.65,
+   "diiBuy": 187966.34,
+   "diiSell": 162949.39,
+   "diiNet": 25016.95
+  },
+  {
+   "month": "2023-09",
+   "fiiBuy": 228678.76,
+   "fiiSell": 255370.92,
+   "fiiNet": -26692.16,
+   "diiBuy": 184018.45,
+   "diiSell": 163705.81,
+   "diiNet": 20312.64
+  },
+  {
+   "month": "2023-10",
+   "fiiBuy": 184699.3,
+   "fiiSell": 215526.5,
+   "fiiNet": -30827.2,
+   "diiBuy": 163706.23,
+   "diiSell": 135452.2,
+   "diiNet": 28254.03
+  },
+  {
+   "month": "2023-11",
+   "fiiBuy": 246426.89,
+   "fiiSell": 242551.06,
+   "fiiNet": 3875.83,
+   "diiBuy": 153467.85,
+   "diiSell": 139214.18,
+   "diiNet": 14253.67
+  },
+  {
+   "month": "2023-12",
+   "fiiBuy": 299153.04,
+   "fiiSell": 267193.26,
+   "fiiNet": 31959.78,
+   "diiBuy": 224569.2,
+   "diiSell": 211626.95,
+   "diiNet": 12942.25
+  },
+  {
+   "month": "2024-01",
+   "fiiBuy": 324457.57,
+   "fiiSell": 360435.38,
+   "fiiNet": -35977.81,
+   "diiBuy": 258423.78,
+   "diiSell": 231680.19,
+   "diiNet": 26743.59
+  },
+  {
+   "month": "2024-02",
+   "fiiBuy": 345878.76,
+   "fiiSell": 361841.48,
+   "fiiNet": -15962.72,
+   "diiBuy": 240482.15,
+   "diiSell": 215102.85,
+   "diiNet": 25379.3
+  },
+  {
+   "month": "2024-03",
+   "fiiBuy": 365393.17,
+   "fiiSell": 362078.7,
+   "fiiNet": 3314.47,
+   "diiBuy": 246251.16,
+   "diiSell": 189939.56,
+   "diiNet": 56311.6
+  },
+  {
+   "month": "2024-04",
+   "fiiBuy": 277880.2,
+   "fiiSell": 313572.39,
+   "fiiNet": -35692.19,
+   "diiBuy": 257826.14,
+   "diiSell": 213639.86,
+   "diiNet": 44186.28
+  },
+  {
+   "month": "2024-05",
+   "fiiBuy": 381296.83,
+   "fiiSell": 423511.11,
+   "fiiNet": -42214.28,
+   "diiBuy": 291806.13,
+   "diiSell": 236073.09,
+   "diiNet": 55733.04
+  },
+  {
+   "month": "2024-06",
+   "fiiBuy": 391740.96,
+   "fiiSell": 389703.49,
+   "fiiNet": 2037.47,
+   "diiBuy": 337468.58,
+   "diiSell": 308835.43,
+   "diiNet": 28633.15
+  },
+  {
+   "month": "2024-08",
+   "fiiBuy": 403228.73,
+   "fiiSell": 424597.24,
+   "fiiNet": -21368.51,
+   "diiBuy": 302928.44,
+   "diiSell": 254649.79,
+   "diiNet": 48278.65
+  },
+  {
+   "month": "2024-09",
+   "fiiBuy": 397451.41,
+   "fiiSell": 382028.09,
+   "fiiNet": 15423.32,
+   "diiBuy": 318958.84,
+   "diiSell": 287098.61,
+   "diiNet": 31860.23
+  },
+  {
+   "month": "2024-10",
+   "fiiBuy": 299260.34,
+   "fiiSell": 413706.23,
+   "fiiNet": -114445.89,
+   "diiBuy": 340159.3,
+   "diiSell": 232904.62,
+   "diiNet": 107254.68
+  },
+  {
+   "month": "2024-11",
+   "fiiBuy": 306735.44,
+   "fiiSell": 352709.56,
+   "fiiNet": -45974.12,
+   "diiBuy": 229409.09,
+   "diiSell": 184925.23,
+   "diiNet": 44483.86
+  },
+  {
+   "month": "2024-12",
+   "fiiBuy": 299628.86,
+   "fiiSell": 316611.34,
+   "fiiNet": -16982.48,
+   "diiBuy": 289749.74,
+   "diiSell": 255555.01,
+   "diiNet": 34194.73
+  },
+  {
+   "month": "2025-01",
+   "fiiBuy": 242699.59,
+   "fiiSell": 330074.25,
+   "fiiNet": -87374.66,
+   "diiBuy": 339689.44,
+   "diiSell": 253097.64,
+   "diiNet": 86591.8
+  },
+  {
+   "month": "2025-02",
+   "fiiBuy": 259256.89,
+   "fiiSell": 318244.97,
+   "fiiNet": -58988.08,
+   "diiBuy": 277187,
+   "diiSell": 212333.81,
+   "diiNet": 64853.19
+  },
+  {
+   "month": "2025-03",
+   "fiiBuy": 296455.65,
+   "fiiSell": 294441.47,
+   "fiiNet": 2014.18,
+   "diiBuy": 274791.22,
+   "diiSell": 237205.54,
+   "diiNet": 37585.68
+  },
+  {
+   "month": "2025-04",
+   "fiiBuy": 299966.45,
+   "fiiSell": 297231.43,
+   "fiiNet": 2735.02,
+   "diiBuy": 273363.93,
+   "diiSell": 245135.48,
+   "diiNet": 28228.45
+  },
+  {
+   "month": "2025-05",
+   "fiiBuy": 351188.38,
+   "fiiSell": 339415.13,
+   "fiiNet": 11773.25,
+   "diiBuy": 312150.49,
+   "diiSell": 230590.16,
+   "diiNet": 81560.33
+  },
+  {
+   "month": "2025-06",
+   "fiiBuy": 349580.23,
+   "fiiSell": 342091.25,
+   "fiiNet": 7488.98,
+   "diiBuy": 350402.34,
+   "diiSell": 277728.43,
+   "diiNet": 72673.91
+  },
+  {
+   "month": "2025-08",
+   "fiiBuy": 268077.36,
+   "fiiSell": 314980.28,
+   "fiiNet": -46902.92,
+   "diiBuy": 293563.09,
+   "diiSell": 198734.54,
+   "diiNet": 94828.55
+  },
+  {
+   "month": "2025-09",
+   "fiiBuy": 278843.46,
+   "fiiSell": 314144.82,
+   "fiiNet": -35301.36,
+   "diiBuy": 326751.09,
+   "diiSell": 261407.5,
+   "diiNet": 65343.59
+  },
+  {
+   "month": "2025-10",
+   "fiiBuy": 261117.36,
+   "fiiSell": 263464.25,
+   "fiiNet": -2346.89,
+   "diiBuy": 314238.53,
+   "diiSell": 261444.51,
+   "diiNet": 52794.02
+  },
+  {
+   "month": "2025-11",
+   "fiiBuy": 307573.59,
+   "fiiSell": 325073.9,
+   "fiiNet": -17500.31,
+   "diiBuy": 318136.71,
+   "diiSell": 241052.93,
+   "diiNet": 77083.78
+  },
+  {
+   "month": "2025-12",
+   "fiiBuy": 249054.9,
+   "fiiSell": 283404.52,
+   "fiiNet": -34349.62,
+   "diiBuy": 356905.61,
+   "diiSell": 277285.7,
+   "diiNet": 79619.91
+  },
+  {
+   "month": "2026-01",
+   "fiiBuy": 300257.57,
+   "fiiSell": 341692.79,
+   "fiiNet": -41435.22,
+   "diiBuy": 364373.29,
+   "diiSell": 295152.55,
+   "diiNet": 69220.74
+  },
+  {
+   "month": "2026-02",
+   "fiiBuy": 339315.95,
+   "fiiSell": 345956.73,
+   "fiiNet": -6640.78,
+   "diiBuy": 346722.22,
+   "diiSell": 308299.11,
+   "diiNet": 38423.11
+  },
+  {
+   "month": "2026-03",
+   "fiiBuy": 278800.39,
+   "fiiSell": 401340.8,
+   "fiiNet": -122540.41,
+   "diiBuy": 414657.07,
+   "diiSell": 271696.7,
+   "diiNet": 142960.37
+  },
+  {
+   "month": "2026-04",
+   "fiiBuy": 303387.09,
+   "fiiSell": 373522.55,
+   "fiiNet": -70135.46,
+   "diiBuy": 377771.28,
+   "diiSell": 326707.41,
+   "diiNet": 51063.87
+  },
+  {
+   "month": "2026-05",
+   "fiiBuy": 353913.83,
+   "fiiSell": 409877.16,
+   "fiiNet": -55963.33,
+   "diiBuy": 361325.17,
+   "diiSell": 278656.24,
+   "diiNet": 82668.93
+  },
+  {
+   "month": "2026-06",
+   "fiiBuy": 340120.27,
+   "fiiSell": 389148.9,
+   "fiiNet": -49028.63,
+   "diiBuy": 422821.98,
+   "diiSell": 337021.84,
+   "diiNet": 85800.14
+  }
+ ],
+ "fno": [
+  {
+   "date": "2026-07-01",
+   "indexFutNet": -586,
+   "indexOptNet": -6738.1,
+   "stockFutNet": -492,
+   "stockOptNet": -842.9
+  },
+  {
+   "date": "2026-07-02",
+   "indexFutNet": 472.3,
+   "indexOptNet": -6643.1,
+   "stockFutNet": 1426.6,
+   "stockOptNet": 562.1
+  },
+  {
+   "date": "2026-07-03",
+   "indexFutNet": 934.2,
+   "indexOptNet": 4398.8,
+   "stockFutNet": 500,
+   "stockOptNet": -478
+  },
+  {
+   "date": "2026-07-06",
+   "indexFutNet": 1538.7,
+   "indexOptNet": 3592.9,
+   "stockFutNet": 1452.9,
+   "stockOptNet": -671.3
+  },
+  {
+   "date": "2026-07-07",
+   "indexFutNet": 390.9,
+   "indexOptNet": -40176.2,
+   "stockFutNet": 1133.2,
+   "stockOptNet": 154
+  },
+  {
+   "date": "2026-07-08",
+   "indexFutNet": -4806.8,
+   "indexOptNet": 1471,
+   "stockFutNet": -1574.4,
+   "stockOptNet": 1487.8
+  },
+  {
+   "date": "2026-07-09",
+   "indexFutNet": 380.6,
+   "indexOptNet": 250.3,
+   "stockFutNet": 1279.7,
+   "stockOptNet": 190
+  },
+  {
+   "date": "2026-07-10",
+   "indexFutNet": 1911,
+   "indexOptNet": -1850.2,
+   "stockFutNet": 3303.5,
+   "stockOptNet": -660.4
+  },
+  {
+   "date": "2026-07-13",
+   "indexFutNet": -76.5,
+   "indexOptNet": 2589.9,
+   "stockFutNet": -948,
+   "stockOptNet": -87
+  },
+  {
+   "date": "2026-07-14",
+   "indexFutNet": -1736.2,
+   "indexOptNet": -47567.9,
+   "stockFutNet": -5263.7,
+   "stockOptNet": -181.7
+  },
+  {
+   "date": "2026-07-15",
+   "indexFutNet": 440.7,
+   "indexOptNet": -7661.8,
+   "stockFutNet": -1864.1,
+   "stockOptNet": -456.4
+  },
+  {
+   "date": "2026-07-16",
+   "indexFutNet": 1994.3,
+   "indexOptNet": -270.4,
+   "stockFutNet": 1308.5,
+   "stockOptNet": -445.8
+  },
+  {
+   "date": "2026-07-17",
+   "indexFutNet": 5393,
+   "indexOptNet": 8075.1,
+   "stockFutNet": 917,
+   "stockOptNet": 141.9
+  },
+  {
+   "date": "2026-07-20",
+   "indexFutNet": -631.8,
+   "indexOptNet": -9944.5,
+   "stockFutNet": 446,
+   "stockOptNet": 230.8
+  },
+  {
+   "date": "2026-07-21",
+   "indexFutNet": -1487.5,
+   "indexOptNet": -70338.1,
+   "stockFutNet": -1690,
+   "stockOptNet": -339.3
+  },
+  {
+   "date": "2026-07-22",
+   "indexFutNet": -3606.8,
+   "indexOptNet": -6918.9,
+   "stockFutNet": -980.4,
+   "stockOptNet": -438
+  },
+  {
+   "date": "2026-07-23",
+   "indexFutNet": -1840,
+   "indexOptNet": -10223.9,
+   "stockFutNet": 2181.5,
+   "stockOptNet": 1346.2
+  },
+  {
+   "date": "2026-07-24",
+   "indexFutNet": -1201.6,
+   "indexOptNet": 7104.6,
+   "stockFutNet": 2115.6,
+   "stockOptNet": -1433
+  }
+ ]
+}
