@@ -29,7 +29,7 @@ Respond with ONLY a JSON object (no markdown fences, no preamble) with exactly t
  "execSummary": "150-220 word executive summary explaining why the composite framework concluded ${baseline.recommendation}",
  "thesis": "180-260 word investment thesis with 2-3 substantive pillars grounded in the actual numbers",
  "thesisPillars": [{"h":"2-4 word pillar name","p":"one-sentence supporting point"}],
- "valuation": "100-160 words explaining valuation — DCF vs market price context, why intrinsic value may diverge from market price for quality businesses, blended target derivation",
+ "valuation": "${pack.valuationBasis === "market" ? "100-160 words explaining valuation — how the target is derived from the market-based methods (" + (pack.targetMethod || "relative methods") + "); no DCF is used, so do not mention DCF, WACC or terminal value" : "100-160 words explaining valuation — DCF vs market price context, why intrinsic value may diverge from market price for quality businesses, blended target derivation"}",
  "business": "100-140 words on the business model, unit economics and what the margin stack reveals",
  "management": "80-120 words on management quality, capital allocation and shareholder alignment",
  "competitive": "70-110 words on competitive positioning vs the peer set",

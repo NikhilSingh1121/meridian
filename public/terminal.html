@@ -19,6 +19,9 @@
   <link rel="stylesheet" href="/auth.css" />
   <link rel="stylesheet" href="/research-pack.css" />
   <link rel="stylesheet" href="/research-ws.css" />
+  <link rel="stylesheet" href="/earnings-ws.css" />
+  <link rel="stylesheet" href="/forensic-ws.css" />
+  <link rel="stylesheet" href="/assistant.css" />
   <link rel="stylesheet" href="/mobile.css" />
 </head>
 <body class="term-body">
@@ -60,16 +63,15 @@
   <!-- ── Module tabs ── -->
   <nav class="ttabs" id="ttabs">
     <button data-tab="markets" class="active">Market Intelligence</button>
-    <button data-tab="research">Equity Research</button>
+    <button data-tab="sector">Sector Analysis</button>
+    <button data-tab="portfolio">Portfolio Analysis</button>
+    <button data-tab="research">Company Analysis</button>
     <button data-tab="earnings">Earnings Call</button>
     <button data-tab="forensic">Forensic Analysis</button>
     <button data-tab="models">Modeling Lab</button>
-    <button data-tab="quant">Quant Lab</button>
     <button data-tab="risk">Risk Center</button>
     <button data-tab="reports">Report Generation</button>
-    <button data-tab="portfolio">Portfolio</button>
-    <button data-tab="sector">Sector Analysis</button>
-    <button data-tab="news">News &amp; Sentiment</button>
+    <button data-tab="quant">Quant Lab</button>
     <button data-tab="calc">Calculators</button>
     <button data-tab="learn">Learning Center</button>
     <button data-tab="library">Library</button>
@@ -239,6 +241,7 @@
               ↓ EXPORT TO EXCEL
             </button>
           </div>
+          <div id="idcfBasis" class="idcf-basis" hidden></div>
           <div id="idcfOut"><div class="empty-mini mono">The full analyst-grade DCF — historical foundation, forecast build-up, EBIT→NOPAT→FCFF schedule, WACC, discounting, terminal value, EV bridge, sensitivity, scenarios and AI commentary — renders here.</div></div>
         </div>
       </div>
@@ -270,80 +273,21 @@
 
     <!-- ════ TAB · EARNINGS CALL ════ -->
     <section class="tab" id="tab-earnings" hidden>
-      <div class="ec-page">
-        <!-- ticker loader -->
+      <!-- Earnings Call workstation — built by earnings-ws.js from the same
+           panels, grid, tables and charts as Equity Research -->
+      <div class="ec-page ec-ws" id="ecRoot">
         <div class="ec-loadbar">
           <div class="ec-loadbar-in">
             <span class="ec-slash mono">/</span>
-            <input id="ecSym" placeholder="Ticker — RELIANCE.NS · TCS.NS · AAPL · MSFT · any listed company" autocomplete="off" spellcheck="false">
-            <button class="btn btn-amber" id="ecLoad" type="button">Load earnings</button>
+            <input id="ecSym" placeholder="Ticker — RELIANCE.NS · TCS.NS · MARICO.NS · any listed company" autocomplete="off" spellcheck="false">
+            <button class="btn btn-amber" id="ecLoad" type="button">Load company</button>
           </div>
           <span id="ecCoreStatus" class="panel-sub mono"></span>
         </div>
-
-        <!-- 50 / 50 core: recent earnings calls (left) · schedule (right).
-             Initial state: a structured 3-step workflow strip instead of a
-             floating hint sentence (JS replaces this wholesale on load). -->
-        <div class="ec-core" id="ecCore">
-          <div class="ec-start">
-            <div class="ec-start-step"><span class="n mono">01</span><div><h4>Load a company</h4><p>Enter any ticker for its earnings-call schedule and recent calls — actual vs. estimate EPS, surprise and transcript links. Keyless &middot; NSE &middot; BSE &middot; US &middot; global.</p></div></div>
-            <div class="ec-start-step"><span class="n mono">02</span><div><h4>Provide the transcript</h4><p>Paste the call text or import a PDF — headers, footers, page numbers and disclaimers are stripped automatically before analysis.</p></div></div>
-            <div class="ec-start-step"><span class="n mono">03</span><div><h4>Read the dashboard</h4><p>A nine-section institutional report — tone, guidance, risks, segments, per-speaker sentiment and a scorecard — computed locally.</p></div></div>
-          </div>
-        </div>
-
-        <!-- analysis: input methods (left) · report contents (right) -->
-        <div class="ec-analysis">
-          <div class="ec-an-head">
-            <h3>EARNINGS CALL ANALYSIS</h3>
-            <span class="panel-sub mono" id="ecFor">paste a transcript or import a PDF</span>
-          </div>
-          <div class="ec-inpanel">
-            <div class="ec-inrow">
-              <div class="ec-inputs">
-                <div class="ec-tabs" id="ecInTabs">
-                  <button class="ec-tab active" data-in="text" type="button">✎ Paste text</button>
-                  <button class="ec-tab" data-in="pdf" type="button">⬆ Import PDF</button>
-                </div>
-                <div class="ec-in" id="ecInText">
-                  <textarea id="ecPaste" placeholder="Paste an earnings-call transcript here — any format, any company. Non-content lines (headers, footers, page numbers, disclaimers) are stripped automatically before analysis."></textarea>
-                </div>
-                <div class="ec-in" id="ecInPdf" hidden>
-                  <label class="ec-drop" id="ecDrop">
-                    <input type="file" id="ecPdf" accept="application/pdf,.pdf" hidden>
-                    <div class="ec-drop-ic">⬆</div>
-                    <div class="ec-drop-t">Drop a transcript PDF here, or click to choose</div>
-                    <div class="ec-drop-s mono">Text is extracted in your browser context · headers, footers &amp; page numbers removed</div>
-                    <div class="ec-drop-file mono" id="ecPdfName"></div>
-                  </label>
-                </div>
-                <div class="ec-btnrow">
-                  <button class="btn" id="ecNse" type="button" title="Fetch the latest earnings-call transcript the company filed with the exchange and analyse it">⬇ Latest transcript from NSE</button>
-                  <button class="btn btn-amber" id="ecAnalyze" type="button">Analyse transcript</button>
-                  <button class="btn" id="ecDocx" type="button" title="Download a formatted .docx research report">⬇ DOCX report</button>
-                </div>
-                <div id="ecStatus" class="panel-sub mono" style="margin-top:8px"></div>
-              </div>
-              <aside class="ec-includes" aria-label="Report contents">
-                <div class="ec-includes-t mono">REPORT INCLUDES</div>
-                <ul>
-                  <li>Overall assessment &amp; call score</li>
-                  <li>Financial snapshot — verbatim KPIs</li>
-                  <li>Management scorecard &amp; tone</li>
-                  <li>Sentiment timeline — prepared vs Q&amp;A</li>
-                  <li>Segment &amp; geography readout</li>
-                  <li>Guidance tracking</li>
-                  <li>Risk heat-map &amp; competitor mentions</li>
-                  <li>Investment thesis</li>
-                  <li>Evidence appendix — every quote traced</li>
-                </ul>
-                <div class="ec-includes-foot mono">DETERMINISTIC · COMPUTED LOCALLY · NO AI, NO EXTERNAL CALLS</div>
-              </aside>
-            </div>
-            <div class="note ec-an-note">Every figure is extracted verbatim and every score traces to the transcript text. Use <b>⬇ DOCX report</b> for a formatted download.</div>
-          </div>
-          <div id="ecOut"></div>
-        </div>
+        <div id="ecHead"></div>
+        <div id="ecPreview"></div>
+        <div id="ecInput"></div>
+        <div id="ecOut"></div>
       </div>
     </section>
 
@@ -356,21 +300,18 @@
 
     <!-- ════ TAB · FORENSIC ANALYSIS ════ -->
     <section class="tab" id="tab-forensic" hidden>
-      <div class="trow" style="align-items:flex-start">
-        <div class="panel m-side-panel" style="min-width:280px;max-width:300px;position:sticky;top:12px">
-          <div class="panel-h"><h3>FORENSIC ANALYSIS</h3></div>
-          <div style="padding:14px 16px">
-            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:6px">Ticker</label>
-            <input id="frcSym" type="text" placeholder="e.g. RELIANCE.NS" style="text-transform:uppercase;width:100%;background:var(--ink);border:1px solid var(--hairline);color:var(--fg);padding:8px 10px;font-family:var(--mono);font-size:12px">
-            <button class="btn btn-amber" id="frcLoad" style="width:100%;margin-top:10px">Run forensic scan</button>
-            <div id="frcStatus" class="panel-sub mono" style="margin-top:12px"></div>
-            <div class="note" style="font-size:10px;color:var(--muted-ink);line-height:1.5;margin-top:12px">Screens earnings quality, cash-flow quality, accounting quality and financial-distress risk using the Piotroski, Altman and Beneish models — every component shown and auditable.</div>
+      <!-- Forensic Analysis workstation — built by forensic-ws.js -->
+      <div class="ec-page fx-ws" id="fxRoot">
+        <div class="ec-loadbar">
+          <div class="ec-loadbar-in">
+            <span class="ec-slash mono">/</span>
+            <input id="fxSym" placeholder="Ticker — RELIANCE.NS · TCS.NS · MARICO.NS · any listed company" autocomplete="off" spellcheck="false">
+            <button class="btn btn-amber" id="fxLoad" type="button">Run forensic scan</button>
           </div>
+          <span id="fxStatus" class="panel-sub mono"></span>
         </div>
-        <div class="panel grow">
-          <div class="panel-h"><h3>FORENSIC SCORECARD</h3><span class="panel-sub mono" id="frcFor"></span></div>
-          <div id="frcOut"><div class="empty-mini mono">Run a forensic scan to see the earnings-quality, cash-flow, accounting and distress-risk scorecard — Piotroski F, Altman Z, Beneish M, working-capital trend and red-flag detection.</div></div>
-        </div>
+        <div id="fxHead"></div>
+        <div id="fxBody"></div>
       </div>
     </section>
 
@@ -584,25 +525,6 @@
       <div id="sectorRoot"></div>
     </section>
 
-    <!-- ════ TAB · NEWS & SENTIMENT ════ -->
-    <section class="tab" id="tab-news" hidden>
-      <div class="trow">
-        <div class="panel grow">
-          <div class="panel-h"><h3>NEWS &amp; MARKET SENTIMENT</h3>
-            <div class="panel-tools mono">
-              <select id="newsMode"><option value="company">Company</option><option value="industry">Industry</option><option value="market">Market</option></select>
-              <input id="newsQuery" value="NIFTY" spellcheck="false" />
-              <button class="mini-btn" id="newsGo">Fetch</button>
-            </div>
-          </div>
-          <div id="newsAgg"></div>
-        </div>
-      </div>
-      <div class="trow">
-        <div class="panel grow"><div class="panel-h"><h3>HEADLINES</h3><span class="panel-sub mono" id="newsCount"></span></div><div id="newsList"><div class="loading mono">loading…</div></div></div>
-      </div>
-    </section>
-
     <!-- ════ TAB · CALCULATORS ════ -->
     <section class="tab" id="tab-calc" hidden>
       <div class="trow" style="align-items:flex-start">
@@ -651,11 +573,14 @@
   <script src="/chart-component.js"></script>
   <script src="/terminal-modules.js"></script>
   <script src="/research-ws.js"></script>
+  <script src="/earnings-ws.js"></script>
+  <script src="/forensic-ws.js"></script>
   <script src="/price-action.js"></script>
   <script src="/quant-lab.js"></script>
   <script src="/sector-analysis.js"></script>
   <script src="/calculators.js"></script>
   <script src="/learning.js"></script>
   <script src="/auth.js"></script>
+  <script src="/assistant.js"></script>
 </body>
 </html>

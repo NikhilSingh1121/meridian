@@ -6,10 +6,10 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "test": "node --test server/lib/analytics.test.js server/lib/infrastructure.test.js server/lib/research-workbook.test.js server/lib/macrodata.test.js server/lib/quant.test.js server/lib/fiidii.test.js server/lib/payments-baseline.test.js server/lib/insights.test.js server/lib/pack.test.js server/lib/reportChecks.test.js"
+    "test": "node --test server/lib/analytics.test.js server/lib/infrastructure.test.js server/lib/research-workbook.test.js server/lib/macrodata.test.js server/lib/quant.test.js server/lib/fiidii.test.js server/lib/payments-baseline.test.js server/lib/insights.test.js server/lib/pack.test.js server/lib/reportChecks.test.js server/lib/calls.test.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "dependencies": {
     "compression": "^1.8.1",
@@ -17,6 +17,8 @@
     "exceljs": "^3.4.0",
     "express": "^4.19.2",
     "google-auth-library": "^9.15.0",
+    "jszip": "^3.10.1",
+    "unpdf": "^1.8.1",
     "yahoo-finance2": "^3.15.3"
   }
 }

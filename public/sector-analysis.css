@@ -224,3 +224,11 @@
 .sec-tile-v { font-weight: 500; }
 .sec-tip { border-radius: var(--r-sm, 4px); font-size: 11.5px; }
 .sec-view-toggle button, .sec-pager button { border-radius: var(--r-sm, 4px); }
+
+/* ── market picker + country mode ── */
+.sec-country { display: inline-flex; align-items: center; gap: 10px; margin-top: 14px; font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.sec-country select { background: var(--ink); color: var(--fg); border: 1px solid var(--hairline); border-radius: 4px; padding: 7px 30px 7px 10px; font-family: var(--sans); font-size: 13px; letter-spacing: 0; text-transform: none; cursor: pointer; min-width: 220px; }
+.sec-country select:hover, .sec-country select:focus { border-color: color-mix(in srgb, var(--amber) 55%, var(--hairline)); outline: none; }
+.sec-metrics.sec-metrics-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sec-cotbl td.sec-co-ex { font-family: var(--sans); color: var(--muted); font-size: 12px; text-align: left; }
+.sec-pickers { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }

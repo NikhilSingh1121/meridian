@@ -1,0 +1,102 @@
+/* ═══ M-Terminal Assistant — floating chat widget ═══════════════════════════
+   Dark glass panel, a four-point spark mark (amber accent), minimal outlined chips. Uses the
+   terminal's tokens (--ink, --fg, --muted, --hairline, --amber). */
+.mta-launch {
+  position: fixed; right: 22px; bottom: 22px; z-index: 900;
+  width: 52px; height: 52px; border-radius: 50%; cursor: pointer;
+  border: 1px solid var(--hairline, #232a33);
+  background: radial-gradient(120% 120% at 30% 25%, #2a313b 0%, #12161c 55%, #0b0d11 100%);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .06);
+  display: grid; place-items: center; transition: transform .18s ease, border-color .18s ease;
+}
+.mta-launch:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--amber, #c8862a) 70%, transparent); }
+.mta-launch:focus-visible, .mta-icon:focus-visible, .mta-chip:focus-visible, .mta-send:focus-visible { outline: 2px solid var(--amber-bright, #e8a33d); outline-offset: 2px; }
+/* the assistant's mark — a spark in the terminal's ink, amber when active */
+.mta-mark { display: inline-grid; place-items: center; flex: none; color: #d9d4ca; transition: color .18s ease, transform .18s ease; }
+.mta-mark svg { width: 100%; height: 100%; display: block; }
+.mta-launch .mta-mark { width: 20px; height: 20px; }
+.mta-launch:hover .mta-mark, .mta-launch[aria-expanded="true"] .mta-mark { color: var(--amber-bright, #e8a33d); }
+.mta-launch:hover .mta-mark { transform: rotate(45deg); }
+.mta-mark.head { width: 30px; height: 30px; padding: 8px; border-radius: 50%; border: 1px solid var(--hairline, #232a33); background: #0f1318; color: var(--amber-bright, #e8a33d); }
+.mta-mark.msg { width: 14px; height: 14px; margin: 4px 3px 0; color: var(--amber, #c8862a); }
+
+.mta-panel {
+  position: fixed; right: 22px; bottom: 86px; z-index: 901;
+  width: 390px; height: min(620px, calc(100vh - 120px));
+  display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 22px; border: 1px solid var(--hairline, #232a33);
+  background: linear-gradient(180deg, #161b22 0%, #0f1217 60%, #0c0e12 100%);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .05);
+  color: var(--fg, #e8eaed); font-family: var(--sans, Inter, sans-serif);
+  transform-origin: bottom right; animation: mtaIn .18s ease-out;
+}
+.mta-panel[hidden] { display: none; }
+@keyframes mtaIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+
+.mta-head { display: flex; align-items: center; gap: 12px; padding: 16px 16px 12px 18px; border-bottom: 1px solid rgba(255, 255, 255, .04); }
+.mta-ttl { flex: 1; min-width: 0; }
+.mta-ttl b { display: block; font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+.mta-ttl span { display: block; font-size: 11.5px; color: var(--muted, #8a93a0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mta-icon { width: 30px; height: 30px; border-radius: 50%; border: 0; background: transparent; color: var(--muted, #8a93a0); cursor: pointer; display: grid; place-items: center; }
+.mta-icon:hover { color: var(--fg, #e8eaed); background: rgba(255, 255, 255, .05); }
+.mta-icon svg { width: 16px; height: 16px; }
+
+.mta-body { position: relative; flex: 1; overflow-y: auto; padding: 14px 16px 8px; scrollbar-width: thin; scrollbar-color: #2a313b transparent; }
+.mta-msg { display: flex; gap: 10px; margin: 0 0 14px; font-size: 13px; line-height: 1.55; }
+.mta-bot .mta-txt { color: #cfd3d8; min-width: 0; }
+.mta-user { justify-content: flex-end; }
+.mta-user .mta-txt { max-width: 82%; background: #1c222b; border: 1px solid rgba(255, 255, 255, .05); border-radius: 14px 14px 4px 14px; padding: 9px 12px; color: var(--fg, #e8eaed); }
+.mta-txt ul { margin: 6px 0 0; padding-left: 16px; }
+.mta-txt li { margin: 2px 0; color: #b9bec6; }
+.mta-tag { display: inline-block; font-size: 9.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted, #8a93a0); border: 1px solid var(--hairline, #232a33); border-radius: 999px; padding: 1px 7px; margin-bottom: 5px; }
+.mta-tag.ai { color: var(--amber-bright, #e8a33d); border-color: color-mix(in srgb, var(--amber, #c8862a) 45%, transparent); }
+.mta-src { margin-top: 6px; font-size: 11px; }
+.mta-src a { color: var(--muted, #8a93a0); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mta-go { margin-top: 8px; background: none; border: 0; padding: 0; color: var(--amber-bright, #e8a33d); font: inherit; font-size: 12px; cursor: pointer; }
+.mta-go:hover { text-decoration: underline; }
+.mta-think { color: var(--muted, #8a93a0); background: linear-gradient(90deg, #6b7280 0%, #e8eaed 45%, #6b7280 90%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: mtaShine 1.4s linear infinite; }
+@keyframes mtaShine { to { background-position: -200% 0; } }
+
+/* question chips — thin outline, minimal */
+.mta-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 14px 30px; }
+.mta-chip {
+  font: inherit; font-size: 12px; line-height: 1.3; text-align: left; cursor: pointer;
+  color: #d6d9de; background: transparent; border: 1px solid #2c333d; border-radius: 999px; padding: 6px 11px;
+  transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+.mta-chip:hover { border-color: color-mix(in srgb, var(--amber, #c8862a) 60%, transparent); color: #fff; background: rgba(200, 134, 42, .06); }
+.mta-chip.ghost { color: var(--muted, #8a93a0); border-style: dashed; }
+.mta-chip { display: inline-flex; align-items: center; gap: 6px; }
+.mta-chip svg { width: 13px; height: 13px; flex: none; }
+.mta-chip.pin { color: var(--amber-bright, #e8a33d); border-color: color-mix(in srgb, var(--amber, #c8862a) 40%, transparent); background: rgba(200, 134, 42, .05); }
+.mta-chip.pin:hover { background: rgba(200, 134, 42, .12); }
+.mta-ai { font-style: normal; font-size: 10px; color: var(--amber, #c8862a); }
+.mta-chip.accent { color: var(--amber-bright, #e8a33d); border-color: color-mix(in srgb, var(--amber, #c8862a) 45%, transparent); }
+.mta-cat { margin: 4px 0 6px 30px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted-ink, #6b7280); }
+
+/* More questions — one category at a time behind text tabs */
+.mta-more { margin: 0 0 4px 30px; }
+.mta-tabs { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 0 0 10px; border-bottom: 1px solid rgba(255, 255, 255, .06); }
+.mta-tab { font: inherit; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted-ink, #6b7280); background: none; border: 0; border-bottom: 1.5px solid transparent; padding: 6px 0 7px; margin-bottom: -1px; cursor: pointer; }
+.mta-tab:hover { color: var(--fg, #e8eaed); }
+.mta-tab[aria-selected="true"] { color: var(--amber-bright, #e8a33d); border-bottom-color: var(--amber, #c8862a); }
+.mta-tab:focus-visible { outline: 2px solid var(--amber-bright, #e8a33d); outline-offset: 2px; }
+.mta-more .mta-chips { margin-left: 0; }
+.mta-note { margin: 0 0 8px 30px; font-size: 10.5px; color: var(--muted-ink, #6b7280); }
+
+.mta-foot { padding: 10px 14px 12px; border-top: 1px solid rgba(255, 255, 255, .04); }
+.mta-input { display: flex; align-items: center; gap: 6px; background: #12161c; border: 1px solid #262d37; border-radius: 999px; padding: 4px 4px 4px 16px; }
+.mta-input:focus-within { border-color: color-mix(in srgb, var(--amber, #c8862a) 55%, transparent); }
+.mta-input input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--fg, #e8eaed); font: inherit; font-size: 13px; height: 34px; }
+.mta-input input::placeholder { color: #6b7280; }
+.mta-send { width: 34px; height: 34px; flex: none; border-radius: 50%; border: 1px solid #353d48; background: #1d232c; color: var(--fg, #e8eaed); cursor: pointer; display: grid; place-items: center; }
+.mta-send:hover:not(:disabled) { border-color: var(--amber, #c8862a); }
+.mta-send:disabled { opacity: .4; cursor: default; }
+.mta-send svg { width: 15px; height: 15px; }
+.mta-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 7px; padding: 0 6px; font-size: 10.5px; color: var(--muted-ink, #6b7280); }
+
+@media (max-width: 520px) {
+  .mta-panel { right: 12px; left: 12px; bottom: 80px; width: auto; height: calc(100vh - 110px); border-radius: 18px; }
+  .mta-launch { right: 14px; bottom: 14px; }
+}
+@media (prefers-reduced-motion: reduce) { .mta-panel, .mta-think { animation: none; } .mta-launch, .mta-mark { transition: none; } }

@@ -22,7 +22,8 @@ const express = require("express");
 const router = express.Router();
 const F = require("../providers/fundamentals");
 const yahoo = require("../providers/yahoo");
-const { cached, cachedDurable } = require("../cache");
+const { cached, cachedDurable, get: cacheGet } = require("../cache");
+const CS = require("../lib/countrySectors");
 
 // Yahoo's canonical sector keys (match the finance.yahoo.com/sectors/* slugs).
 const SECTOR_KEYS = [
@@ -153,7 +154,36 @@ async function buildOverview() {
     sectors: sectors.sort((a, b) => (b.weight || 0) - (a.weight || 0)),
   };
 }
-router.get("/sectors", async (_req, res) => {
+/* ═══════════════ COUNTRY MODE — any screener region (?country=in, jp, gb …) ═══════════════
+   United States keeps the richer Yahoo sector feed above (YTD / 1Y / 3Y / 5Y, index
+   charts). Other countries are built from the screener on demand: the first request
+   starts a background job and answers 202 with progress; the page polls. */
+const COUNTRY_TTL = 30 * 60 * 1000;
+const countryJobs = new Map(); // "code:exchange" → { progress, error }
+const exchangeCode = (q) => { const e = String(q || "").toUpperCase(); return /^[A-Z]{2,5}$/.test(e) ? e : ""; };
+const countryCode = (q) => { const c = String(q || "").toLowerCase(); return c && c !== "us" && CS.COUNTRIES[c] ? c : null; };
+router.get("/sectors/countries", (_req, res) => {
+  res.json({ countries: Object.entries(CS.COUNTRIES).map(([code, name]) => ({ code, name })).sort((a, b) => (a.code === "us" ? -1 : b.code === "us" ? 1 : a.name.localeCompare(b.name))) });
+});
+function countryOverview(code, ex, res) {
+  const key = `csec:overview:${code}:${ex}`, jk = `${code}:${ex}`;
+  const hit = cacheGet(key);
+  if (hit) return res.json({ status: "done", ...hit });
+  const job = countryJobs.get(jk);
+  if (job && job.error) { countryJobs.delete(jk); return res.status(502).json({ error: job.error }); }
+  if (!job) {
+    const j = { progress: { done: 0, total: CS.SECTORS.length } };
+    countryJobs.set(jk, j);
+    cachedDurable(key, COUNTRY_TTL, () => CS.overview(code, ex || null, (p) => (j.progress = p)))
+      .then(() => countryJobs.delete(jk))
+      .catch((e) => { j.error = String((e && e.message) || e).slice(0, 140); });
+  }
+  return res.status(202).json({ status: "running", progress: (countryJobs.get(jk) || {}).progress });
+}
+
+router.get("/sectors", async (req, res) => {
+  const code = countryCode(req.query.country);
+  if (code) return countryOverview(code, exchangeCode(req.query.exchange), res);
   try { res.json({ status: "done", ...(await cachedDurable("sectors:overview", OVERVIEW_TTL, buildOverview)) }); }
   catch (e) { res.status(502).json({ error: String((e && e.message) || e).slice(0, 140) }); }
 });
@@ -241,9 +271,24 @@ async function buildDetail(key) {
     indexSymbol: d.symbol || null,
   };
 }
-router.get("/sectors/:key", async (req, res) => {
+router.get("/sectors/:key", async (req, res, next) => {
   const key = req.params.key;
-  if (!SECTOR_KEYS.includes(key)) return res.status(404).json({ error: "Unknown sector" });
+  if (!SECTOR_KEYS.includes(key)) return next(); // e.g. /sectors/benchmark-metrics, registered below
+  const code = countryCode(req.query.country);
+  if (code) {
+    try {
+      const ex = exchangeCode(req.query.exchange);
+      const d = await cachedDurable(`csec:detail:${code}:${ex}:${key}`, COUNTRY_TTL, async () => {
+        const meta = await sectorRaw(key).catch(() => null);
+        const out = await CS.detail(code, key, meta, ex || null);
+        const ov = cacheGet(`csec:overview:${code}:${ex}`);
+        const row = ov && ov.sectors.find((x) => x.key === key);
+        if (row) out.weight = row.weight;
+        return out;
+      });
+      return res.json(d);
+    } catch (e) { return res.status(502).json({ error: "Sector detail unavailable", detail: String((e && e.message) || e).slice(0, 120) }); }
+  }
   try { res.json(await cachedDurable(`sectors:detail:${key}`, DETAIL_TTL, () => buildDetail(key))); }
   catch (e) { res.status(502).json({ error: "Sector detail unavailable", detail: String((e && e.message) || e).slice(0, 120) }); }
 });

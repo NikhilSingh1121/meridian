@@ -493,6 +493,68 @@ function addWaccBuild(wb, p) {
 //   Block H — Scenario selector + delta table
 // All downstream sheets read from these via named ranges.
 // ════════════════════════════════════════════════════════════════════════════
+/* The plan's terminal value (server/lib/dcfAssumptions.js → analytics.perpetuityPV):
+   a stage-2 fade of Stage2Years from the last explicit growth rate to g, each year's
+   FCFF = NOPAT × (1 − g ÷ RONIC), then a Gordon perpetuity on the same basis. Writes the
+   schedule as formulas under row r and returns the cell holding its PV at t = 0 plus the
+   next free row. Mid-year discounting, exactly as the in-app engine. */
+function stage2Of(p) {
+  const i = p.idcf || {};
+  return i.stage2 && i.assumptions && i.assumptions.planDriven && i.terminalMethod !== "exitMultiple" ? i.stage2 : null;
+}
+function writeStage2(ws, r, s2, { nopatN, g0, g, w, N, label }) {
+  const n2 = Math.max(0, Math.round(s2.years || 0));
+  setCell(ws, r, 2, label || "Stage 2 — fade to the perpetuity (value-driver: FCFF = NOPAT × (1 − g ÷ RONIC))", STYLE.rowLabelBold); r++;
+  const gR = r, nR = r + 1, fR = r + 2, pR = r + 3;
+  setCell(ws, gR, 2, "  Stage-2 growth (%)", STYLE.rowLabelSub);
+  setCell(ws, nR, 2, "  Stage-2 NOPAT", STYLE.rowLabelSub);
+  setCell(ws, fR, 2, "  Stage-2 FCFF = NOPAT × (1 − g ÷ RONIC)", STYLE.rowLabelSub);
+  setCell(ws, pR, 2, "  PV at (1+WACC)^(N + k − 0.5)", STYLE.rowLabelSub);
+  for (let k = 1; k <= n2; k++) {
+    const c = 2 + k;
+    setCell(ws, gR, c, { formula: `${g0} + (${g} - ${g0}) * ${k} / Stage2Years` }, STYLE.formula, NF.money2);
+    setCell(ws, nR, c, { formula: `${k === 1 ? nopatN : `${col(c - 1)}${nR}`} * (1 + ${col(c)}${gR}/100)` }, STYLE.formula, NF.money);
+    setCell(ws, fR, c, { formula: `${col(c)}${nR} * (1 - MAX(0, ${col(c)}${gR})/Ronic)` }, STYLE.formula, NF.money);
+    setCell(ws, pR, c, { formula: `${col(c)}${fR} / (1 + ${w}/100)^(${N} + ${k} - 0.5)` }, STYLE.formula, NF.money);
+  }
+  r = pR + 1;
+  const lastN = n2 ? `${col(2 + n2)}${nR}` : nopatN;
+  setCell(ws, r, 2, "  Σ PV stage 2", STYLE.rowLabel);
+  const sumCell = `${col(3)}${r}`;
+  setCell(ws, r, 3, n2 ? { formula: `SUM(${col(3)}${pR}:${col(2 + n2)}${pR})` } : 0, STYLE.formula, NF.money); r++;
+  setCell(ws, r, 2, "  Perpetuity = NOPAT × (1+g) × (1 − g ÷ RONIC) ÷ (WACC − g)", STYLE.rowLabel);
+  const perpCell = `${col(3)}${r}`;
+  setCell(ws, r, 3, { formula: `IF(${w}-${g}>0, ${lastN} * (1 + ${g}/100) * (1 - MAX(0, ${g})/Ronic) / ((${w}-${g})/100), 0)` }, STYLE.formula, NF.money); r++;
+  setCell(ws, r, 2, "  PV of perpetuity at (1+WACC)^(N + Stage2Years − 0.5)", STYLE.rowLabel);
+  const pvPerp = `${col(3)}${r}`;
+  setCell(ws, r, 3, { formula: `${perpCell} / (1 + ${w}/100)^(${N} + Stage2Years - 0.5)` }, STYLE.formula, NF.money); r++;
+  setCell(ws, r, 2, "  PV of terminal value (stage 2 + perpetuity)", STYLE.subtotalLabel);
+  const pvCell = `${col(3)}${r}`;
+  setCell(ws, r, 3, { formula: `${sumCell} + ${pvPerp}` }, STYLE.subtotal, NF.money); r++;
+  return { pvCell, r: r + 1 };
+}
+
+/* per-year driver values of a plan-driven model, read back from the base-case rows */
+function planYearValues(p, key) {
+  const idcf = p.idcf || {};
+  if (!idcf.assumptions || !idcf.assumptions.planDriven) return null;
+  const rows = (idcf.base && idcf.base.rows) || [];
+  if (!rows.length) return null;
+  const firstPrev = (() => { const r0 = rows[0]; return r0 && r0.growth != null ? r0.rev / (1 + r0.growth / 100) : null; })();
+  return rows.map((r, i) => {
+    const prev = i === 0 ? firstPrev : rows[i - 1].rev;
+    switch (key) {
+      case "growth": return r.growth;
+      case "ebitdaMargin": return r.rev ? (r.ebitda / r.rev) * 100 : null;   // before any scenario tilt
+      case "capexPctRev": return r.rev ? (r.capex / r.rev) * 100 : null;
+      case "depPctRev": return r.rev ? (r.dep / r.rev) * 100 : null;
+      case "taxRate": return r.ebit ? (r.tax / r.ebit) * 100 : null;
+      case "wcPctRev": return prev != null && r.rev !== prev ? (r.dWC / (r.rev - prev)) * 100 : null;
+      default: return null;
+    }
+  });
+}
+
 function addAssumptions(wb, p) {
   const ws = wb.addWorksheet("Assumptions", {
     properties: { tabColor: { argb: C.amber } },
@@ -597,8 +659,12 @@ function addAssumptions(wb, p) {
     });
 
     // Forecast: Y1 falls back to base scalar + scenario delta;
-    //          Y2+ chains from previous year cell (fade for growth, flat for others)
+    //          Y2+ chains from previous year cell (fade for growth, flat for others).
+    // Plan-driven models (server/lib/dcfAssumptions.js) carry a different value every
+    // year, so each year is written as the engine's value (+ the scenario delta),
+    // which keeps the workbook reconciling with the in-app model.
     const ywVals = yw[d.key] || [];
+    const pv = planYearValues(p, d.key);
     let prevColRef = null;
     for (let y = 1; y <= nF; y++) {
       const c = colFC(y);
@@ -606,6 +672,9 @@ function addAssumptions(wb, p) {
 
       if (ov != null) {
         setCell(ws, r, c, ov, STYLE.input, NF.money1);
+      } else if (pv && pv[y - 1] != null && isFinite(pv[y - 1])) {
+        const scen = d.scenName ? ` + ${d.scenName}` : "";
+        setCell(ws, r, c, scen ? { formula: `${(+pv[y - 1]).toFixed(4)}${scen}` } : +(+pv[y - 1]).toFixed(4), scen ? STYLE.formula : STYLE.input, NF.money1);
       } else {
         let formula;
         const scenAdd = d.scenName ? ` + ${d.scenName}` : "";
@@ -785,12 +854,14 @@ function addAssumptions(wb, p) {
   addScalar("Risk-free rate (Rf)",     safeNum(w.rf),           "%", "Rf",   NF.money2, "10-year sovereign yield.");
   addScalar("Beta (β, levered)",       safeNum(w.beta),         "—", "Beta", NF.ratio,  "2-year monthly levered beta.");
   addScalar("Equity risk premium (ERP)", safeNum(w.erp),        "%", "Erp",  NF.money2, "Damodaran ERP (mature + country risk).");
-  addScalar("Pre-tax cost of debt (Kd)", safeNum((w.rf || 0) + 1.5), "%", "Kd", NF.money2, "Rf + 150bp credit spread.");
+  addScalar("Company-specific premium", safeNum(w.premium || 0), "%", "Prem", NF.money2, "Earnings-quality / distress / size premium from the assumption engine (0 = none).");
+  addScalar("Pre-tax cost of debt (Kd)", safeNum(w.costDebtPre != null ? w.costDebtPre : (w.rf || 0) + 1.5), "%", "Kd", NF.money2, w.costDebtPre != null ? "Rf + synthetic-rating credit spread (interest cover)." : "Rf + 150bp credit spread.");
+  addScalar("Tax rate for debt shield", safeNum(w.kdTax != null ? w.kdTax : w.taxRate), "%", "KdTax", NF.money2, "Statutory rate — the rate at which interest is deductible.");
   addScalar("Weight of equity (We)",   safeNum(w.weightEquity), "%", "WEq",  NF.money1, "Mkt cap / (Mkt cap + Debt).");
   addScalar("Weight of debt (Wd)",     safeNum(w.weightDebt),   "%", "WDt",  NF.money1, "Debt / (Mkt cap + Debt).");
 
-  setCell(ws, r, 2, "Cost of equity (Rf + β × ERP)", STYLE.rowLabelBold);
-  setCell(ws, r, 3, { formula: "Rf + Beta * Erp" }, STYLE.formulaBold, NF.money2);
+  setCell(ws, r, 2, "Cost of equity (Rf + β × ERP + premium)", STYLE.rowLabelBold);
+  setCell(ws, r, 3, { formula: "Rf + Beta * Erp + Prem" }, STYLE.formulaBold, NF.money2);
   setCell(ws, r, 4, "%",
     { font: fontBase(C.greyDk, false, 9), alignment: { horizontal: "left", indent: 1 } });
   setCell(ws, r, colNotes, "Sharpe-Lintner CAPM.", STYLE.note);
@@ -798,7 +869,7 @@ function addAssumptions(wb, p) {
   r++;
 
   setCell(ws, r, 2, "After-tax cost of debt (Kd × (1−t))", STYLE.rowLabelBold);
-  setCell(ws, r, 3, { formula: "Kd * (1 - TaxRate/100)" }, STYLE.formulaBold, NF.money2);
+  setCell(ws, r, 3, { formula: "Kd * (1 - KdTax/100)" }, STYLE.formulaBold, NF.money2);
   setCell(ws, r, 4, "%",
     { font: fontBase(C.greyDk, false, 9), alignment: { horizontal: "left", indent: 1 } });
   wb.definedNames.add(`Assumptions!${addr(r, 3)}`, "CostDebtAT");
@@ -892,6 +963,11 @@ function addAssumptions(wb, p) {
   const isExitMult = a.terminalMethod === "exitMultiple";
   addScalar("Method (1=Perpetual, 2=Exit Multiple)", isExitMult ? 2 : 1, "", "TermMethod", NF.money, "Toggles TV approach.");
   addScalar("Exit EV/EBITDA multiple", safeNum(a.exitMultiple ?? ui.exitMultiple ?? 12), "×", "ExitMult", NF.mult, "Only used when TermMethod = 2.");
+  {
+    const s2 = stage2Of(p) || { years: 0, ronic: 0 };
+    addScalar("Stage-2 fade (years)", s2.years || 0, "yrs", "Stage2Years", NF.money, "Competitive-advantage period after the explicit forecast (assumption engine: wide moat 10, narrow 5, none 0).");
+    addScalar("Return on new capital (RONIC)", safeNum(s2.ronic || 0), "%", "Ronic", NF.money1, "Terminal FCFF = NOPAT × (1 − g ÷ RONIC). 0 = plain Gordon on the last FCFF.");
+  }
 
   setCell(ws, r, 2, "Forecast horizon (years)", STYLE.rowLabel);
   setCell(ws, r, 3, nF, STYLE.input, NF.money);
@@ -2611,10 +2687,17 @@ function addDcfEngine(wb, p) {
     { formula: `${col(3)}${rows.lastFcff} * (1 + ${col(3)}${rows.termG}/100)` },
     STYLE.formula, NF.money);
   r++;
-  setCell(ws, r, 2, "Gordon growth TV  = FCFF(yN+1) / (WACC − g)", STYLE.rowLabel);
+  const s2e = stage2Of(p);
+  let s2pv = null;
+  if (s2e) {
+    const w2 = writeStage2(ws, r, s2e, { nopatN: `${col(2 + nF)}${rows.nopat}`, g0: `((${col(2 + nF)}${rows.rev}/${col(1 + nF)}${rows.rev}-1)*100)`, g: `${col(3)}${rows.termG}`, w: "WaccScen", N: nF });
+    s2pv = w2.pvCell; r = w2.r;
+  }
+  setCell(ws, r, 2, s2e ? "Perpetuity TV at the horizon  = PV(stage 2 + perpetuity) ÷ DF(yN)" : "Gordon growth TV  = FCFF(yN+1) / (WACC − g)", STYLE.rowLabel);
   rows.tvGordon = r;
   setCell(ws, r, 3,
-    { formula: `IF(WaccScen-${col(3)}${rows.termG}>0, ${col(3)}${rows.fcffNext}/((WaccScen-${col(3)}${rows.termG})/100), 0)` },
+    s2e ? { formula: `IF(${col(2 + nF)}${rows.nopat}>0, ${s2pv} * (1 + WaccScen/100)^(${nF}-0.5), IF(WaccScen-${col(3)}${rows.termG}>0, ${col(3)}${rows.fcffNext}/((WaccScen-${col(3)}${rows.termG})/100), 0))` }
+        : { formula: `IF(WaccScen-${col(3)}${rows.termG}>0, ${col(3)}${rows.fcffNext}/((WaccScen-${col(3)}${rows.termG})/100), 0)` },
     STYLE.formula, NF.money);
   r++;
   setCell(ws, r, 2, "Exit-multiple TV  = EBITDA(yN) × ExitMult", STYLE.rowLabel);
@@ -2754,7 +2837,7 @@ function addSensitivity(wb, p) {
   ws.columns = [
     { width: 3 }, { width: 24 },
     { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 },
-    { width: 4 }, { width: 36 },
+    { width: 14 }, { width: 36 },   // H wide enough for year 6 of a 10-year schedule
   ];
 
   pageHeader(ws, "Sensitivity Analysis",
@@ -3292,10 +3375,17 @@ function addScenarios(wb, p) {
       { formula: `${col(2 + colsForYears)}${fcR} * (1 + ${col(3 + s)}${tgScenRow}/100)` },
       STYLE.formula, NF.money);
     r++;
-    setCell(ws, r, 2, "Gordon TV  = TF / (WACC − g)", STYLE.rowLabel);
+    const s2s = stage2Of(p);
+    let s2pvS = null;
+    if (s2s) {
+      const w2 = writeStage2(ws, r, s2s, { nopatN: `${col(2 + colsForYears)}${noR}`, g0: `((${col(2 + colsForYears)}${revR}/${col(1 + colsForYears)}${revR}-1)*100)`, g: `${col(3 + s)}${tgScenRow}`, w: `${col(3 + s)}${waccScenRow}`, N: colsForYears, label: "Stage 2 + value-driver perpetuity" });
+      s2pvS = w2.pvCell; r = w2.r;
+    }
+    setCell(ws, r, 2, s2s ? "Perpetuity TV at the horizon" : "Gordon TV  = TF / (WACC − g)", STYLE.rowLabel);
     const tvGordonR = r;
     setCell(ws, r, 3,
-      { formula: `IF(${col(3 + s)}${waccScenRow}-${col(3 + s)}${tgScenRow}>0, ${col(3)}${tfR}/((${col(3 + s)}${waccScenRow}-${col(3 + s)}${tgScenRow})/100), 0)` },
+      s2s ? { formula: `IF(${col(2 + colsForYears)}${noR}>0, ${s2pvS} * (1 + ${col(3 + s)}${waccScenRow}/100)^(${colsForYears}-0.5), IF(${col(3 + s)}${waccScenRow}-${col(3 + s)}${tgScenRow}>0, ${col(3)}${tfR}/((${col(3 + s)}${waccScenRow}-${col(3 + s)}${tgScenRow})/100), 0))` }
+          : { formula: `IF(${col(3 + s)}${waccScenRow}-${col(3 + s)}${tgScenRow}>0, ${col(3)}${tfR}/((${col(3 + s)}${waccScenRow}-${col(3 + s)}${tgScenRow})/100), 0)` },
       STYLE.formula, NF.money);
     r++;
     setCell(ws, r, 2, "Exit-multiple TV  = EBITDA(yN) × ExitMult", STYLE.rowLabel);
@@ -3764,7 +3854,7 @@ function addDashboard(wb, p) {
     { width: 3 },  // A margin
     { width: 30 }, // B label
     { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, // C-G
-    { width: 4 },  // H spacer
+    { width: 14 }, // H — spacer for the panels, year 6 of the 10-year forecast table
     { width: 30 }, // I label
     { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, // J-N
   ];

@@ -94,10 +94,10 @@ function barMini(canvas, series) {
 /* ── tab switching ── */
 const TABS = {};
 const TAB_LABELS = {
-  markets:"Market Intelligence", research:"Equity Research", earnings:"Earnings Call",
-  forensic:"Forensic Analysis", models:"Modeling Lab", quant:"Quant Lab", risk:"Risk Center",
-  reports:"Report Generation", portfolio:"Portfolio", sector:"Sector Analysis",
-  news:"News & Sentiment", calc:"Calculators", learn:"Learning Center", library:"Library",
+  markets:"Market Intelligence", sector:"Sector Analysis", portfolio:"Portfolio Analysis",
+  research:"Company Analysis", earnings:"Earnings Call", forensic:"Forensic Analysis", models:"Modeling Lab",
+  risk:"Risk Center", reports:"Report Generation", quant:"Quant Lab",
+  calc:"Calculators", learn:"Learning Center", library:"Library",
 };
 
 function showTab(name) {
@@ -187,10 +187,11 @@ function initMobileNav() {
 
   // Populate drawer from the desktop ttabs (single source of truth)
   const tabBtns = $$(".ttabs button[data-tab]");
-  // Group tabs into two sections: core analytics + user tools
+  // Three sections (mobile drawer only — the desktop bar is one flat row in the same order)
   const groups = [
-    { label: "Analytics", tabs: ["markets","research","earnings","forensic","models","quant","risk","reports"] },
-    { label: "Tools", tabs: ["portfolio","sector","news","calc","learn","library"] },
+    { label: "Macro Economics", tabs: ["markets","sector","portfolio"] },
+    { label: "Equity Research", tabs: ["research","earnings","forensic","models","risk","reports","quant"] },
+    { label: "Other Utilities", tabs: ["calc","learn","library"] },
   ];
 
   let html = "";
@@ -662,7 +663,7 @@ async function bootTerminal() {
   // signed out or offline.
   try { if (window.MSTORE && window.MSTORE.ready) await window.MSTORE.ready; } catch { }
   const start = (location.hash || "#markets").slice(1);
-  showTab(["markets", "research", "earnings", "forensic", "models", "quant", "risk", "reports", "portfolio", "sector", "news", "calc", "learn", "library"].includes(start) ? start : "markets");
+  showTab(Object.keys(TAB_LABELS).includes(start) ? start : "markets");
 }
 
 /* Industry & competitive analysis renderer (Market Intelligence). */

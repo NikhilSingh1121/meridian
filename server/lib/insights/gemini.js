@@ -168,7 +168,10 @@ async function tryModel(model, req, isLast) {
 function chat(req) {
   if (!hasKey()) return Promise.reject(new GeminiError("no_key", "GEMINI_API_KEY not configured"));
   const r = { maxTokens: 8000, reasoning: "medium", timeoutMs: Number(process.env.GEMINI_TIMEOUT_MS) || 150_000, ...req };
-  return serial(async () => {
+  // small interactive calls (the assistant chat) skip the serial queue so a user never waits
+  // behind a multi-minute report job; they are tiny next to the per-minute token limits
+  const run = r.direct ? (fn) => fn() : serial;
+  return run(async () => {
     const chain = MODELS();
     let last = null;
     for (let i = 0; i < chain.length; i++) {

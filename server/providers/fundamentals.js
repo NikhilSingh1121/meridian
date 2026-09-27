@@ -33,7 +33,87 @@ async function quoteSummary(symbol, modules = MODULES) {
   const summary = await y.quoteSummary(symbol, { modules }, { validateResult: false });
   // attach normalized annual statements from the time-series API
   summary.__statements = await annualStatements(symbol).catch(() => ({ income: [], balance: [], cashflow: [] }));
+  await toTradingCurrency(summary);
+  fillShareCount(summary);
   return summary;
+}
+
+/* Shares outstanding drives market cap, per-share DCF value and every
+   price-multiple. Yahoo sometimes omits it (seen from cloud-host IPs, e.g.
+   RELIANCE.NS on Render), so fall back through other disclosed figures and
+   derive market cap from it. The source is recorded in __sharesSource. */
+function fillShareCount(summary) {
+  const ks = (summary.defaultKeyStatistics = summary.defaultKeyStatistics || {});
+  const sd = (summary.summaryDetail = summary.summaryDetail || {});
+  const pr = (summary.price = summary.price || {});
+  const num = (v) => (v != null && Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null);
+  const st = summary.__statements || {};
+  const li = (st.income || []).at(-1) || {}, lb = (st.balance || []).at(-1) || {};
+  const price = num(pr.regularMarketPrice) ?? num(sd.previousClose);
+  const mcap = num(sd.marketCap) ?? num(pr.marketCap);
+  const candidates = [
+    ["reported", num(ks.sharesOutstanding)],
+    ["implied", num(ks.impliedSharesOutstanding)],
+    ["market cap / price", mcap && price ? mcap / price : null],
+    ["balance sheet", num(lb.sharesIssued)],
+    ["average shares", num(li.basicAvgShares)],
+    ["net profit / EPS", num(li.netIncome) && num(li.basicEPS) ? li.netIncome / li.basicEPS : null],
+  ];
+  const hit = candidates.find(([, v]) => v != null);
+  summary.__sharesSource = hit ? hit[0] : null;
+  if (!hit) return;
+  if (hit[0] !== "reported") ks.sharesOutstanding = Math.round(hit[1]);
+  if (mcap == null && price) sd.marketCap = Math.round(hit[1] * price);
+}
+
+/** Some issuers file in one currency and trade in another — Yahoo gives
+    Infosys' and HCL Tech's statements in USD while the shares trade in INR.
+    Every statement amount (not years or share counts) is converted into the
+    trading currency at today's rate, so ratios, the DCF, forensic scores and
+    reports compare like with like. Recorded on summary.__statementFx. */
+const NOT_MONEY = new Set(["year", "periodEnd", "basicAvgShares", "sharesIssued"]);
+async function toTradingCurrency(summary) {
+  const fc = summary.financialData && summary.financialData.financialCurrency;
+  const pc = summary.price && summary.price.currency;
+  const base = pc === "GBp" ? "GBP" : pc === "ZAc" ? "ZAR" : pc === "ILA" ? "ILS" : pc;
+  if (!fc || !base || fc === base) return;
+  let rate = null;
+  try { const q = await batchQuotes([`${fc}${base}=X`]); rate = q[0] && q[0].regularMarketPrice; } catch { /* leave as filed */ }
+  if (!rate || !isFinite(rate)) { summary.__statementFx = { from: fc, to: base, rate: null, note: "conversion rate unavailable — statements left in the filing currency" }; return; }
+  const st = summary.__statements;
+  // Yahoo's financialCurrency label is not reliable (HCL Tech says USD, its statements are
+  // in INR). Convert only if it makes price-to-sales plausible: of the two readings, keep the
+  // one closer to a typical P/S of ~3× (the two differ by the exchange rate, so this is decisive).
+  const rev = (st.income || []).map((r) => r.revenue).filter((x) => x > 0).at(-1);
+  const mcap = (summary.summaryDetail && summary.summaryDetail.marketCap) || (summary.price && summary.price.marketCap);
+  if (rev && mcap) {
+    const d = (ps) => Math.abs(Math.log(ps / 3));
+    if (d(mcap / (rev * rate)) >= d(mcap / rev)) { summary.__statementFx = { from: fc, to: base, rate: null, note: `Yahoo labels the statements ${fc}, but their scale matches ${base} — left unconverted` }; return; }
+  }
+  // Each period at its own rate — flows (income, cash flow) at the average of the 12 months
+  // to the period end, balances at the period-end rate; today's rate only when history is
+  // missing. Converting every year at today's rate would turn currency moves into fake growth.
+  let monthly = [];
+  try {
+    const y = await yf();
+    const ch = await y.chart(`${fc}${base}=X`, { period1: new Date(Date.now() - 8 * 365 * 864e5), interval: "1mo" });
+    monthly = (ch.quotes || []).filter((q) => q.close > 0).map((q) => ({ t: new Date(q.date).getTime(), c: q.close }));
+  } catch { /* spot fallback */ }
+  const rateFor = (end, flow) => {
+    const e = end ? new Date(end).getTime() : null;
+    if (!e || !monthly.length) return rate;
+    const win = monthly.filter((m) => m.t <= e + 16 * 864e5 && m.t > e - (flow ? 365 : 35) * 864e5);
+    return win.length ? win.reduce((a, m) => a + m.c, 0) / win.length : rate;
+  };
+  const used = [];
+  for (const part of ["income", "balance", "cashflow"]) {
+    for (const row of st[part] || []) {
+      const r = rateFor(row.periodEnd, part !== "balance");
+      if (part === "income") used.push(`FY${String(row.year).slice(2)} ${r.toFixed(2)}`);
+      for (const k of Object.keys(row)) if (!NOT_MONEY.has(k) && typeof row[k] === "number" && isFinite(row[k])) row[k] *= r;
+    }
+  }
+  summary.__statementFx = { from: fc, to: base, rate, note: `Statements filed in ${fc}, converted to ${base} at each period's own rate (flows: 12-month average; balances: period end) — ${used.join(", ")}` };
 }
 
 /** Annual statements via fundamentalsTimeSeries (current Yahoo API). */
@@ -46,7 +126,7 @@ async function annualStatements(symbol, years = 5) {
   const yr = (d) => (d ? new Date(d).getFullYear() : null);
   const pick = (r, ...keys) => { for (const k of keys) if (r[k] !== undefined && r[k] !== null) return Number(r[k]); return null; };
   const income = rows.map((r) => ({
-    year: yr(r.date), revenue: pick(r, "totalRevenue", "operatingRevenue"),
+    year: yr(r.date), periodEnd: r.date ? new Date(r.date).toISOString().slice(0, 10) : null, revenue: pick(r, "totalRevenue", "operatingRevenue"),
     grossProfit: pick(r, "grossProfit"), opIncome: pick(r, "operatingIncome", "totalOperatingIncomeAsReported"),
     ebit: pick(r, "EBIT"), ebitda: pick(r, "EBITDA", "normalizedEBITDA"),
     interest: pick(r, "interestExpense") !== null ? Math.abs(pick(r, "interestExpense")) : null,
@@ -57,6 +137,7 @@ async function annualStatements(symbol, years = 5) {
     otherOpExp: pick(r, "otherOperatingExpenses", "otherGandA", "otherOperatingIncomeExpenseNet"),
     interestIncome: pick(r, "interestIncome", "interestIncomeNonOperating") !== null ? Math.abs(pick(r, "interestIncome", "interestIncomeNonOperating")) : null,
     basicEPS: pick(r, "basicEPS", "dilutedEPS"),
+    basicAvgShares: pick(r, "basicAverageShares", "dilutedAverageShares"),
     dilutedEPS: pick(r, "dilutedEPS", "basicEPS"),
     // ── PAT-correct mapping fields (per user spec) ─────────────────────────
     // netIncomeIncludingNoncontrollingInterests = total Profit After Tax for
@@ -68,7 +149,7 @@ async function annualStatements(symbol, years = 5) {
     minorityIntIncome: pick(r, "minorityInterests", "netIncomeMinorityInterests", "otherIncomeMinority"),
   })).filter((r) => r.year);
   const balance = rows.map((r) => ({
-    year: yr(r.date), assets: pick(r, "totalAssets"), currentAssets: pick(r, "currentAssets"),
+    year: yr(r.date), periodEnd: r.date ? new Date(r.date).toISOString().slice(0, 10) : null, assets: pick(r, "totalAssets"), currentAssets: pick(r, "currentAssets"),
     currentLiab: pick(r, "currentLiabilities"), inventory: pick(r, "inventory"),
     receivables: pick(r, "receivables", "accountsReceivable"), payables: pick(r, "accountsPayable", "payables"),
     cash: pick(r, "cashAndCashEquivalents", "cashCashEquivalentsAndShortTermInvestments"),
@@ -84,6 +165,7 @@ async function annualStatements(symbol, years = 5) {
     otherNCA: pick(r, "otherNonCurrentAssets", "otherAssets"),
     otherCL: pick(r, "otherCurrentLiabilities"),
     shareCapital: pick(r, "commonStock", "capitalStock"),
+    sharesIssued: pick(r, "ordinarySharesNumber", "shareIssued"),
     retainedEarnings: pick(r, "retainedEarnings"),
     otherEquity: pick(r, "gainsLossesNotAffectingRetainedEarnings", "otherStockholdersEquity", "AOCIIncludingNoncontrollingInterests"),
     // ── Reconciliation-critical fields (for BS to balance) ────────────────
@@ -100,7 +182,7 @@ async function annualStatements(symbol, years = 5) {
     treasuryStock: pick(r, "treasuryStock"),
   })).filter((r) => r.year);
   const cashflow = rows.map((r) => ({
-    year: yr(r.date), ocf: pick(r, "operatingCashFlow", "cashFlowFromContinuingOperatingActivities"),
+    year: yr(r.date), periodEnd: r.date ? new Date(r.date).toISOString().slice(0, 10) : null, ocf: pick(r, "operatingCashFlow", "cashFlowFromContinuingOperatingActivities"),
     capex: pick(r, "capitalExpenditure") !== null ? Math.abs(pick(r, "capitalExpenditure")) : null,
     dividends: pick(r, "cashDividendsPaid", "commonStockDividendPaid") !== null ? Math.abs(pick(r, "cashDividendsPaid", "commonStockDividendPaid")) : null,
     dep: pick(r, "depreciationAndAmortization", "depreciationAmortizationDepletion"),
@@ -188,6 +270,41 @@ function rangeMs(r) {
 async function sectorApi(path) {
   const y = await yf();
   return y._fetch("https://${YF_QUERY_HOST}/v1/finance/" + path, {}, {}, "json", true);
+}
+
+/** Yahoo equity screener — the engine behind finance.yahoo.com/research-hub/
+    screener (region / sector / industry / market-cap filters, 250 rows a page).
+    It is a POST, and the library would reuse the POST options when it has to
+    mint a crumb, so the crumb is established first with an ordinary GET. On a
+    failure the crumb is re-established once and the call retried. */
+let _screenerWarm = false;
+async function screener(body) {
+  const y = await yf();
+  const warm = async () => { await y.quote("AAPL", { fields: ["symbol"] }, { validateResult: false }); _screenerWarm = true; };
+  const call = () => y._fetch("https://${YF_QUERY_HOST}/v1/finance/screener",
+    { formatted: "false", lang: "en-US", region: "US" },
+    { fetchOptions: { method: "POST", body: JSON.stringify({ userId: "", userIdType: "guid", quoteType: "EQUITY", ...body }), headers: { "content-type": "application/json" } } },
+    "json", true);
+  if (!_screenerWarm) await warm();
+  let r;
+  try { r = await call(); } catch (e) { await warm(); r = await call(); }
+  const res = r && r.finance && r.finance.result && r.finance.result[0];
+  if (!res) throw new Error("screener: empty result");
+  return res;
+}
+
+/** Third-party fair value published on Yahoo (Trading Central's valuation
+    model, finance.yahoo.com → Insights). Yahoo gives the discount of the price
+    to fair value ("-8%" = price 8% above fair value), so fair value =
+    price × (1 + discount). Mostly US-listed coverage; null when not published. */
+async function marketFairValue(symbol, price) {
+  if (!price || !isFinite(price)) return null;
+  const y = await yf();
+  const r = await y.insights(symbol, { reportsCount: 0 }, { validateResult: false });
+  const v = r && r.instrumentInfo && r.instrumentInfo.valuation;
+  const d = v && parseFloat(String(v.discount || "").replace(/[^\d.+-]/g, ""));
+  if (!v || !isFinite(d)) return null;
+  return { value: price * (1 + d / 100), discountPct: d, label: v.description || null, provider: v.provider || "Trading Central", relative: v.relativeValue || null };
 }
 
 async function peerSuggestions(symbol) {
@@ -348,4 +465,4 @@ async function pool(items, limit, fn) {
   return out;
 }
 
-module.exports = { batchQuotes, quoteSummary, miniSummary, chartCloses, peerSuggestions, newsFor, searchSymbols, sectorApi, earningsSummary, UNIVERSE, pool };
+module.exports = { batchQuotes, quoteSummary, miniSummary, chartCloses, peerSuggestions, newsFor, searchSymbols, sectorApi, screener, marketFairValue, earningsSummary, fillShareCount, UNIVERSE, pool };

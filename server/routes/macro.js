@@ -575,3 +575,4 @@ router.get("/macro/brief", async (_req, res) => {
 });
 
 module.exports = router;
+module.exports.buildRates = buildRates;   // sovereign 10Y yields — also the DCF risk-free rate

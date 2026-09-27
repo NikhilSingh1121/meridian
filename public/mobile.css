@@ -647,20 +647,6 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   14. NEWS & SENTIMENT
-────────────────────────────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .senti {
-    grid-template-columns: 1fr;
-  }
-
-  .evt-row {
-    grid-template-columns: 75px 1fr 24px;
-    font-size: 11px;
-  }
-}
-
-/* ─────────────────────────────────────────────────────────────────────────
    15. INSTITUTIONAL REPORT (.ir-*) — white-page output
    The report is the trickiest: it's a white-bg document with fixed widths.
 ────────────────────────────────────────────────────────────────────────── */

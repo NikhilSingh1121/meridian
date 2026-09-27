@@ -1,0 +1,95 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   Forensic Analysis workstation — layered on research-ws.css (grid, panels,
+   tables, charts) and earnings-ws.css (badges, lists). Only the pieces this
+   page adds live here: score cards, gauge, grade chip and the ⓘ explainer.
+   ════════════════════════════════════════════════════════════════════════════ */
+.fx-ws #fxHead:empty, .fx-ws #fxBody:empty { display: none; }
+.fx-head { grid-template-columns: minmax(0, 1.1fr) auto minmax(0, 1.9fr); }
+.fx-quote { display: flex; align-items: center; gap: 14px; }
+.fx-spark .ws-spark { display: block; }
+.fx-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.fx-ws .ws-tabs { margin-top: 2px; }
+
+/* score cards */
+.fx-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.fx-card { position: relative; border: 1px solid var(--hairline); border-radius: 6px; background: var(--ink-2); padding: 12px 34px 12px 14px; cursor: pointer; min-width: 0; transition: border-color .15s; }
+.fx-card:hover { border-color: color-mix(in srgb, var(--amber) 55%, var(--hairline)); }
+.fx-card-k { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.fx-card-v { font-family: var(--mono); font-size: 30px; font-weight: 600; line-height: 1.15; margin: 6px 0 8px; }
+.fx-card-v small { font-size: 15px; color: var(--muted); font-weight: 500; }
+.fx-card.good .fx-card-v { color: var(--up); } .fx-card.mid .fx-card-v { color: var(--amber-bright); } .fx-card.bad .fx-card-v { color: var(--down); }
+.fx-card-bar { height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--hairline) 70%, transparent); overflow: hidden; }
+.fx-card-bar i { display: block; height: 100%; border-radius: 3px; background: var(--amber); }
+.fx-card.good .fx-card-bar i { background: var(--up); } .fx-card.bad .fx-card-bar i { background: var(--down); }
+.fx-card-c { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+.fx-card-go { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 22px; color: var(--muted-ink); }
+.fx-card:hover .fx-card-go { color: var(--amber-bright); }
+
+/* narrative pieces */
+.fx-list { gap: 9px; }
+.fx-p { margin: 0; font-size: 12.5px; line-height: 1.65; color: var(--fg); }
+.fx-flags { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 7px; font-size: 12px; }
+.fx-flags li { border-left: 3px solid var(--amber); padding: 5px 9px; background: color-mix(in srgb, var(--amber) 6%, transparent); border-radius: 3px; }
+.fx-flags li.high { border-left-color: var(--down); background: color-mix(in srgb, var(--down) 7%, transparent); }
+.fx-flags li b { font-weight: 500; }
+.fx-clean { display: flex; gap: 12px; align-items: flex-start; font-size: 12.5px; line-height: 1.5; }
+.fx-clean > b { font-size: 20px; line-height: 1; border: 1px solid color-mix(in srgb, var(--up) 50%, transparent); border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.fx-clean div b { display: block; color: var(--fg); font-weight: 600; margin-bottom: 3px; }
+.fx-clean span { color: var(--muted); font-size: 12px; }
+
+/* tables */
+.fx-t td, .fx-t th { vertical-align: top; }
+.fx-t td { white-space: nowrap; }
+.fx-t td code { font-family: var(--code); font-size: 11px; color: var(--muted); white-space: normal; }
+.fx-t tr.fx-fail td:nth-child(2) { color: var(--muted); }
+.fx-t tr.fx-tot td { border-top: 1px solid var(--hairline); background: color-mix(in srgb, var(--amber) 6%, transparent); }
+.fx-t td:has(code), .fx-t td:has(br) { white-space: normal; }
+.fx-t td { font-size: 11.5px; }
+.fx-t td, .fx-t th { text-align: left; }
+.fx-t td.n, .fx-t th.n { text-align: right; white-space: nowrap; }
+
+/* grade + gauge */
+.fx-grade { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; font-size: 12.5px; }
+.fx-grade .g { font-family: var(--mono); font-size: 34px; font-weight: 700; width: 56px; height: 56px; border-radius: 8px; border: 1px solid currentColor; display: flex; align-items: center; justify-content: center; }
+.fx-big { font-family: var(--mono); font-size: 34px; font-weight: 600; color: var(--fg); }
+.fx-gauge { margin: 8px 0 14px; }
+.fx-gauge-t { position: relative; display: flex; height: 8px; border-radius: 4px; overflow: visible; }
+.fx-gauge-t i { display: block; height: 100%; }
+.fx-gauge-t i.d { background: var(--down); border-radius: 4px 0 0 4px; } .fx-gauge-t i.g { background: var(--amber); } .fx-gauge-t i.s { flex: 1; background: var(--up); border-radius: 0 4px 4px 0; }
+.fx-gauge-t b { position: absolute; top: -4px; width: 3px; height: 16px; margin-left: -1px; background: var(--fg); border-radius: 2px; }
+.fx-gauge-a { position: relative; height: 14px; font-family: var(--mono); font-size: 10px; color: var(--muted-ink); margin-top: 4px; }
+.fx-gauge-a span { position: absolute; transform: translateX(-50%); } .fx-gauge-a span:first-child { transform: none; } .fx-gauge-a span:last-child { transform: none; }
+
+/* ⓘ button + explainer popover */
+.fx-i { all: unset; cursor: pointer; font-size: 11px; line-height: 1; color: var(--muted-ink); padding: 1px 2px; border-radius: 50%; vertical-align: 1px; }
+.fx-i:hover, .fx-i:focus-visible { color: var(--amber-bright); outline: 1px solid color-mix(in srgb, var(--amber) 50%, transparent); }
+.fx-pop { position: fixed; z-index: 1000; background: var(--ink-2); border: 1px solid color-mix(in srgb, var(--amber) 45%, var(--hairline)); border-radius: 7px; box-shadow: 0 12px 34px rgba(0,0,0,.45); padding: 12px 14px; font-size: 12px; line-height: 1.5; color: var(--fg); max-height: 70vh; overflow: auto; }
+.fx-pop[hidden] { display: none; }
+.fx-pop-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.fx-pop-h b { font-size: 13px; color: var(--amber-bright); }
+.fx-pop-x { all: unset; cursor: pointer; color: var(--muted); font-size: 12px; padding: 0 3px; }
+.fx-pop-r { margin-top: 7px; }
+.fx-pop-r > span { display: block; font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted-ink); margin-bottom: 1px; }
+.fx-pop-r code { font-family: var(--code); font-size: 11.5px; color: var(--fg); }
+.fx-pop-t { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11.5px; }
+.fx-pop-t th { font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; color: var(--muted-ink); text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--hairline); }
+.fx-pop-t td { font-family: var(--mono); text-align: right; padding: 3px 6px; border-bottom: 1px solid color-mix(in srgb, var(--hairline) 50%, transparent); white-space: nowrap; }
+.fx-pop-t th:first-child, .fx-pop-t td:first-child { text-align: left; font-family: var(--sans); }
+.fx-pop-src { margin-top: 9px; font-size: 11px; color: var(--muted-ink); }
+
+@media (max-width: 1180px) { .fx-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .fx-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 10px; } }
+@media (max-width: 720px) { .fx-cards { grid-template-columns: 1fr; } .fx-quote { justify-content: flex-start; } }
+@media print { .fx-i, .fx-pop { display: none !important; } }
+
+/* ten sub-tabs share the bar evenly instead of scrolling */
+.fx-ws .ws-tab { flex: 1 1 auto; padding-left: 8px; padding-right: 8px; text-align: center; }
+/* narrative tables wrap inside narrow panels */
+.fx-t.fx-wrap td { white-space: normal; }
+.fx-t.fx-wrap td:last-child { min-width: 120px; text-align: left !important; font-family: var(--sans); color: var(--muted); }
+/* forensic tables live in narrow 4-column panels: let every cell wrap under pressure */
+.fx-t td, .fx-t th { white-space: normal; padding-left: 7px; padding-right: 7px; }
+.fx-t td:first-child { min-width: 92px; }
+.fx-t td b.up, .fx-t td b.down { white-space: nowrap; }
+.fx-ws .ws-tab { font-size: 11px; padding-left: 6px; padding-right: 6px; }
+.fx-t.fx-cmp td, .fx-t.fx-cmp th { padding-left: 5px; padding-right: 5px; }
+.fx-t.fx-cmp td:first-child { min-width: 0; }

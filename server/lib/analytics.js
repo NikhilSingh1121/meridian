@@ -202,11 +202,15 @@ function institutionalDCF(bundle, st, dcfIn, growth, ov = {}) {
   const li = st.income.at(-1) || {}, lc = st.cashflow.at(-1) || {};
   const baseRev = li.revenue;
   if (!baseRev || !dcfIn.sharesOut) return null;
-  const ebitdaMargin = ov.ebitdaMargin != null ? ov.ebitdaMargin : (fd.ebitdaMargins ?? (li.ebitda ? li.ebitda / baseRev : (li.opIncome ? li.opIncome / baseRev * 1.15 : 0.18)));
-  const depPctRev = ov.depPctRev != null ? ov.depPctRev : (lc.dep && baseRev ? lc.dep / baseRev : 0.04);
-  const capexPctRev = ov.capexPctRev != null ? ov.capexPctRev : (dcfIn.baseFcf && lc.capex && baseRev ? lc.capex / baseRev : 0.05);
-  const taxRate = ov.taxRate != null ? ov.taxRate : (li.pretax && li.tax ? Math.min(Math.max(li.tax / li.pretax, 0.12), 0.35) : 0.25);
-  const wcPctRev = ov.wcPctRev != null ? ov.wcPctRev : 0.02; // incremental WC as % of revenue change
+  // PT: year-by-year default paths from the assumption engine (server/lib/dcfAssumptions.js).
+  // Without a plan the engine falls back to its original single-value defaults.
+  const PT = dcfIn.paths || null;
+  const p0 = (k) => (PT && PT[k] && PT[k][0] != null ? PT[k][0] / 100 : null);
+  const ebitdaMargin = ov.ebitdaMargin != null ? ov.ebitdaMargin : (p0("ebitdaMargin") ?? fd.ebitdaMargins ?? (li.ebitda ? li.ebitda / baseRev : (li.opIncome ? li.opIncome / baseRev * 1.15 : 0.18)));
+  const depPctRev = ov.depPctRev != null ? ov.depPctRev : (p0("depPctRev") ?? (lc.dep && baseRev ? lc.dep / baseRev : 0.04));
+  const capexPctRev = ov.capexPctRev != null ? ov.capexPctRev : (p0("capexPctRev") ?? (dcfIn.baseFcf && lc.capex && baseRev ? lc.capex / baseRev : 0.05));
+  const taxRate = ov.taxRate != null ? ov.taxRate : (p0("taxRate") ?? (li.pretax && li.tax ? Math.min(Math.max(li.tax / li.pretax, 0.12), 0.35) : 0.25));
+  const wcPctRev = ov.wcPctRev != null ? ov.wcPctRev : (p0("wcPctRev") ?? 0.02); // incremental WC as % of revenue change
 
   // ── BUG FIX (v42): Compute proper WACC from CAPM components UP FRONT so
   // the discount rate used by every downstream calculation (FCFF schedule,
@@ -222,13 +226,17 @@ function institutionalDCF(bundle, st, dcfIn, growth, ov = {}) {
   // side. If currentPrice is unknown (legacy edge case), we fall back to
   // the prior proxy so behavior is unchanged for that path.
   const _rfW = dcfIn.rationale.rf, _betaW = dcfIn.rationale.beta, _erpW = dcfIn.rationale.erp;
-  const _costEquity = _rfW + _betaW * _erpW;
-  const _costDebtAT = (_rfW + 1.5) * (1 - taxRate);            // already after-tax, per Excel
+  const _premW = +dcfIn.rationale.premium || 0;               // company-specific premium (plan adjustment factors)
+  const _costEquity = _rfW + _betaW * _erpW + _premW;
+  const _kdPre = dcfIn.rationale.kdPre != null && isFinite(+dcfIn.rationale.kdPre) ? +dcfIn.rationale.kdPre : _rfW + 1.5;
+  const _kdTax = dcfIn.rationale.kdTax != null && isFinite(+dcfIn.rationale.kdTax) ? +dcfIn.rationale.kdTax / 100 : taxRate;
+  const _costDebtAT = _kdPre * (1 - _kdTax);                   // already after-tax, per Excel
   const _debtForWacc = dcfIn.netDebt > 0 ? dcfIn.netDebt : (st.balance.at(-1)?.totalDebt || 0);
   const _cp = +dcfIn.currentPrice;
   const _mcapInit = (isFinite(_cp) && _cp > 0) ? dcfIn.sharesOut * _cp : 0;
-  const _wdInit = _mcapInit > 0 ? _debtForWacc / (_debtForWacc + _mcapInit) : 0;
-  const _waccProper = _mcapInit > 0
+  const _wdInit = dcfIn.rationale.wd != null && isFinite(+dcfIn.rationale.wd) ? +dcfIn.rationale.wd
+    : _mcapInit > 0 ? _debtForWacc / (_debtForWacc + _mcapInit) : 0;
+  const _waccProper = _mcapInit > 0 || dcfIn.rationale.wd != null
     ? (1 - _wdInit) * _costEquity + _wdInit * _costDebtAT
     : dcfIn.wacc;
   // Replace dcfIn.wacc with the proper value; the clone avoids mutating
@@ -247,7 +255,7 @@ function institutionalDCF(bundle, st, dcfIn, growth, ov = {}) {
   if (r <= gT && ov.terminalMethod !== "exitMultiple") return { error: "WACC must exceed terminal growth" };
 
   // ── Expanded-mode parameters ──────────────────────────────────────────
-  const horizon = [3, 5, 7, 10].includes(+ov.forecastHorizon) ? +ov.forecastHorizon : 5;
+  const horizon = [3, 5, 7, 10].includes(+ov.forecastHorizon) ? +ov.forecastHorizon : (dcfIn.horizon || 5);
   const terminalMethod = ov.terminalMethod === "exitMultiple" ? "exitMultiple" : "perpetual";
   const exitMultiple = isFinite(+ov.exitMultiple) && +ov.exitMultiple > 0 ? +ov.exitMultiple : 12;
   const yw = ov.yearwise || {};
@@ -257,6 +265,15 @@ function institutionalDCF(bundle, st, dcfIn, growth, ov = {}) {
   //   y = 1-based year index
   //   defaultPct = the model's default value in percent FOR THIS year (already fade-adjusted for growth)
   //   isGrowth = true for revenue growth (Y4+ fade from user Y3 if set)
+  // Plan path for driver k in year y, shifted so year 1 equals `y1` (the scalar in force —
+  // a user edit, the bull/bear tilt, or the reverse-DCF solve). Growth shifts taper to zero
+  // by the last year (so the terminal state is untouched); the other drivers shift in parallel.
+  function pathVal(k, y, y1, taper = false) {
+    const p = PT && PT[k];
+    if (!p || p[y - 1] == null) return null;
+    const shift = y1 != null && isFinite(y1) && p[0] != null ? y1 - p[0] : 0;
+    return p[y - 1] + shift * (taper ? Math.max(0, 1 - (y - 1) / Math.max(1, horizon - 1)) : 1);
+  }
   function yrVal(key, y, defaultPct, isGrowth = false) {
     const arr = yw[key];
     const u1 = arr && arr[0] != null && isFinite(+arr[0]) ? +arr[0] : null;
@@ -269,6 +286,10 @@ function institutionalDCF(bundle, st, dcfIn, growth, ov = {}) {
     // Y4+ : if user set Y3 explicitly, fade from there (growth) or hold (constants).
     //       Otherwise pass through the model's existing per-year default (which already encodes fade).
     if (u3 == null) return defaultPct;
+    if (PT && PT[key] && PT[key][2] != null && PT[key][y - 1] != null) {
+      const k3 = PT[key][2], shift = u3 - k3;
+      return PT[key][y - 1] + shift * (isGrowth ? Math.max(0, 1 - (y - 3) / Math.max(1, horizon - 3)) : 1);
+    }
     if (isGrowth) {
       const yearsFromY3 = Math.max(0, y - 3);
       return Math.max(dcfIn.terminalG, u3 - dcfIn.fade * yearsFromY3);
@@ -277,21 +298,45 @@ function institutionalDCF(bundle, st, dcfIn, growth, ov = {}) {
   }
 
   const baseYear = li.year || new Date().getFullYear();
+
+  /* Perpetuity value at the explicit horizon. With an engine plan (dcfIn.stage2) it is the
+     value-driver form: a stage-2 fade of `years` years from the last explicit growth rate to
+     g, each year's FCFF = NOPAT × (1 − g ÷ RONIC), then a Gordon perpetuity on the same basis —
+     reinvestment is exactly what the growth needs at the return on new capital, so the
+     terminal value is internally consistent. Without a plan: Gordon on the last FCFF. */
+  const S2 = PT && dcfIn.stage2 && dcfIn.stage2.ronic > 0 ? dcfIn.stage2 : null;
+  function perpetuityPV(lastRow, rr, gg) {
+    if (!S2 || !(lastRow.nopat > 0)) {
+      const tv = (lastRow.fcff * (1 + gg)) / (rr - gg);
+      return { tv, tvPv: tv / Math.pow(1 + rr, horizon - 0.5), stage2Pv: 0 };
+    }
+    const ron = S2.ronic / 100, n2 = Math.max(0, Math.round(S2.years || 0)), g0 = lastRow.growth / 100;
+    let nopat = lastRow.nopat, pv2 = 0;
+    for (let k = 1; k <= n2; k++) {
+      const gk = g0 + (gg - g0) * (k / n2);
+      nopat *= 1 + gk;
+      pv2 += (nopat * (1 - Math.max(0, gk) / ron)) / Math.pow(1 + rr, horizon + k - 0.5);
+    }
+    const gordon = (nopat * (1 + gg) * (1 - Math.max(0, gg) / ron)) / (rr - gg);
+    const tvPv = pv2 + gordon / Math.pow(1 + rr, horizon + n2 - 0.5);
+    return { tv: tvPv * Math.pow(1 + rr, horizon - 0.5), tvPv, stage2Pv: pv2 };
+  }
+
   function schedule(g1, marginDelta) {
     let rev = baseRev, prevRev = baseRev, rows = [], pvSum = 0;
     for (let y = 1; y <= horizon; y++) {
       // Per-year inputs (in %): apply user yearwise overrides for Y1..Y3, fade for Y4+
-      const gPct = yrVal("growth",       y, (g1 - dcfIn.fade * Math.max(0, y - 2)), true);
-      const marPctBase = yrVal("ebitdaMargin", y, ebitdaMargin * 100, false);
-      const capPct = yrVal("capexPctRev", y, capexPctRev  * 100, false);
-      const depPct = yrVal("depPctRev",   y, depPctRev    * 100, false);
-      const taxPct = yrVal("taxRate",     y, taxRate      * 100, false);
-      const wcPct  = yrVal("wcPctRev",    y, wcPctRev     * 100, false);
+      const gPct = yrVal("growth",       y, pathVal("growth", y, g1, true) ?? (g1 - dcfIn.fade * Math.max(0, y - 2)), true);
+      const marPctBase = yrVal("ebitdaMargin", y, pathVal("ebitdaMargin", y, ebitdaMargin * 100) ?? ebitdaMargin * 100, false);
+      const capPct = yrVal("capexPctRev", y, pathVal("capexPctRev", y, capexPctRev * 100) ?? capexPctRev  * 100, false);
+      const depPct = yrVal("depPctRev",   y, pathVal("depPctRev", y, depPctRev * 100) ?? depPctRev    * 100, false);
+      const taxPct = yrVal("taxRate",     y, pathVal("taxRate", y, taxRate * 100) ?? taxRate      * 100, false);
+      const wcPct  = yrVal("wcPctRev",    y, pathVal("wcPctRev", y, wcPctRev * 100) ?? wcPctRev     * 100, false);
 
       // Bull/bear scenario margin tilt — applied on top of base year value, scaled by horizon
       const marPctScen = marPctBase + marginDelta * (y / horizon);
       const margin = Math.min(0.6, Math.max(0.01, marPctScen / 100));
-      const g = Math.max(gPct, dcfIn.terminalG) / 100;
+      const g = (PT ? gPct : Math.max(gPct, dcfIn.terminalG)) / 100;   // a plan may carry a real decline
 
       rev = rev * (1 + g);
       const ebitda = rev * margin;
@@ -314,27 +359,29 @@ function institutionalDCF(bundle, st, dcfIn, growth, ov = {}) {
       const df     = 1 / Math.pow(1 + r, t);
       const pv     = fcff * df;
       pvSum += pv;
-      rows.push({ year: baseYear + y, rev, growth: g * 100, ebitda, margin: margin * 100, dep, ebit, tax: ebit * yrTax, nopat, capex, dWC, fcff, df, pv });
+      // inp: the per-year driver inputs before bounds (margin 1–60%, growth floor) — the Excel
+      // export writes these as its input cells and re-applies the same bounds in formulas
+      rows.push({ year: baseYear + y, rev, growth: g * 100, ebitda, margin: margin * 100, dep, ebit, tax: ebit * yrTax, nopat, capex, dWC, fcff, df, pv,
+        inp: { g: gPct, m: marPctBase, cap: capPct, dep: depPct, tax: taxPct, wc: wcPct } });
       prevRev = rev;
     }
     // ── Terminal value ──────────────────────────────────────────────────
     const lastRow  = rows[rows.length - 1];
-    const lastFcff = lastRow.fcff;
-    let tv;
+    let tv, tvPv, stage2Pv = 0;
     if (terminalMethod === "exitMultiple") {
       // Exit EV/EBITDA: terminal value = lastYearEBITDA × exitMultiple (undiscounted)
       tv = lastRow.ebitda * exitMultiple;
+      // Mid-year convention also applies to terminal value: discount factor
+      // is 1/(1+WACC)^(N − 0.5), aligning with the per-year FCFF treatment
+      // above and the Excel's `(${nF}-0.5)` exponent on the TV PV line.
+      tvPv = tv * (1 / Math.pow(1 + r, horizon - 0.5));
     } else {
-      tv = (lastFcff * (1 + gT)) / (r - gT);
+      ({ tv, tvPv, stage2Pv } = perpetuityPV(lastRow, r, gT));
     }
-    // Mid-year convention also applies to terminal value: discount factor
-    // is 1/(1+WACC)^(N − 0.5), aligning with the per-year FCFF treatment
-    // above and the Excel's `(${nF}-0.5)` exponent on the TV PV line.
-    const tvPv   = tv * (1 / Math.pow(1 + r, horizon - 0.5));
     const ev     = pvSum + tvPv;
     const equity = ev - (dcfIn.netDebt || 0);
     const perShare = equity / dcfIn.sharesOut;
-    return { rows, pvExplicit: pvSum, tv, tvPv, ev, equity, perShare, terminalShare: tvPv / ev };
+    return { rows, pvExplicit: pvSum, tv, tvPv, stage2Pv, ev, equity, perShare, terminalShare: tvPv / ev };
   }
   const base = schedule(dcfIn.growthY1_5, 0);
   const bull = schedule(dcfIn.growthY1_5 + 4, 2);
@@ -353,7 +400,7 @@ function institutionalDCF(bundle, st, dcfIn, growth, ov = {}) {
   const debt = _debtForWacc;
   const mcap = dcfIn.sharesOut * (dcfIn.currentPrice || base.perShare);
   const wd = (_mcapInit > 0) ? _wdInit : ((debt + mcap) > 0 ? debt / (debt + mcap) : 0);
-  const waccBuild = { rf, beta, erp, costEquity, costDebt, weightEquity: (1 - wd) * 100, weightDebt: wd * 100, taxRate: taxRate * 100, wacc: dcfIn.wacc };
+  const waccBuild = { rf, beta, erp, premium: _premW, costEquity, costDebt, costDebtPre: _kdPre, kdTax: _kdTax * 100, weightEquity: (1 - wd) * 100, weightDebt: wd * 100, taxRate: taxRate * 100, wacc: dcfIn.wacc };
 
   // sensitivity grid (per-share, base assumptions)
   const sens = [];
@@ -364,11 +411,11 @@ function institutionalDCF(bundle, st, dcfIn, growth, ov = {}) {
       const rr = (dcfIn.wacc + dw) / 100, gg = (dcfIn.terminalG + dg) / 100;
       if (rr <= gg && terminalMethod !== "exitMultiple") { row.push(null); continue; }
       const lastRow = base.rows[base.rows.length - 1];
-      const tv = terminalMethod === "exitMultiple"
-        ? lastRow.ebitda * exitMultiple
-        : (lastRow.fcff * (1 + gg)) / (rr - gg);
+      const tvPvS = terminalMethod === "exitMultiple"
+        ? (lastRow.ebitda * exitMultiple) / Math.pow(1 + rr, horizon - 0.5)
+        : perpetuityPV(lastRow, rr, gg).tvPv;
       let pvSum = 0; base.rows.forEach((rw, idx) => pvSum += rw.fcff / Math.pow(1 + rr, (idx + 1) - 0.5));
-      const ev = pvSum + tv / Math.pow(1 + rr, horizon - 0.5);
+      const ev = pvSum + tvPvS;
       row.push((ev - (dcfIn.netDebt || 0)) / dcfIn.sharesOut);
     }
     sens.push({ wacc: +(dcfIn.wacc + dw).toFixed(2), values: row });
@@ -425,7 +472,8 @@ function institutionalDCF(bundle, st, dcfIn, growth, ov = {}) {
     sharesOut: dcfIn.sharesOut, netDebt: dcfIn.netDebt, currentPrice: cp,
     forecastHorizon: horizon,
     terminalMethod, exitMultiple: terminalMethod === "exitMultiple" ? exitMultiple : null,
-    assumptions: { ebitdaMargin: ebitdaMargin * 100, depPctRev: depPctRev * 100, capexPctRev: capexPctRev * 100, taxRate: taxRate * 100, wcPctRev: wcPctRev * 100, growthY1_5: dcfIn.growthY1_5, fade: dcfIn.fade, terminalG: dcfIn.terminalG, wacc: dcfIn.wacc, forecastHorizon: horizon, terminalMethod, exitMultiple: terminalMethod === "exitMultiple" ? exitMultiple : null },
+    stage2: S2 && terminalMethod !== "exitMultiple" ? { years: S2.years, ronic: S2.ronic } : null,
+    assumptions: { ebitdaMargin: ebitdaMargin * 100, depPctRev: depPctRev * 100, capexPctRev: capexPctRev * 100, taxRate: taxRate * 100, wcPctRev: wcPctRev * 100, growthY1_5: dcfIn.growthY1_5, fade: dcfIn.fade, terminalG: dcfIn.terminalG, wacc: dcfIn.wacc, forecastHorizon: horizon, terminalMethod, exitMultiple: terminalMethod === "exitMultiple" ? exitMultiple : null, planDriven: !!PT },
     target: base.perShare, upside: cp ? (base.perShare / cp - 1) * 100 : null,
     tvWarn: base.terminalShare > 0.75,
   };
@@ -542,7 +590,7 @@ function ruleNarrative(pack) {
   if (blendedUpside != null) {
     // Score: +30% upside = 100, 0% = 50, -30% = 0
     const valScore = Math.max(0, Math.min(100, 50 + blendedUpside * (5 / 3)));
-    factors.push({ name: "Valuation", weight: 20, score: valScore, evidence: targetUpside != null ? `${targetUpside >= 0 ? "+" : ""}${targetUpside.toFixed(1)}% expected return to the ${targetPrice.toFixed(2)} target (DCF + relative valuation)` : blendedUpside >= 0 ? `+${blendedUpside.toFixed(1)}% blended upside (DCF + street consensus)` : `${blendedUpside.toFixed(1)}% blended position vs target` });
+    factors.push({ name: "Valuation", weight: 20, score: valScore, evidence: targetUpside != null ? `${targetUpside >= 0 ? "+" : ""}${targetUpside.toFixed(1)}% expected return to the ${targetPrice.toFixed(2)} target (${pack.valuationBasis === "market" ? "market-based methods" + (/Fair value \(/.test(pack.targetMethod || "") ? " + published fair value" : "") : "DCF + relative valuation"})` : blendedUpside >= 0 ? `+${blendedUpside.toFixed(1)}% blended upside (DCF + street consensus)` : `${blendedUpside.toFixed(1)}% blended position vs target` });
   }
 
   // 2. QUALITY (weight 18) — the same Business Quality Score that Equity Research shows.
@@ -778,7 +826,7 @@ function ruleNarrative(pack) {
 
   // -------- BUILD THE RATIONALE PARAGRAPH (the full audit trail) --------
   const factorsByWeight = factors.slice().sort((a, b) => b.weight - a.weight);
-  const recRationale = `Our ${recLong.toUpperCase()} call is the output of a composite scoring framework that weights ${factors.length} independent factors and aggregates them to a single 0-100 reading (${compositeScore.toFixed(0)}/100 here). The framework deliberately blends DCF intrinsic value with relative valuation, fundamental quality, moat durability, forensic health, earnings quality, growth momentum, balance-sheet strength, and street consensus — because using DCF alone would systematically under-rate quality compounders that the market correctly pays a premium for. Component breakdown: ${factorsByWeight.map((f) => `${f.name} ${f.score.toFixed(0)}/100`).join(" · ")}. Bands: ≥75 Strong Buy, 60-74 Buy, 40-59 Hold, 25-39 Sell, &lt;25 Strong Sell. The rating must also agree with the expected return to the target: Buy requires at least +${RATING_RULE.buyMin}%, Strong Buy at least +${RATING_RULE.strongBuyMin}%, and a Sell becomes Hold above +${RATING_RULE.sellCapUpside}%.${ratingNote ? " " + ratingNote : ""}`;
+  const recRationale = `Our ${recLong.toUpperCase()} call is the output of a composite scoring framework that weights ${factors.length} independent factors and aggregates them to a single 0-100 reading (${compositeScore.toFixed(0)}/100 here). The framework deliberately blends ${pack.valuationBasis === "market" ? "market-based valuation (peer multiples, PEG, residual income, dividend discount)" : "DCF intrinsic value with relative valuation"}, fundamental quality, moat durability, forensic health, earnings quality, growth momentum, balance-sheet strength, and street consensus — because ${pack.valuationBasis === "market" ? "any single valuation method" : "using DCF alone"} would systematically under-rate quality compounders that the market correctly pays a premium for. Component breakdown: ${factorsByWeight.map((f) => `${f.name} ${f.score.toFixed(0)}/100`).join(" · ")}. Bands: ≥75 Strong Buy, 60-74 Buy, 40-59 Hold, 25-39 Sell, &lt;25 Strong Sell. The rating must also agree with the expected return to the target: Buy requires at least +${RATING_RULE.buyMin}%, Strong Buy at least +${RATING_RULE.strongBuyMin}%, and a Sell becomes Hold above +${RATING_RULE.sellCapUpside}%.${ratingNote ? " " + ratingNote : ""}`;
 
   return {
     mode: "deterministic",
@@ -815,113 +863,147 @@ function ruleNarrative(pack) {
 function forensicScores(bundle, st) {
   const i = st.income, b = st.balance, c = st.cashflow;
   if (i.length < 2 || b.length < 2) return null;
-  const li = i.at(-1), pi = i.at(-2), lb = b.at(-1), pb = b.at(-2), lc = c.at(-1) || {};
-  const sd = bundle.summaryDetail || {}, ks = bundle.defaultKeyStatistics || {}, pr = bundle.price || {};
+  const sd = bundle.summaryDetail || {}, pr = bundle.price || {};
   const safe = (x) => (x == null || !isFinite(x) ? null : x);
   const r = (x, d = 2) => (x == null || !isFinite(x) ? null : +x.toFixed(d));
+  const mcap = safe(sd.marketCap) ?? safe(pr.marketCap);
+  const byYear = (arr, y) => arr.find((x) => x.year === y) || {};
+  const fy = (y) => (y == null ? "—" : "FY" + String(y).slice(-2));
 
-  // ---- Piotroski F-Score (0–9): profitability, leverage/liquidity, efficiency ----
-  const pctv = (x) => (x == null || !isFinite(x) ? "—" : (x * 100).toFixed(1) + "%");
-  const f2 = (x) => (x == null || !isFinite(x) ? "—" : x.toFixed(2));
-  const pf = [];
-  const roa = div(li.netIncome, lb.assets), roaPrev = div(pi.netIncome, pb.assets);
-  const ltdA = div(lb.ltDebt, lb.assets), ltdAp = div(pb.ltDebt, pb.assets);
-  const curR = div(lb.currentAssets, lb.currentLiab), curRp = div(pb.currentAssets, pb.currentLiab);
-  const gmL = div(li.grossProfit, li.revenue), gmP = div(pi.grossProfit, pi.revenue);
-  const atL = div(li.revenue, lb.assets), atP = div(pi.revenue, pb.assets);
-  const ocfNi = div(lc.ocf, li.netIncome);
-  pf.push({ t: "Positive net income", ok: li.netIncome > 0, detail: `Net income ${li.netIncome > 0 ? "positive" : "negative"}`, benchmark: "> 0" });
-  pf.push({ t: "Positive operating cash flow", ok: (lc.ocf ?? 0) > 0, detail: `OCF ${(lc.ocf ?? 0) > 0 ? "positive" : "negative"}`, benchmark: "> 0" });
-  pf.push({ t: "ROA improved YoY", ok: roa != null && roaPrev != null && roa > roaPrev, detail: `ROA ${pctv(roa)} vs ${pctv(roaPrev)} prior`, benchmark: "current > prior" });
-  pf.push({ t: "OCF exceeds net income (accruals)", ok: (lc.ocf ?? 0) > (li.netIncome ?? 0), detail: `OCF/NI ${ocfNi == null ? "—" : f2(ocfNi) + "×"}`, benchmark: "OCF > NI" });
-  pf.push({ t: "Lower leverage (LT-debt / assets) YoY", ok: ltdA != null && ltdAp != null && ltdA <= ltdAp, detail: `${pctv(ltdA)} vs ${pctv(ltdAp)} prior`, benchmark: "current ≤ prior" });
-  pf.push({ t: "Higher current ratio YoY", ok: curR != null && curRp != null && curR > curRp, detail: `${f2(curR)}× vs ${f2(curRp)}× prior`, benchmark: "current > prior" });
-  pf.push({ t: "No share dilution", ok: true, detail: "Share count treated neutral (proxy)", benchmark: "no increase" });
-  pf.push({ t: "Higher gross margin YoY", ok: gmL != null && gmP != null && gmL > gmP, detail: `${pctv(gmL)} vs ${pctv(gmP)} prior`, benchmark: "current > prior" });
-  pf.push({ t: "Higher asset turnover YoY", ok: atL != null && atP != null && atL > atP, detail: `${f2(atL)}× vs ${f2(atP)}× prior`, benchmark: "current > prior" });
-  const fScore = pf.filter((x) => x.ok).length;
+  /* one year-pair (t vs t−1) → all three models with their full working */
+  function pair(k, withMarket) {
+    const li = i[k], pi = i[k - 1];
+    const lb = byYear(b, li.year), pb = byYear(b, pi.year), lc = byYear(c, li.year), pc = byYear(c, pi.year);
+    const Y = fy(li.year), P = fy(pi.year);
+    const notes = [];
+    const cogs = (x) => x.cogs ?? (x.revenue != null && x.grossProfit != null ? x.revenue - x.grossProfit : null);
+    const shares = (bal, inc) => safe(bal.sharesIssued) ?? safe(inc.basicAvgShares);
+    const totLiab = (bal) => safe(bal.totalLiabilities) ?? ((bal.ltDebt != null || bal.currentLiab != null) ? (bal.ltDebt ?? 0) + (bal.currentLiab ?? 0) : null);
 
-  // ---- Altman Z-Score (manufacturing form) ----
-  const wc = (lb.currentAssets ?? 0) - (lb.currentLiab ?? 0);
-  const ta = lb.assets, mcap = safe(sd.marketCap) ?? safe(pr.marketCap);
-  const totalLiab = (lb.ltDebt ?? 0) + (lb.currentLiab ?? 0);
-  const retained = lb.retainedEarnings ?? (lb.equity != null ? lb.equity * 0.6 : null); // estimate if absent
-  let zComponents = null, zScore = null;
-  if (ta) {
-    const z1 = div(wc, ta), z2 = div(retained, ta), z3 = div(li.ebit ?? li.opIncome, ta),
-          z4 = div(mcap, totalLiab), z5 = div(li.revenue, ta);
-    if ([z1, z2, z3, z4, z5].every((x) => x != null)) {
-      zScore = 1.2 * z1 + 1.4 * z2 + 3.3 * z3 + 0.6 * z4 + 1.0 * z5;
-      zComponents = { wcTa: r(z1), reTa: r(z2), ebitTa: r(z3), mveTl: r(z4), salesTa: r(z5) };
+    // ---- Piotroski F-Score (0–9) ----
+    const roa = div(li.netIncome, lb.assets), roaP = div(pi.netIncome, pb.assets);
+    const ltdA = div(lb.ltDebt ?? 0, lb.assets), ltdAp = div(pb.ltDebt ?? 0, pb.assets);
+    const cr = div(lb.currentAssets, lb.currentLiab), crP = div(pb.currentAssets, pb.currentLiab);
+    const gm = div(li.grossProfit, li.revenue), gmP = div(pi.grossProfit, pi.revenue);
+    const at = div(li.revenue, lb.assets), atP = div(pi.revenue, pb.assets);
+    const sh = shares(lb, li), shP = shares(pb, pi);
+    const pct = (x) => (x == null ? "—" : (x * 100).toFixed(1) + "%"), x2 = (x) => (x == null ? "—" : x.toFixed(2) + "×");
+    const T = (key, t, formula, ok, detail, inputs, na) => ({ key, t, formula, ok: !!ok && !na, na: !!na, detail, inputs, benchmark: formula });
+    const pf = [
+      T("ni", "Positive net income", "NI > 0", li.netIncome > 0, `NI ${Y} ${li.netIncome > 0 ? "> 0" : "≤ 0"}`, [{ label: "Net income", cur: li.netIncome }], li.netIncome == null),
+      T("ocf", "Positive operating cash flow", "OCF > 0", (lc.ocf ?? 0) > 0, `OCF ${Y} ${(lc.ocf ?? 0) > 0 ? "> 0" : "≤ 0"}`, [{ label: "Operating cash flow", cur: lc.ocf }], lc.ocf == null),
+      T("roa", "ROA improved YoY", "Current ROA > Prior ROA (ROA = NI ÷ Total assets)", roa != null && roaP != null && roa > roaP, `${pct(roa)} vs ${pct(roaP)} prior`, [{ label: "Net income", cur: li.netIncome, prev: pi.netIncome }, { label: "Total assets", cur: lb.assets, prev: pb.assets }], roa == null || roaP == null),
+      T("accr", "OCF exceeds net income", "OCF > NI", (lc.ocf ?? -Infinity) > (li.netIncome ?? Infinity), `OCF/NI ${x2(div(lc.ocf, li.netIncome))}`, [{ label: "Operating cash flow", cur: lc.ocf }, { label: "Net income", cur: li.netIncome }], lc.ocf == null || li.netIncome == null),
+      T("lev", "Lower leverage YoY", "Current LT debt ÷ Assets < Prior", ltdA != null && ltdAp != null && ltdA <= ltdAp, `${pct(ltdA)} vs ${pct(ltdAp)} prior`, [{ label: "Long-term debt", cur: lb.ltDebt, prev: pb.ltDebt }, { label: "Total assets", cur: lb.assets, prev: pb.assets }], ltdA == null || ltdAp == null),
+      T("cr", "Higher current ratio YoY", "Current ratio > Prior (CA ÷ CL)", cr != null && crP != null && cr > crP, `${x2(cr)} vs ${x2(crP)} prior`, [{ label: "Current assets", cur: lb.currentAssets, prev: pb.currentAssets }, { label: "Current liabilities", cur: lb.currentLiab, prev: pb.currentLiab }], cr == null || crP == null),
+      T("dil", "No share dilution", "Current shares ≤ Prior shares", sh != null && shP != null && sh <= shP * 1.001, sh != null && shP != null ? `${(sh / 1e7).toFixed(2)} Cr vs ${(shP / 1e7).toFixed(2)} Cr shares` : "share count not disclosed", [{ label: "Shares outstanding", cur: sh, prev: shP, unit: "shares" }], sh == null || shP == null),
+      T("gm", "Higher gross margin YoY", "Current GM > Prior GM (GM = Gross profit ÷ Revenue)", gm != null && gmP != null && gm > gmP, `${pct(gm)} vs ${pct(gmP)} prior`, [{ label: "Gross profit", cur: li.grossProfit, prev: pi.grossProfit }, { label: "Revenue", cur: li.revenue, prev: pi.revenue }], gm == null || gmP == null),
+      T("at", "Higher asset turnover YoY", "Current asset turnover > Prior (Revenue ÷ Total assets)", at != null && atP != null && at > atP, `${x2(at)} vs ${x2(atP)} prior`, [{ label: "Revenue", cur: li.revenue, prev: pi.revenue }, { label: "Total assets", cur: lb.assets, prev: pb.assets }], at == null || atP == null),
+    ];
+    const fScore = pf.filter((x) => x.ok).length, fTested = pf.filter((x) => !x.na).length;
+
+    // ---- Altman Z-Score (original public-manufacturer form) ----
+    let altman = null;
+    if (withMarket && lb.assets) {
+      const ta = lb.assets, wc = lb.currentAssets != null && lb.currentLiab != null ? lb.currentAssets - lb.currentLiab : null;
+      let re = safe(lb.retainedEarnings);
+      if (re == null && lb.equity != null) { re = lb.equity - (lb.shareCapital ?? 0); notes.push(`Retained earnings not disclosed for ${Y}; approximated as shareholders' equity less share capital.`); }
+      const tl = totLiab(lb), ebit = li.ebit ?? li.opIncome;
+      const comps = [
+        { key: "X1", comp: "wcTa", label: "Working capital / Total assets", formula: "(Current assets − Current liabilities) ÷ Total assets", weight: 1.2, num: wc, den: ta, inputs: [{ label: "Current assets", cur: lb.currentAssets }, { label: "Current liabilities", cur: lb.currentLiab }, { label: "Total assets", cur: ta }] },
+        { key: "X2", comp: "reTa", label: "Retained earnings / Total assets", formula: "Retained earnings ÷ Total assets", weight: 1.4, num: re, den: ta, inputs: [{ label: "Retained earnings", cur: re }, { label: "Total assets", cur: ta }] },
+        { key: "X3", comp: "ebitTa", label: "EBIT / Total assets", formula: "EBIT ÷ Total assets", weight: 3.3, num: ebit, den: ta, inputs: [{ label: "EBIT", cur: ebit }, { label: "Total assets", cur: ta }] },
+        { key: "X4", comp: "mveTl", label: "Market value of equity / Total liabilities", formula: "Market capitalisation ÷ Total liabilities", weight: 0.6, num: mcap, den: tl, inputs: [{ label: "Market capitalisation (current)", cur: mcap }, { label: "Total liabilities", cur: tl }] },
+        { key: "X5", comp: "salesTa", label: "Sales / Total assets", formula: "Revenue ÷ Total assets", weight: 1.0, num: li.revenue, den: ta, inputs: [{ label: "Revenue", cur: li.revenue }, { label: "Total assets", cur: ta }] },
+      ].map((x) => { const ratio = div(x.num, x.den); return { ...x, ratio: r(ratio, 3), contribution: ratio == null ? null : r(ratio * x.weight, 3) }; });
+      if (comps.every((x) => x.ratio != null)) altman = { score: r(comps.reduce((s, x) => s + x.contribution, 0)), detail: comps };
+      if (safe(lb.totalLiabilities) == null) notes.push(`Total liabilities not disclosed for ${Y}; long-term debt plus current liabilities used.`);
     }
+
+    // ---- Beneish M-Score (8 variables) ----
+    const aqBase = (bal) => (bal.assets && bal.currentAssets != null && bal.ppe != null ? 1 - (bal.currentAssets + bal.ppe) / bal.assets : null);
+    const depRate = (cf, bal) => (cf.dep != null && bal.ppe != null && cf.dep + bal.ppe ? cf.dep / (cf.dep + bal.ppe) : null);
+    const lev = (bal) => div(totLiab(bal), bal.assets);
+    const V = (key, name, formula, value, inputs, weight, bench, dflt = 1) => {
+      const ok = value != null && isFinite(value);
+      if (!ok) notes.push(`${key} could not be computed for ${Y} (input not disclosed) — set to the neutral ${dflt} in the M-Score.`);
+      const v = ok ? value : dflt;
+      return { key, name, formula, value: r(v, 3), computed: ok, weight, contribution: r(v * weight, 3), inputs, benchmark: bench };
+    };
+    const ben = [
+      V("DSRI", "Days Sales in Receivables Index", "(Receivables ÷ Revenue)ₜ ÷ (Receivables ÷ Revenue)ₜ₋₁", div(div(lb.receivables, li.revenue), div(pb.receivables, pi.revenue)), [{ label: "Trade receivables", cur: lb.receivables, prev: pb.receivables }, { label: "Revenue", cur: li.revenue, prev: pi.revenue }], 0.92, "≈1 normal · >1 receivables rising faster than sales"),
+      V("GMI", "Gross Margin Index", "Gross marginₜ₋₁ ÷ Gross marginₜ", div(gmP, gm), [{ label: "Gross profit", cur: li.grossProfit, prev: pi.grossProfit }, { label: "Revenue", cur: li.revenue, prev: pi.revenue }], 0.528, "≈1 normal · >1 margins deteriorating"),
+      V("AQI", "Asset Quality Index", "[1 − (CA + PPE) ÷ TA]ₜ ÷ [1 − (CA + PPE) ÷ TA]ₜ₋₁", div(aqBase(lb), aqBase(pb)), [{ label: "Current assets", cur: lb.currentAssets, prev: pb.currentAssets }, { label: "Net PPE", cur: lb.ppe, prev: pb.ppe }, { label: "Total assets", cur: lb.assets, prev: pb.assets }], 0.404, "≈1 normal · >1 more soft / intangible assets"),
+      V("SGI", "Sales Growth Index", "Revenueₜ ÷ Revenueₜ₋₁", div(li.revenue, pi.revenue), [{ label: "Revenue", cur: li.revenue, prev: pi.revenue }], 0.892, "≈1 normal · high growth raises pressure to manage earnings"),
+      V("DEPI", "Depreciation Index", "[Dep ÷ (Dep + PPE)]ₜ₋₁ ÷ [Dep ÷ (Dep + PPE)]ₜ", div(depRate(pc, pb), depRate(lc, lb)), [{ label: "Depreciation & amortisation", cur: lc.dep, prev: pc.dep }, { label: "Net PPE", cur: lb.ppe, prev: pb.ppe }], 0.115, "≈1 normal · >1 depreciating more slowly"),
+      V("SGAI", "SG&A Expense Index", "(SG&A ÷ Revenue)ₜ ÷ (SG&A ÷ Revenue)ₜ₋₁", div(div(li.sga, li.revenue), div(pi.sga, pi.revenue)), [{ label: "SG&A expenses", cur: li.sga, prev: pi.sga }, { label: "Revenue", cur: li.revenue, prev: pi.revenue }], -0.172, "≈1 normal · >1 rising overhead burden"),
+      V("LVGI", "Leverage Index", "(Total liabilities ÷ TA)ₜ ÷ (Total liabilities ÷ TA)ₜ₋₁", div(lev(lb), lev(pb)), [{ label: "Total liabilities", cur: totLiab(lb), prev: totLiab(pb) }, { label: "Total assets", cur: lb.assets, prev: pb.assets }], -0.327, "≈1 normal · >1 rising leverage"),
+      V("TATA", "Total Accruals to Total Assets", "(Net income − OCF) ÷ Total assets", div((li.netIncome ?? NaN) - (lc.ocf ?? NaN), lb.assets), [{ label: "Net income", cur: li.netIncome }, { label: "Operating cash flow", cur: lc.ocf }, { label: "Total assets", cur: lb.assets }], 4.679, "lower is better · high positive = accrual-driven profit", 0),
+    ];
+    const mScore = r(-4.84 + ben.reduce((s, x) => s + x.contribution, 0));
+
+    // ---- cash, working capital ----
+    const ocfNi = div(lc.ocf, li.netIncome), fcfM = div(lc.fcf, li.revenue), accr = div((li.netIncome ?? NaN) - (lc.ocf ?? NaN), lb.assets);
+    const rd = div(lb.receivables, li.revenue), idays = div(lb.inventory, cogs(li)), pdays = div(lb.payables, cogs(li));
+    return {
+      year: li.year, prevYear: pi.year, Y, P, pf, fScore, fTested, altman, ben, mScore, notes,
+      cash: { ocfNi, fcfM, accr, fcfNi: div(lc.fcf, li.netIncome), capexRev: div(lc.capex, li.revenue) },
+      wc: { recvDays: rd == null ? null : rd * 365, invDays: idays == null ? null : idays * 365, payDays: pdays == null ? null : pdays * 365, cr, wcTa: div(lb.currentAssets != null && lb.currentLiab != null ? lb.currentAssets - lb.currentLiab : null, lb.assets) },
+      gm,
+    };
   }
 
-  // ---- Beneish M-Score (8-variable) ----
-  let mScore = null, mComponents = null;
-  const cogsL = li.revenue != null && li.grossProfit != null ? li.revenue - li.grossProfit : null;
-  const cogsP = pi.revenue != null && pi.grossProfit != null ? pi.revenue - pi.grossProfit : null;
-  try {
-    const DSRI = div(div(lb.receivables, li.revenue), div(pb.receivables, pi.revenue));
-    const GMI = div(div(pi.grossProfit, pi.revenue), div(li.grossProfit, li.revenue));
-    const nonCA = (lb.assets ?? 0) - (lb.currentAssets ?? 0) - (lb.cash ?? 0);
-    const nonCAp = (pb.assets ?? 0) - (pb.currentAssets ?? 0) - (pb.cash ?? 0);
-    const AQI = div(div(nonCA, lb.assets), div(nonCAp, pb.assets));
-    const SGI = div(li.revenue, pi.revenue);
-    const DEPI = div(div(pi.dep ?? (c.at(-2) || {}).dep, ((pi.dep ?? 0) + (pb.assets ?? 0))), div(li.dep ?? lc.dep, ((li.dep ?? 0) + (lb.assets ?? 0))));
-    const SGAI = div(div(li.sga, li.revenue), div(pi.sga, pi.revenue)) ?? 1;
-    const LVGI = div(div(totalLiab, lb.assets), div((pb.ltDebt ?? 0) + (pb.currentLiab ?? 0), pb.assets));
-    const TATA = div(((li.netIncome ?? 0) - (lc.ocf ?? 0)), lb.assets);
-    const v = { DSRI: DSRI ?? 1, GMI: GMI ?? 1, AQI: AQI ?? 1, SGI: SGI ?? 1, DEPI: DEPI ?? 1, SGAI: SGAI ?? 1, LVGI: LVGI ?? 1, TATA: TATA ?? 0 };
-    mScore = -4.84 + 0.92 * v.DSRI + 0.528 * v.GMI + 0.404 * v.AQI + 0.892 * v.SGI + 0.115 * v.DEPI - 0.172 * v.SGAI + 4.679 * v.TATA - 0.327 * v.LVGI;
-    mComponents = Object.fromEntries(Object.entries(v).map(([k, val]) => [k, r(val)]));
-  } catch (e) { mScore = null; }
+  const L = pair(i.length - 1, true);
+  // year-by-year history (Altman needs a market value for each year, which only exists for today — so it is left out)
+  const history = [];
+  for (let k = 1; k < i.length; k++) {
+    const p = k === i.length - 1 ? L : pair(k, false);
+    history.push({ year: p.year, fScore: p.fScore, fTested: p.fTested, mScore: p.mScore, ocfNi: r(p.cash.ocfNi), fcfMargin: p.cash.fcfM == null ? null : r(p.cash.fcfM * 100, 1), accrual: p.cash.accr == null ? null : r(p.cash.accr * 100, 1), grossMargin: p.gm == null ? null : r(p.gm * 100, 1), recvDays: r(p.wc.recvDays, 0), invDays: r(p.wc.invDays, 0), payDays: r(p.wc.payDays, 0), ccc: p.wc.recvDays != null && p.wc.invDays != null && p.wc.payDays != null ? r(p.wc.recvDays + p.wc.invDays - p.wc.payDays, 0) : null, currentRatio: r(p.wc.cr), wcTa: p.wc.wcTa == null ? null : r(p.wc.wcTa * 100, 1) });
+  }
 
-  // ---- cash conversion ----
-  const cashConv = div(lc.ocf, li.netIncome);
-  const fcfMargin = div(lc.fcf, li.revenue);
-  const accrualRatio = div((li.netIncome ?? 0) - (lc.ocf ?? 0), lb.assets);
-
-  // ---- grades ----
-  const fGrade = fScore >= 7 ? "Strong" : fScore >= 4 ? "Moderate" : "Weak";
+  const zScore = L.altman ? L.altman.score : null;
+  const fGrade = L.fScore >= 7 ? "Strong" : L.fScore >= 4 ? "Moderate" : "Weak";
   const zZone = zScore == null ? "n/a" : zScore > 2.99 ? "Safe" : zScore >= 1.81 ? "Grey" : "Distress";
-  const mFlag = mScore == null ? "n/a" : mScore > -1.78 ? "Elevated manipulation risk" : "Low manipulation risk";
-  const eqGrade = (() => {
-    let s = 0;
-    if (cashConv != null && cashConv >= 0.9) s++;
-    if (accrualRatio != null && Math.abs(accrualRatio) < 0.1) s++;
-    if (fScore >= 6) s++;
-    if (zZone === "Safe") s++;
-    if (mScore != null && mScore < -1.78) s++;
-    return s >= 4 ? "A" : s === 3 ? "B" : s === 2 ? "C" : "D";
-  })();
+  const mFlag = L.mScore == null ? "n/a" : L.mScore > -1.78 ? "Elevated manipulation risk" : "Low manipulation risk";
+  const cashConv = L.cash.ocfNi, accrualRatio = L.cash.accr;
+  const eqChecks = [
+    { label: "Cash conversion (OCF ÷ NI) ≥ 0.90×", value: cashConv == null ? "—" : cashConv.toFixed(2) + "×", pass: cashConv != null && cashConv >= 0.9 },
+    { label: "Accrual ratio within ±10% of assets", value: accrualRatio == null ? "—" : (accrualRatio * 100).toFixed(1) + "%", pass: accrualRatio != null && Math.abs(accrualRatio) < 0.1 },
+    { label: "Piotroski F-Score ≥ 6", value: `${L.fScore}/9`, pass: L.fScore >= 6 },
+    { label: "Altman Z in the safe zone (> 2.99)", value: zScore == null ? "—" : zScore.toFixed(2), pass: zZone === "Safe" },
+    { label: "Beneish M-Score below −1.78", value: L.mScore == null ? "—" : L.mScore.toFixed(2), pass: L.mScore != null && L.mScore < -1.78 },
+  ];
+  const eqPass = eqChecks.filter((x) => x.pass).length;
+  const eqGrade = eqPass >= 4 ? "A" : eqPass === 3 ? "B" : eqPass === 2 ? "C" : "D";
 
-  // ---- year-wise figures feeding the models (most recent last) ----
-  const yN = Math.min(5, i.length);
-  const figures = [];
+  // year-wise figures feeding the models (most recent last)
+  const yN = Math.min(5, i.length), figures = [];
   for (let k = i.length - yN; k < i.length; k++) {
-    const inc = i[k] || {}, bal = b[k] || {}, cf = c[k] || {};
+    const inc = i[k] || {}, bal = byYear(b, inc.year), cf = byYear(c, inc.year);
     figures.push({
-      year: inc.year ?? bal.year ?? k,
-      revenue: safe(inc.revenue), grossProfit: safe(inc.grossProfit), ebit: safe(inc.ebit ?? inc.opIncome), netIncome: safe(inc.netIncome),
-      ocf: safe(cf.ocf), fcf: safe(cf.fcf),
-      assets: safe(bal.assets), currentAssets: safe(bal.currentAssets), currentLiab: safe(bal.currentLiab),
-      ltDebt: safe(bal.ltDebt), equity: safe(bal.equity), receivables: safe(bal.receivables), inventory: safe(bal.inventory),
+      year: inc.year, revenue: safe(inc.revenue), grossProfit: safe(inc.grossProfit), ebit: safe(inc.ebit ?? inc.opIncome), netIncome: safe(inc.netIncome), sga: safe(inc.sga),
+      ocf: safe(cf.ocf), fcf: safe(cf.fcf), capex: safe(cf.capex), dep: safe(cf.dep),
+      assets: safe(bal.assets), currentAssets: safe(bal.currentAssets), currentLiab: safe(bal.currentLiab), totalLiabilities: safe(bal.totalLiabilities),
+      ltDebt: safe(bal.ltDebt), equity: safe(bal.equity), retainedEarnings: safe(bal.retainedEarnings), ppe: safe(bal.ppe),
+      receivables: safe(bal.receivables), inventory: safe(bal.inventory), payables: safe(bal.payables),
     });
   }
-
-  // ---- raw inputs behind the Altman ratios (calculation backup) ----
-  const zBackup = zComponents ? { workingCapital: r(wc, 0), totalAssets: r(ta, 0), retainedEarnings: r(retained, 0), ebit: r(li.ebit ?? li.opIncome, 0), marketValueEquity: r(mcap, 0), totalLiabilities: r(totalLiab, 0), sales: r(li.revenue, 0) } : null;
-
-  const altmanBench = { wcTa: "higher is safer", reTa: "higher is safer", ebitTa: "higher is safer", mveTl: "higher is safer", salesTa: "higher is safer" };
-  const beneishBench = { DSRI: "≈1 normal; ≫1 = receivables inflating", GMI: "≈1 normal; >1 = margins deteriorating", AQI: "≈1 normal; >1 = softer assets", SGI: "≈1 normal; ≫1 = growth pressure to manage", DEPI: "≈1 normal; >1 = slowing depreciation", SGAI: "≈1 normal; >1 = cost creep", LVGI: "≈1 normal; >1 = rising leverage", TATA: "lower is better; high = accrual-driven profit" };
-
+  const A = L.altman;
   return {
-    piotroski: { score: fScore, max: 9, grade: fGrade, components: pf },
-    altman: { score: r(zScore), zone: zZone, components: zComponents, backup: zBackup, benchmarks: altmanBench, weights: { wcTa: 1.2, reTa: 1.4, ebitTa: 3.3, mveTl: 0.6, salesTa: 1.0 } },
-    beneish: { score: r(mScore), flag: mFlag, components: mComponents, threshold: -1.78, benchmarks: beneishBench },
-    cash: { cashConversion: r(cashConv), fcfMargin: fcfMargin != null ? r(fcfMargin * 100, 1) : null, accrualRatio: accrualRatio != null ? r(accrualRatio * 100, 1) : null },
-    earningsQualityGrade: eqGrade,
-    figures,
+    years: { current: L.year, prior: L.prevYear, label: `${L.Y} vs ${L.P}` },
+    source: "Annual consolidated financial statements (income statement, balance sheet, cash-flow statement) via the market-data provider; market capitalisation is the latest quote.",
+    piotroski: { score: L.fScore, max: 9, tested: L.fTested, grade: fGrade, components: L.pf },
+    altman: {
+      score: zScore, zone: zZone, detail: A ? A.detail : null,
+      components: A ? Object.fromEntries(A.detail.map((x) => [x.comp, r(x.ratio)])) : null,
+      backup: A ? { workingCapital: r(A.detail[0].num, 0), totalAssets: r(A.detail[0].den, 0), retainedEarnings: r(A.detail[1].num, 0), ebit: r(A.detail[2].num, 0), marketValueEquity: r(A.detail[3].num, 0), totalLiabilities: r(A.detail[3].den, 0), sales: r(A.detail[4].num, 0) } : null,
+      weights: { wcTa: 1.2, reTa: 1.4, ebitTa: 3.3, mveTl: 0.6, salesTa: 1.0 },
+      benchmarks: { wcTa: "higher is safer", reTa: "higher is safer", ebitTa: "higher is safer", mveTl: "higher is safer", salesTa: "higher is safer" },
+    },
+    beneish: { score: L.mScore, flag: mFlag, threshold: -1.78, detail: L.ben, components: Object.fromEntries(L.ben.map((x) => [x.key, x.value])), benchmarks: Object.fromEntries(L.ben.map((x) => [x.key, x.benchmark])) },
+    cash: { cashConversion: r(cashConv), fcfMargin: L.cash.fcfM != null ? r(L.cash.fcfM * 100, 1) : null, accrualRatio: accrualRatio != null ? r(accrualRatio * 100, 1) : null, fcfToNi: r(L.cash.fcfNi), capexToRevenue: L.cash.capexRev != null ? r(L.cash.capexRev * 100, 1) : null },
+    earningsQualityGrade: eqGrade, eqChecks, eqPass,
+    history, figures, notes: [...new Set(L.notes)],
   };
 }
 
@@ -974,7 +1056,7 @@ function riskAssessment({ ratios, forensic, dcf, growth, variance, beta, price, 
       tv > 75 ? "Cross-check against exit-multiple and relative methods; haircut the perpetuity." : "Explicit forecast carries a healthy share of value.");
     if (dcf.upside != null) add("Valuation", "Downside to fair value",
       dcf.upside < -10 ? 5 : dcf.upside < 0 ? 4 : dcf.upside < 15 ? 2 : 1, 4,
-      `Base-case DCF implies ${dcf.upside >= 0 ? "+" : ""}${dcf.upside.toFixed(1)}% versus the current price.`,
+      `${dcf.label || "Base-case DCF"} implies ${dcf.upside >= 0 ? "+" : ""}${dcf.upside.toFixed(1)}% versus the current price.`,
       dcf.upside < 0 ? "Price already discounts the base case; demand a margin of safety." : "Valuation offers a cushion to the thesis.");
   }
   const pe = g["P/E (TTM)"], peg = g["PEG"];
@@ -1050,98 +1132,236 @@ function riskAssessment({ ratios, forensic, dcf, growth, variance, beta, price, 
   };
 }
 
-/* ── MULTI-METHOD VALUATION: EV/EBITDA, P/E, PEG, Residual Income, DDM, SOTP ──
+/* ── MULTI-METHOD VALUATION ────────────────────────────────────────────────
    Every method returns its inputs and per-share output so the working is auditable.
-   Peer medians anchor the relative methods; DCF comes from institutionalDCF. */
-function multiValuation({ bundle, st, ratios, growth, dcf, peers, sharesOut, netDebt, price }) {
-  const fd = bundle.financialData || {}, ks = bundle.defaultKeyStatistics || {}, sd = bundle.summaryDetail || {};
+
+   Valuation basis:
+     "lab"    — the Modeling Lab DCF is switched on for this company (the house view):
+                40% DCF + 60% equal-weighted relative & fundamental methods.
+     "market" — default. Only market-data methods set the target: peer EV/EBITDA and P/E,
+                growth-adjusted peer P/E, the stock's own 5-year multiple, the street
+                consensus target, and a published third-party fair value (the 40% anchor
+                where one exists). Residual income and dividend discount are shown as
+                fundamental cross-checks with 0% weight.
+   Each method carries a role: "anchor" | "relative" | "market" | "crosscheck". */
+function multiValuation({ bundle, st, ratios, growth, dcf, peers, sharesOut, netDebt, price, fairValue = null, basis = dcf ? "lab" : "market", costEquityPct = null, bands = null, street = null, sector = "" }) {
+  const sd = bundle.summaryDetail || {};
   const li = st.income.at(-1) || {}, lb = st.balance.at(-1) || {};
   const g = Object.fromEntries((ratios || []).map((r) => [r.name, r.value]));
   const out = { methods: [], currency: bundle.price?.currency || "" };
   const median = (arr) => { const v = arr.filter((x) => x != null && isFinite(x)).sort((a, b) => a - b); return v.length ? v[Math.floor(v.length / 2)] : null; };
+  const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
   const peerSet = (peers || []).slice(1); // exclude self (index 0)
-  const add = (name, value, inputs, note) => out.methods.push({ name, value: value != null && isFinite(value) ? value : null, inputs, note });
+  const add = (name, value, inputs, note, role) => out.methods.push({ name, value: value != null && isFinite(value) ? value : null, inputs, note, role });
+  const market = basis !== "lab";
+  const isFin = /financial/i.test(sector || "");
 
   const ebitda = li.ebitda || li.opIncome, eps = sharesOut ? li.netIncome / sharesOut : null, bvps = sharesOut && lb.equity ? lb.equity / sharesOut : null;
-
-  // 1. EV/EBITDA
-  const peerEvEbitda = median(peerSet.map((p) => p.evEbitda));
-  if (peerEvEbitda && ebitda) { const ev = ebitda * peerEvEbitda, eq = ev - (netDebt || 0); add("EV / EBITDA", sharesOut ? eq / sharesOut : null,
-    { "Company EBITDA": ebitda, "Peer median EV/EBITDA": peerEvEbitda, "Implied EV": ev, "Less net debt": netDebt, "Equity value": eq }, `Applies the peer-median EV/EBITDA of ${peerEvEbitda.toFixed(1)}× to trailing EBITDA.`); }
-
-  // 2. P/E
-  const peerPe = median(peerSet.map((p) => p.pe));
-  if (peerPe && eps) add("P / E", eps * peerPe, { "Company EPS": eps, "Peer median P/E": peerPe }, `Applies the peer-median P/E of ${peerPe.toFixed(1)}× to trailing EPS.`);
-
-  // 3. PEG (fair P/E = growth rate at PEG 1.0)
+  const ke = (dcf && dcf.waccBuild && dcf.waccBuild.costEquity ? dcf.waccBuild.costEquity : costEquityPct ?? 11) / 100;
+  const payout = sd.payoutRatio != null && isFinite(sd.payoutRatio) ? clamp(sd.payoutRatio, 0, 1.5) : null;
+  const roe = (g["ROE"] ?? 12) / 100;
   const grRate = growth?.revCagr ?? growth?.revYoy;
-  if (eps && grRate && grRate > 0) { const fairPe = Math.min(grRate, 40); add("PEG", eps * fairPe,
-    { "Company EPS": eps, "Growth rate %": grRate, "Fair P/E (PEG=1.0)": fairPe }, `At a PEG of 1.0, a ${grRate.toFixed(1)}% grower justifies ~${fairPe.toFixed(0)}× earnings.`); }
 
-  // 4. Residual Income (Edwards-Bell-Ohlson, simplified): V = BV + Σ PV(RI), RI = NI − Ke×BV
-  if (bvps && eps) { const ke = (dcf && dcf.waccBuild ? dcf.waccBuild.costEquity : 11) / 100; const roe = (g["ROE"] ?? 12) / 100;
-    let bv = bvps, v = bvps, gFade = (grRate ? Math.min(grRate, 12) : 6) / 100;
-    for (let yr = 1; yr <= 5; yr++) { const ni = bv * roe; const ri = ni - ke * bv; v += ri / Math.pow(1 + ke, yr); bv += ni * (1 - 0.4); }
-    const tvRI = (bv * roe - ke * bv) / (ke - Math.min(gFade, ke - 0.02)) / Math.pow(1 + ke, 5);
-    add("Residual Income", v + (isFinite(tvRI) ? tvRI : 0), { "Book value/share": bvps, "Cost of equity %": ke * 100, "ROE %": roe * 100 }, "Equity value = book value plus the present value of returns earned above the cost of equity."); }
+  // 1. EV/EBITDA — peer median multiple on trailing EBITDA
+  const peerEvEbitda = median(peerSet.map((p) => p.evEbitda));
+  if (peerEvEbitda && ebitda && !isFin) { const ev = ebitda * peerEvEbitda, eq = ev - (netDebt || 0); add("EV / EBITDA", sharesOut ? eq / sharesOut : null,
+    { "Company EBITDA": ebitda, "Peer median EV/EBITDA": peerEvEbitda, "Implied EV": ev, "Less net debt": netDebt, "Equity value": eq }, `Applies the peer-median EV/EBITDA of ${peerEvEbitda.toFixed(1)}× to trailing EBITDA.`, "relative"); }
 
-  // 5. Dividend Discount (Gordon) — only if it pays a dividend
-  const divRate = sd.dividendRate ?? (sd.dividendYield && price ? sd.dividendYield * price : null);
-  if (divRate && divRate > 0) { const ke = (dcf && dcf.waccBuild ? dcf.waccBuild.costEquity : 11) / 100; const gD = Math.min((grRate ?? 4) / 100, ke - 0.02);
-    add("Dividend Discount", divRate * (1 + gD) / (ke - gD), { "Dividend/share": divRate, "Cost of equity %": ke * 100, "Div growth %": gD * 100 }, "Gordon growth model on the current dividend."); }
+  // 2. P/E — peer median multiple on trailing EPS
+  const peerPe = median(peerSet.map((p) => p.pe));
+  if (peerPe && eps && eps > 0) add("P / E", eps * peerPe, { "Company EPS": eps, "Peer median P/E": peerPe }, `Applies the peer-median P/E of ${peerPe.toFixed(1)}× to trailing EPS.`, "relative");
 
-  // 6. Sum-of-the-Parts — approximate by valuing core EBITDA at the peer multiple (single-segment proxy; flagged)
-  if (ebitda && peerEvEbitda && sharesOut) { const coreEv = ebitda * peerEvEbitda; const eq = coreEv - (netDebt || 0);
-    add("Sum-of-the-Parts", eq / sharesOut, { "Core EBITDA": ebitda, "Segment multiple": peerEvEbitda, "Net debt": netDebt }, "Single-segment approximation (segment-level data not available from the source); refine with disclosed segment EBITDA where published."); }
+  // 3. PEG — growth-adjusted peer P/E: the peer multiple scaled by the company's growth
+  //    relative to the peers' (bounded 0.5×–2×, so one outlier year cannot swing it)
+  const peerGr = median(peerSet.map((p) => p.revGrowth));
+  if (peerPe && eps && eps > 0 && grRate != null && grRate > 0 && peerGr != null && peerGr > 0) {
+    const rel = clamp(grRate / peerGr, 0.5, 2), fairPe = peerPe * rel;
+    add("PEG (growth-adjusted peer P/E)", eps * fairPe, { "Company EPS": eps, "Company revenue CAGR %": grRate, "Peer median revenue growth %": peerGr, "Growth relative to peers (bounded 0.5–2×)": rel, "Peer median P/E": peerPe, "Growth-adjusted P/E": fairPe },
+      `Peer P/E of ${peerPe.toFixed(1)}× scaled by growth of ${grRate.toFixed(1)}% vs ${peerGr.toFixed(1)}% for peers → ${fairPe.toFixed(1)}×.`, "relative");
+  }
 
-  // 7. DCF (from institutional model)
-  if (dcf && dcf.target) add("DCF (intrinsic)", dcf.target, { "WACC %": dcf.assumptions?.wacc, "Terminal growth %": dcf.assumptions?.terminalG, "Terminal value share %": dcf.terminalShare != null ? dcf.terminalShare * 100 : null }, "Five-year FCFF model from the Modeling Lab.");
+  // 4. Own-history multiple — trailing EPS (book for financials) at the stock's own 5-year median
+  const pe5 = bands && bands.pe && bands.pe.med, pb5 = bands && bands.pb && bands.pb.med;
+  if (pe5 && eps && eps > 0 && !isFin) add("Own 5-year median P/E", eps * pe5, { "Company EPS": eps, "5-year median P/E": pe5, "Current P/E": bands.pe.current },
+    `Trailing EPS at the stock's own 5-year median P/E of ${pe5.toFixed(1)}× — where the market has usually priced this business.`, "relative");
+  if (pb5 && bvps && isFin) add("Own 5-year median P/B", bvps * pb5, { "Book value/share": bvps, "5-year median P/B": pb5, "Current P/B": bands.pb.current },
+    `Book value per share at the stock's own 5-year median P/B of ${pb5.toFixed(2)}×.`, "relative");
 
-  // blended — weight DCF 40%, relative methods share 60%
-  const valid = out.methods.filter((m) => m.value != null && m.value > 0);
-  const dcfM = valid.find((m) => m.name.startsWith("DCF"));
-  const rel = valid.filter((m) => !m.name.startsWith("DCF") && m.name !== "Sum-of-the-Parts");
+  // 5. Residual income — book value + PV of returns above the cost of equity, with ROE
+  //    fading linearly to the cost of equity over a 10-year competitive-advantage period
+  if (bvps && eps && roe > 0) {
+    const b = clamp(1 - (payout ?? 0.4), 0, 0.9), N = 10;
+    let bv = bvps, v = bvps;
+    for (let yr = 1; yr <= N; yr++) { const r = roe + (ke - roe) * (yr / N); v += ((r - ke) * bv) / Math.pow(1 + ke, yr); bv += bv * r * b; }
+    add("Residual Income", v, { "Book value/share": bvps, "Starting ROE %": roe * 100, "Cost of equity %": ke * 100, "Retention %": b * 100, "Fade to cost of equity (years)": N },
+      "Book value plus the present value of returns above the cost of equity, with ROE fading to the cost of equity over 10 years (no excess return assumed beyond).", market ? "crosscheck" : "relative");
+  }
+
+  // 6. Dividend discount — only for dividend-centric companies (payout ≥ 40%)
+  const divRate = sd.dividendRate ?? sd.trailingAnnualDividendRate ?? (sd.dividendYield && price ? sd.dividendYield * price : null);
+  if (divRate && divRate > 0 && payout != null && payout >= 0.4) {
+    const gD = clamp(Math.min(roe * (1 - Math.min(payout, 1)), (grRate ?? 5) / 100), 0, ke - 0.02);
+    add("Dividend Discount", divRate * (1 + gD) / (ke - gD), { "Dividend/share": divRate, "Payout ratio %": payout * 100, "Cost of equity %": ke * 100, "Sustainable dividend growth %": gD * 100 },
+      "Gordon growth on the current dividend, growth capped at the sustainable rate ROE × (1 − payout). Applied because the company pays out at least 40% of earnings.", market ? "crosscheck" : "relative");
+  }
+
+  // 7. Sum-of-the-Parts — single-segment proxy at the peer multiple (shown, never weighted)
+  if (ebitda && peerEvEbitda && sharesOut && !isFin) { const coreEv = ebitda * peerEvEbitda; const eq = coreEv - (netDebt || 0);
+    add("Sum-of-the-Parts", eq / sharesOut, { "Core EBITDA": ebitda, "Segment multiple": peerEvEbitda, "Net debt": netDebt }, "Single-segment approximation (segment-level data not available from the source); refine with disclosed segment EBITDA where published.", "crosscheck"); }
+
+  // 8. Street consensus target — market basis only (the lab basis is the house view)
+  if (market && street && street.targetMean && (street.analysts ?? 0) >= 3)
+    add(`Street consensus target (${street.analysts} analysts)`, street.targetMean, { "Mean target": street.targetMean, "Analysts": street.analysts, "High": street.targetHigh, "Low": street.targetLow },
+      `Mean 12-month target of ${street.analysts} covering analysts.`, "market");
+
+  // 9. Intrinsic anchor — the Modeling Lab DCF (lab) or a published third-party fair value (market)
+  if (market && fairValue && fairValue.value) add(`Fair value (${fairValue.provider})`, fairValue.value, { "Price vs fair value %": -fairValue.discountPct, "Provider view": fairValue.label },
+    `${fairValue.provider}'s published fair-value estimate (${fairValue.label || "valuation"}; price ${fairValue.discountPct >= 0 ? "below" : "above"} fair value by ${Math.abs(fairValue.discountPct)}%).`, "anchor");
+  if (!market && dcf && dcf.target) add("DCF (intrinsic)", dcf.target, { "WACC %": dcf.assumptions?.wacc, "Terminal growth %": dcf.assumptions?.terminalG, "Terminal value share %": dcf.terminalShare != null ? dcf.terminalShare * 100 : null },
+    "FCFF model from the Modeling Lab (switched on for this company).", "anchor");
+
+  // blended — the anchor 40%, the weighted set shares 60% (100% without an anchor)
+  const ok = (m) => m.value != null && m.value > 0;
+  const anchor = out.methods.find((m) => m.role === "anchor" && ok(m));
+  const set = out.methods.filter((m) => ok(m) && (m.role === "relative" || m.role === "market"));
   let blended = null;
-  if (dcfM && rel.length) blended = dcfM.value * 0.4 + (rel.reduce((s, m) => s + m.value, 0) / rel.length) * 0.6;
-  else if (valid.length) blended = valid.reduce((s, m) => s + m.value, 0) / valid.length;
+  if (anchor && set.length) blended = anchor.value * 0.4 + (set.reduce((s, m) => s + m.value, 0) / set.length) * 0.6;
+  else if (set.length) blended = set.reduce((s, m) => s + m.value, 0) / set.length;
+  else if (anchor) blended = anchor.value;
+  for (const m of out.methods) m.weight = !ok(m) ? 0 : m === anchor ? (set.length ? 0.4 : 1) : set.includes(m) ? (anchor ? 0.6 : 1) / set.length : 0;
+  out.basis = market ? "market" : "lab";
+  const names = set.map((m) => m.name).join(", ");
+  out.targetMethod = anchor && set.length
+    ? `40% ${anchor.role === "anchor" && anchor.name.startsWith("DCF") ? "DCF (Modeling Lab)" : anchor.name} + 60% average of ${market ? "market-based" : "relative"} methods (${names})`
+    : set.length ? `Average of ${market ? "market-based" : "relative"} methods (${names})` : anchor ? anchor.name : null;
+  out.crossChecks = out.methods.filter((m) => ok(m) && m.role === "crosscheck").map((m) => m.name);
   out.blended = blended;
   out.upside = blended && price ? (blended / price - 1) * 100 : null;
   out.price = price;
   return out;
 }
 
-/* ── MONTE CARLO on the DCF: sample growth, margin and WACC; return the
-   distribution of per-share value. Uses a normal-ish draw via central-limit. */
-function monteCarlo(idcf, runs = 5000) {
-  if (!idcf || idcf.error || !idcf.base) return null;
-  const a = idcf.assumptions, shares = idcf.sharesOut, nd = idcf.netDebt, baseRev = idcf.base.rows[0]?.rev / (1 + a.growthY1_5 / 100);
-  if (!shares || !baseRev) return null;
-  const rnd = () => { let s = 0; for (let i = 0; i < 6; i++) s += Math.random(); return (s - 3) / 3; }; // ~N(0,1), bounded ±1
+/* ── MONTE CARLO on the DCF ─────────────────────────────────────────────────
+   Perturbs the model itself, not a simplified copy: each run shifts the base
+   case's own year-by-year paths and re-values them with the same mechanics as
+   institutionalDCF — mid-year discounting and the same terminal value (the
+   plan's stage-2 fade + NOPAT × (1 − g ÷ RONIC) perpetuity, or Gordon on the
+   last FCFF without a plan). With every shock at zero a run reproduces the
+   base-case value exactly, so the distribution is centred on the model.
+   Shocks (≈normal, ±1σ bounded to ±3σ): revenue growth ±2.5pp tapering to zero
+   by the last year, EBITDA margin ±10% relative, WACC ±1.0pp, terminal growth
+   ±0.5pp (kept ≥ 2.5pp below WACC). */
+/* ── TERMINAL VALUE CROSS-CHECK ──────────────────────────────────────────────
+   The same explicit forecast valued with seven terminal-value methods (the Excel model's
+   Terminal Value sheet computes the identical figures): the engine's value-driver fade,
+   Gordon growth on the last FCFF, capitalised earnings (NOPAT ÷ WACC), the H-model, and exit
+   multiples of revenue / EBITDA / EBIT at today's trading multiples. Each TV sits at the
+   horizon and is discounted at (1 + WACC)^(N − 0.5), like the model's. */
+function tradingMultiples(st, idcf) {
+  const li = (st.income || []).at(-1) || {}, lc = (st.cashflow || []).at(-1) || {};
+  const px = idcf.currentPrice || 0, ev = px * (idcf.sharesOut || 0) + (idcf.netDebt || 0);
+  const ebitda = li.ebitda || li.opIncome, dep = lc.dep != null ? Math.abs(lc.dep) : 0, ebit = ebitda != null ? ebitda - dep : null;
+  return { evRev: li.revenue ? ev / li.revenue : null, evEbitda: ebitda > 0 ? ev / ebitda : null, evEbit: ebit > 0 ? ev / ebit : null };
+}
+function tvCrossCheck(idcf, mult = {}) {
+  if (!idcf || idcf.error || !idcf.base || !(idcf.base.rows || []).length) return null;
+  const b = idcf.base, rows = b.rows, N = rows.length, last = rows[N - 1], a = idcf.assumptions;
+  const r = a.wacc / 100, g = a.terminalG / 100, df = 1 / Math.pow(1 + r, N - 0.5);
+  const nd = idcf.netDebt || 0, sh = idcf.sharesOut, px = idcf.currentPrice;
+  const H = Math.max(2, (idcf.stage2 && idcf.stage2.years) || 10), gH = last.growth / 100;
+  const perpetual = idcf.terminalMethod !== "exitMultiple";
+  const selKey = !perpetual ? "exitEbitda" : idcf.stage2 ? "vdf" : "gordon";
+  const m = (key, name, tv, basis) => {
+    if (tv == null || !isFinite(tv)) return { key, name, tv: null, basis };
+    const ev = b.pvExplicit + tv * df, ps = sh ? (ev - nd) / sh : null;
+    return { key, name, basis, tv, tvPv: tv * df, ev, perShare: ps, upside: px && ps != null ? (ps / px - 1) * 100 : null, tvShare: ev ? (tv * df) / ev * 100 : null, selected: key === selKey };
+  };
+  const exitEbitda = !perpetual ? idcf.exitMultiple : mult.evEbitda;
+  return {
+    horizon: N, wacc: a.wacc, terminalG: a.terminalG, selected: selKey,
+    methods: [
+      m("vdf", "Value driver fade (engine)", perpetual && idcf.stage2 ? b.tv : null, idcf.stage2 ? `${idcf.stage2.years}-yr fade to g, FCFF = NOPAT × (1 − g ÷ RONIC ${idcf.stage2.ronic.toFixed(1)}%)` : "needs the assumption plan"),
+      m("gordon", "Gordon growth", r > g ? (last.fcff * (1 + g)) / (r - g) : null, "last FCFF × (1 + g) ÷ (WACC − g)"),
+      m("capEarn", "Capitalised earnings", r > 0 ? last.nopat / r : null, "NOPAT ÷ WACC — no growth, no reinvestment"),
+      m("hModel", "H-model", r > g ? (last.fcff * (1 + g) + last.fcff * (H / 2) * (gH - g)) / (r - g) : null, `growth fades linearly from ${(gH * 100).toFixed(1)}% to g over ${H} years`),
+      m("exitRev", "Exit EV/Revenue", mult.evRev ? last.rev * mult.evRev : null, mult.evRev ? `${mult.evRev.toFixed(1)}× revenue (today's trading multiple)` : "n/a"),
+      m("exitEbitda", "Exit EV/EBITDA", exitEbitda ? last.ebitda * exitEbitda : null, exitEbitda ? `${(+exitEbitda).toFixed(1)}× EBITDA (${perpetual ? "today's trading multiple" : "your exit multiple"})` : "n/a"),
+      m("exitEbit", "Exit EV/EBIT", mult.evEbit ? last.ebit * mult.evEbit : null, mult.evEbit ? `${mult.evEbit.toFixed(1)}× EBIT (today's trading multiple)` : "n/a"),
+    ],
+  };
+}
+
+/* Seeded uniform stream (mulberry32) so a simulation is reproducible: the same seed gives the
+   same draws on the website and in the Excel export, which replays them through its own model. */
+const MC_SEED = 20260927;
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+/* the standard-normal shocks of each run, in draw order: WACC, terminal growth, revenue growth, margin */
+function mcDraws(runs = 5000, seed = MC_SEED) {
+  const u = mulberry32(seed);
+  const nrm = () => { let s = 0; for (let i = 0; i < 12; i++) s += u(); return Math.max(-3, Math.min(3, s - 6)); }; // ~N(0,1), bounded ±3σ
+  const out = [];
+  for (let n = 0; n < runs; n++) out.push([nrm(), nrm(), nrm(), nrm()]);
+  return out;
+}
+function monteCarlo(idcf, runs = 5000, { seed = MC_SEED } = {}) {
+  if (!idcf || idcf.error || !idcf.base || !(idcf.base.rows || []).length) return null;
+  const rows = idcf.base.rows, a = idcf.assumptions, shares = idcf.sharesOut, nd = idcf.netDebt || 0;
+  if (!shares) return null;
+  const N = rows.length, S2 = idcf.stage2 || null, exit = idcf.terminalMethod === "exitMultiple", exitMult = idcf.exitMultiple || 12;
+  const rev0 = rows[0].rev / (1 + rows[0].growth / 100);
+  // per-year ratios of the base case
+  const R = rows.map((r) => ({ g: r.growth / 100, m: r.margin / 100, dep: r.dep / r.rev, cap: r.capex / r.rev, tax: r.ebit ? r.tax / r.ebit : 0.25, wc: null }));
+  rows.forEach((r, i) => { const prev = i ? rows[i - 1].rev : rev0; R[i].wc = r.rev !== prev ? r.dWC / (r.rev - prev) : 0; });
+  const Z = mcDraws(runs, seed);
+  const value = (dg, dm, w, tg) => {
+    let rev = rev0, prev = rev0, pv = 0, last = null;
+    for (let y = 1; y <= N; y++) {
+      const k = R[y - 1], g = k.g + dg * Math.max(0, 1 - (y - 1) / Math.max(1, N - 1));
+      rev = prev * (1 + g);
+      const ebitda = rev * Math.min(0.6, Math.max(0.01, k.m * (1 + dm)));
+      const dep = rev * k.dep, ebit = ebitda - dep, nopat = ebit * (1 - k.tax);
+      const fcff = nopat + dep - rev * k.cap - (rev - prev) * k.wc;
+      pv += fcff / Math.pow(1 + w, y - 0.5);
+      last = { nopat, fcff, ebitda, g };
+      prev = rev;
+    }
+    let tvPv;
+    if (exit) tvPv = (last.ebitda * exitMult) / Math.pow(1 + w, N - 0.5);
+    else if (S2 && S2.ronic > 0 && last.nopat > 0) {
+      const ron = S2.ronic / 100, n2 = Math.max(0, Math.round(S2.years || 0));
+      let nop = last.nopat; tvPv = 0;
+      for (let j = 1; j <= n2; j++) { const gj = last.g + (tg - last.g) * (j / n2); nop *= 1 + gj; tvPv += (nop * (1 - Math.max(0, gj) / ron)) / Math.pow(1 + w, N + j - 0.5); }
+      tvPv += (nop * (1 + tg) * (1 - Math.max(0, tg) / ron)) / (w - tg) / Math.pow(1 + w, N + n2 - 0.5);
+    } else tvPv = ((last.fcff * (1 + tg)) / (w - tg)) / Math.pow(1 + w, N - 0.5);
+    return (pv + tvPv - nd) / shares;
+  };
+  const w0 = a.wacc / 100, g0 = a.terminalG / 100;
   const results = [];
-  // distributions: growth ±40% rel, margin ±15% rel, wacc ±1.2pp, terminalG ±0.8pp
   for (let n = 0; n < runs; n++) {
-    const growth = a.growthY1_5 * (1 + rnd() * 0.4) / 100;
-    const margin = (a.ebitdaMargin / 100) * (1 + rnd() * 0.15);
-    const wacc = (a.wacc + rnd() * 1.2) / 100;
-    const tg = Math.min((a.terminalG + rnd() * 0.8) / 100, wacc - 0.005);
-    const tax = a.taxRate / 100, capex = a.capexPctRev / 100, dep = a.depPctRev / 100, wc = a.wcPctRev / 100;
-    let rev = baseRev, pv = 0, fade = a.fade / 100, gr = growth, lastF = 0;
-    for (let y = 1; y <= 5; y++) { rev *= (1 + gr); gr = Math.max(tg, gr - fade); const ebitda = rev * margin; const ebit = ebitda - rev * dep; const nopat = ebit * (1 - tax); const reinv = rev * capex + (rev - rev / (1 + gr)) * wc; const fcff = nopat + rev * dep - rev * capex - (rev * wc * 0.3); lastF = fcff; pv += fcff / Math.pow(1 + wacc, y); }
-    const tv = (lastF * (1 + tg)) / (wacc - tg); const tvPv = tv / Math.pow(1 + wacc, 5);
-    const ev = pv + tvPv, eq = ev - nd; results.push(eq / shares);
+    const [zw, zt, zg, zm] = Z[n];
+    const w = w0 + zw * 0.010;
+    const tg = Math.min(g0 + zt * 0.005, w - 0.025);
+    const v = value(zg * 0.025, zm * 0.10, w, tg);
+    if (isFinite(v)) results.push(v);
   }
+  if (!results.length) return null;
   results.sort((x, y) => x - y);
-  const pctl = (p) => results[Math.floor(p * results.length)];
+  const pctl = (p) => results[Math.min(results.length - 1, Math.floor(p * results.length))];
   const mean = results.reduce((s, x) => s + x, 0) / results.length;
   const cur = idcf.currentPrice;
-  // histogram (20 buckets)
   const lo = pctl(0.02), hi = pctl(0.98), span = (hi - lo) || 1, buckets = 20;
   const hist = Array.from({ length: buckets }, (_, i) => ({ x: lo + (i + 0.5) * span / buckets, c: 0 }));
   results.forEach((v) => { if (v >= lo && v <= hi) { const idx = Math.min(buckets - 1, Math.floor((v - lo) / span * buckets)); hist[idx].c++; } });
   const probAbove = cur ? results.filter((v) => v > cur).length / results.length * 100 : null;
   return {
-    runs, mean, median: pctl(0.5), p5: pctl(0.05), p25: pctl(0.25), p75: pctl(0.75), p95: pctl(0.95),
+    runs: results.length, mean, median: pctl(0.5), p5: pctl(0.05), p25: pctl(0.25), p75: pctl(0.75), p95: pctl(0.95),
     min: results[0], max: results.at(-1), hist, currentPrice: cur, probAbove,
+    baseCheck: value(0, 0, w0, g0), base: idcf.base.perShare,
+    shocks: "growth ±2.5pp (tapering), EBITDA margin ±10% relative, WACC ±1.0pp, terminal growth ±0.5pp (1σ)",
+    seed, sigma: { wacc: 1.0, terminalG: 0.5, growth: 2.5, marginRel: 10 },
   };
 }
 
@@ -1201,18 +1421,20 @@ function assumptionEvidence(bundle, st, dcfIn) {
   }
 
   // ── WACC decomposition ────────────────────────────────────────────────
-  const beta = n(ks.beta) ?? 1.0;
-  const rf = isIndia ? 7.0 : 4.3;
-  const erp = isIndia ? 6.0 : 5.0;
-  const costEquity = rf + beta * erp;
+  // plan-driven inputs when the assumption engine supplied them (dcfIn.rationale), else legacy defaults
+  const R_ = dcfIn.rationale || {};
+  const beta = R_.beta != null && isFinite(+R_.beta) ? +R_.beta : (n(ks.beta) ?? 1.0);
+  const rf = R_.rf != null && isFinite(+R_.rf) ? +R_.rf : (isIndia ? 7.0 : 4.3);
+  const erp = R_.erp != null && isFinite(+R_.erp) ? +R_.erp : (isIndia ? 6.0 : 5.0);
+  const costEquity = rf + beta * erp + (+R_.premium || 0);
   const lbw = bal.at(-1) || {};
   const debt = (lbw.totalDebt > 0 ? lbw.totalDebt : ((lbw.ltDebt || 0) + (lbw.stDebt || 0) || n(fd.totalDebt))) || 0;   // incl. leases, as in the net-debt bridge
   const mcap_ = n(sd.marketCap) ?? n(pr.marketCap) ?? (dcfIn.sharesOut * (dcfIn.currentPrice || 0));
   const totalCap = debt + mcap_;
-  const wd = totalCap > 0 ? debt / totalCap : 0;
+  const wd = R_.wd != null && isFinite(+R_.wd) ? +R_.wd : totalCap > 0 ? debt / totalCap : 0;
   const taxRateLatest = taxSeries.at(-1) != null ? taxSeries.at(-1) / 100 : 0.25;
   const interestRate = inc.at(-1)?.interest && debt ? Math.abs(inc.at(-1).interest) / debt : null;
-  const costDebt = (interestRate ? interestRate * 100 : rf + 1.5) * (1 - taxRateLatest);
+  const costDebt = R_.kdPre != null && isFinite(+R_.kdPre) ? +R_.kdPre * (1 - (R_.kdTax != null ? +R_.kdTax / 100 : taxRateLatest)) : (interestRate ? interestRate * 100 : rf + 1.5) * (1 - taxRateLatest);
   const waccCalc = (1 - wd) * costEquity + wd * costDebt;
 
   // ── Sector classification (deterministic) ──────────────────────────────
@@ -1954,4 +2176,4 @@ function computeMultipleBands(monthly, st, sharesOut) {
   };
 }
 
-module.exports = { normStatements, computeRatios, computeGrowth, varianceAnalysis, dcfDefaults, runDCF, institutionalDCF, forensicScores, riskAssessment, multiValuation, monteCarlo, correlationMatrix, annVol, maxDrawdown, momentum, ruleNarrative, returns, stdev, assumptionEvidence, enrichDiagnostics, reverseDCF, tornadoAnalysis, computeDuPont, xirr, computeMultipleBands , moatAssessment, RATING_RULE };
+module.exports = { normStatements, computeRatios, computeGrowth, varianceAnalysis, dcfDefaults, runDCF, institutionalDCF, forensicScores, riskAssessment, multiValuation, monteCarlo, correlationMatrix, annVol, maxDrawdown, momentum, ruleNarrative, returns, stdev, assumptionEvidence, enrichDiagnostics, reverseDCF, tornadoAnalysis, computeDuPont, xirr, computeMultipleBands , moatAssessment, RATING_RULE, mcDraws, MC_SEED, tvCrossCheck, tradingMultiples };

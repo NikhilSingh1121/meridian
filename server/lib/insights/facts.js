@@ -96,7 +96,14 @@ function buildFacts(rep) {
     dcf_value_per_share: r2(idcf.base.perShare), bull_value_per_share: r2(idcf.bull && idcf.bull.perShare), bear_value_per_share: r2(idcf.bear && idcf.bear.perShare),
     sensitivity_value_range: (() => { const v = (idcf.sens || []).flatMap((s) => s.values || []).filter((x) => x != null); return v.length ? { min: r2(Math.min(...v)), max: r2(Math.max(...v)) } : null; })(),
     net_debt: S(idcf.netDebt),
-  } : null;
+  } : (d.valuation && d.valuation.methods ? {
+    // market basis — the Modeling Lab DCF is not switched on for this company
+    basis: "market",
+    method: m.targetMethod || "Average of relative valuation methods",
+    no_dcf_note: "No DCF is used in this report: the Modeling Lab DCF is not switched on for this company. Do not discuss a DCF value, WACC, terminal value or DCF assumptions.",
+    methods: d.valuation.methods.filter((x) => x.value != null && x.value > 0).map((x) => ({ method: x.name, value_per_share: r2(x.value), weight_pct: x.weight != null ? r1(x.weight * 100) : null, note: x.note })),
+    published_fair_value: m.fairValue ? { provider: m.fairValue.provider, value_per_share: r2(m.fairValue.value), view: m.fairValue.label, price_vs_fair_value_pct: r1(-m.fairValue.discountPct) } : null,
+  } : null);
 
   const fr = d.forensic;
   return {

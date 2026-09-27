@@ -135,7 +135,7 @@ visual:`<div class="learn-table">
 <ul><li>Receivables growing faster than revenue? (possible fictitious sales)</li>
 <li>OCF / Net Profit ≥ 80%? (earnings quality)</li>
 <li>Interest coverage ≥ 4×? (debt safety)</li></ul>`,
-interactive:`<p>M-Terminal's <b>Equity Research</b> tab loads 4 years of all three financial statements for any listed company — with color-coded YoY changes, margin trends, and automatic ratio computation.</p><button class="btn btn-amber" onclick="showTab('research')">→ Open Financial Statements</button>`,
+interactive:`<p>M-Terminal's <b>Company Analysis</b> tab loads 4 years of all three financial statements for any listed company — with color-coded YoY changes, margin trends, and automatic ratio computation.</p><button class="btn btn-amber" onclick="showTab('research')">→ Open Financial Statements</button>`,
 mistakes:`<ul>
 <li><b>Only reading the P&L headline.</b> Revenue and profit are most easily manipulated. Cash flow and balance sheet are where the truth hides.</li>
 <li><b>Trusting "adjusted EBITDA" blindly.</b> Companies strip out anything inconvenient. Read reported (Ind-AS/GAAP) numbers first.</li>
@@ -175,7 +175,7 @@ visual:`<div class="learn-table">
 <div class="lt-row"><span>P/E</span><span>Market Price / EPS</span><span>Context-dependent; compare within sector</span></div>
 <div class="lt-row"><span>EV/EBITDA</span><span>Enterprise Value / EBITDA</span><span>Compare to sector median</span></div>
 </div>`,
-interactive:`<p>M-Terminal computes 40+ ratios for any listed stock, benchmarked against peer medians — all in the Equity Research tab.</p><button class="btn btn-amber" onclick="showTab('research')">→ Open Ratio Analysis</button>`,
+interactive:`<p>M-Terminal computes 40+ ratios for any listed stock, benchmarked against peer medians — all in the Company Analysis tab.</p><button class="btn btn-amber" onclick="showTab('research')">→ Open Ratio Analysis</button>`,
 mistakes:`<ul>
 <li><b>Comparing ratios across sectors.</b> A bank's ROE is structurally different from a manufacturer's. Always compare within the same sector.</li>
 <li><b>Memorising absolute thresholds.</b> "ROE above 15% is good" — not always. Capital-light tech businesses earn 40–60% ROE. Context matters.</li>
@@ -280,7 +280,7 @@ visual:`<div class="learn-table">
 <div class="lt-row"><span>50–100×</span><span>High-growth expectation</span><span>New-age tech, fast-scaling platforms</span></div>
 <div class="lt-row"><span>Over 100×</span><span>Speculative</span><span>Early-stage listed startups</span></div>
 </div>`,
-interactive:`<p>Open <b>Equity Research</b> in M-Terminal — the Ratio Analysis panel shows trailing P/E, forward P/E, PEG, and how they compare to the peer median.</p><button class="btn btn-amber" onclick="showTab('research')">→ See P/E in Equity Research</button>`,
+interactive:`<p>Open <b>Company Analysis</b> in M-Terminal — the Ratio Analysis panel shows trailing P/E, forward P/E, PEG, and how they compare to the peer median.</p><button class="btn btn-amber" onclick="showTab('research')">→ See P/E in Company Analysis</button>`,
 mistakes:`<ul>
 <li><b>Comparing P/Es across sectors.</b> A 15× bank is not a 15× IT company. Sectors have structurally different fair P/Es.</li>
 <li><b>Trusting "low P/E = cheap" blindly.</b> Stocks can deserve low P/Es — structural decline, poor management, existential competition. A 5× value trap is worse than a 30× quality compounder.</li>
@@ -312,7 +312,7 @@ visual:`<div class="learn-table">
 <div class="lt-row"><span>Cost advantage</span><span>Moderate — scale can shift</span><span>Reliance, ACC Cement, Hindalco</span></div>
 <div class="lt-row"><span>Intangible assets</span><span>High if regulatory, lower if patent-only</span><span>CRISIL, BSE, specialty pharma</span></div>
 </div>`,
-interactive:`<p>M-Terminal's <b>Equity Research</b> tab computes a deterministic Moat Scorecard — rating each moat source (Wide / Narrow / None) from financial fingerprints like ROCE persistence and gross margin durability.</p><button class="btn btn-amber" onclick="showTab('research')">→ See the Economic Moat panel</button>`,
+interactive:`<p>M-Terminal's <b>Company Analysis</b> tab computes a deterministic Moat Scorecard — rating each moat source (Wide / Narrow / None) from financial fingerprints like ROCE persistence and gross margin durability.</p><button class="btn btn-amber" onclick="showTab('research')">→ See the Economic Moat panel</button>`,
 mistakes:`<ul>
 <li><b>Assuming moats are permanent.</b> Kodak had a moat. Nokia had a moat. Both were destroyed by technology shifts. Revisit moat assessments at least annually.</li>
 <li><b>Confusing brand awareness with brand moat.</b> Everyone knows VIP luggage (awareness). But people buy Samsonite without loyalty cost. Asian Paints genuinely has a brand moat; VIP has limited pricing power.</li>
@@ -458,7 +458,7 @@ visual:`<div class="learn-table">
 <div class="lt-row"><span>Bollinger Bands</span><span>Volatility and range</span><span>Price at lower band = potential reversal</span></div>
 <div class="lt-row"><span>Volume</span><span>Conviction behind moves</span><span>Breakout on high volume = more reliable</span></div>
 </div>`,
-interactive:`<p>M-Terminal's Market Intelligence shows live charts for major indices. For individual stocks, open Equity Research and the Overview panel shows 1Y price history.</p><button class="btn btn-amber" onclick="showTab('markets')">→ Open Market Intelligence</button>`,
+interactive:`<p>M-Terminal's Market Intelligence shows live charts for major indices. For individual stocks, open Company Analysis and the Overview panel shows 1Y price history.</p><button class="btn btn-amber" onclick="showTab('markets')">→ Open Market Intelligence</button>`,
 mistakes:`<ul>
 <li><b>Using TA as a standalone system without fundamentals.</b> A stock in a perfect technical setup can collapse on undisclosed fraud, debt crisis, or sector disruption. Always know what you own.</li>
 <li><b>Over-fitting patterns.</b> After the fact, you can find patterns in any chart. The test is whether the pattern predicts forward — most don't.</li>
@@ -591,7 +591,7 @@ visual:`<div class="learn-table">
 <div class="lt-row"><span>P/E vs listed peers</span><span>IPO priced cheap or premium?</span><span>Compute from IPO EPS + price band</span></div>
 <div class="lt-row"><span>OFS vs Fresh Issue</span><span>OFS = promoters cashing out. Fresh = growth capital.</span><span>DRHP issue structure section</span></div>
 </div>`,
-interactive:`<p>To analyse an IPO, start with business fundamentals — run listed peers through M-Terminal's Equity Research to understand industry valuation benchmarks, then compare the IPO price band.</p><button class="btn btn-amber" onclick="showTab('research')">→ Open Equity Research to compare peers</button>`,
+interactive:`<p>To analyse an IPO, start with business fundamentals — run listed peers through M-Terminal's Company Analysis to understand industry valuation benchmarks, then compare the IPO price band.</p><button class="btn btn-amber" onclick="showTab('research')">→ Open Company Analysis to compare peers</button>`,
 mistakes:`<ul>
 <li><b>Treating IPO allotment like a lottery win.</b> Many IPOs that get oversubscribed 100× still disappoint on listing day. Allotment odds are poor; don't build a financial plan around listing gains.</li>
 <li><b>Ignoring the OFS/Fresh Issue split.</b> 80% OFS = company gets no cash; money goes to VCs and promoters. Fresh issue = company gets cash to grow. OFS = founders/VCs exit.</li>
@@ -660,7 +660,7 @@ visual:`<div class="learn-table">
 <div class="lt-row"><span>Cash conversion</span><span>OCF consistently ≥ 80% of net profit</span><span>Profits not converting to cash for multiple years</span></div>
 <div class="lt-row"><span>Dividend history</span><span>Consistent, growing dividends</span><span>Profits retained but never distributed despite no growth</span></div>
 </div>`,
-interactive:`<p>M-Terminal's <b>Equity Research → Ownership Analysis</b> panel shows promoter holding %, institutional ownership, insider transactions, and net buying/selling.</p><button class="btn btn-amber" onclick="showTab('research')">→ Open Ownership Analysis</button>`,
+interactive:`<p>M-Terminal's <b>Company Analysis → Ownership Analysis</b> panel shows promoter holding %, institutional ownership, insider transactions, and net buying/selling.</p><button class="btn btn-amber" onclick="showTab('research')">→ Open Ownership Analysis</button>`,
 mistakes:`<ul>
 <li><b>Trusting brand name over governance checks.</b> Many collapsed Indian companies were household names with decades of history. Brand provides no protection.</li>
 <li><b>Ignoring related-party transactions.</b> Scan notes to accounts for RPTs — if company sells goods to promoter-owned entities at below-market prices or lends to promoter firms, profits are being tunnelled.</li>
@@ -694,7 +694,7 @@ visual:`<div class="learn-table">
 <div class="lt-row"><span>Sell put</span><span>Mildly bullish</span><span>Strike − 0 (large)</span><span>Premium received</span></div>
 <div class="lt-row"><span>Buy future</span><span>Bullish</span><span>Marked to market (margin)</span><span>Unlimited</span></div>
 </div>`,
-interactive:`<p>Before trading options, fully understand a company's fundamental value — options don't change business economics. Use M-Terminal's Equity Research and Modeling Lab to anchor any options thesis.</p><button class="btn btn-amber" onclick="showTab('models')">→ Open Modeling Lab</button>`,
+interactive:`<p>Before trading options, fully understand a company's fundamental value — options don't change business economics. Use M-Terminal's Company Analysis and Modeling Lab to anchor any options thesis.</p><button class="btn btn-amber" onclick="showTab('models')">→ Open Modeling Lab</button>`,
 mistakes:`<ul>
 <li><b>Selling naked calls without understanding.</b> Naked call losses are theoretically unlimited. One unexpected news event can wipe out your account. Never sell naked calls without experience.</li>
 <li><b>Ignoring time decay (theta).</b> Options lose value every day as expiry approaches, even if underlying doesn't move. Buying short-dated out-of-the-money options is a fast way to lose money — must be right on direction AND timing.</li>
@@ -854,7 +854,7 @@ visual:`<p>Finance terms cluster around five core ideas:</p>
 <div class="lt-row"><span>Startup & ESOP</span><span>ESOP, Vesting, Cliff, Dilution, Liquidation Preference, Cap Table</span></div>
 <div class="lt-row"><span>Tax & Regulation</span><span>LTCG, STCG, ELSS, DRHP, OFS, NPA, CASA</span></div>
 </div>`,
-interactive:`<p>All these terms are used live in M-Terminal's analysis modules with real numbers backing them.</p><button class="btn btn-amber" onclick="showTab('research')">→ Open Equity Research (all ratios live)</button>`,
+interactive:`<p>All these terms are used live in M-Terminal's analysis modules with real numbers backing them.</p><button class="btn btn-amber" onclick="showTab('research')">→ Open Company Analysis (all ratios live)</button>`,
 mistakes:`<ul>
 <li><b>Confusing EBITDA and free cash flow.</b> EBITDA is accounting; free cash flow is what a business actually generates. High-capex businesses have FCF far below EBITDA.</li>
 <li><b>Confusing market cap and enterprise value.</b> Market cap = equity value. EV = equity + net debt. For comparing companies with different capital structures, always use EV-based multiples.</li>

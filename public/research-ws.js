@@ -414,16 +414,16 @@ ${v} ${UNIT}`)}"></i></span></td></tr>`;
       ${l.methods.map((m) => `<tr><td class="nm" title="${esc(m.note || "")}">${esc(m.name)}</td><td>${px(m.value)}</td><td>${n1(m.weight * 100, 0)}%</td><td>${px(m.value * m.weight)}</td></tr>`).join("")}
       <tr class="rp-tot"><td class="nm"><b>12-month target</b></td><td><b>${px(l.target)}</b></td><td>100%</td><td class="${cls(l.upside)}"><b>${sgn(l.upside)}</b></td></tr>
       ${st ? `<tr><td class="nm">Consensus target</td><td>${px(st)}</td><td></td><td class="${cls((l.target / st - 1) * 100)}">ours ${sgn((l.target / st - 1) * 100)}</td></tr>` : ""}</table></div>`;
-    const c1 = card("How the 12-month target is built", build, `Weights: DCF 40%, relative methods share 60%. Current price ${px(l.price)}.`);
+    const c1 = card("How the 12-month target is built", build, `${l.basis === "market" ? `Market basis — Modeling Lab DCF off${l.fairValue ? `; ${esc(l.fairValue.provider)} fair value is the 40% anchor` : "; equal-weighted relative methods"}` : "Weights: Modeling Lab DCF 40%, relative methods share 60%"}. Current price ${px(l.price)}.`);
     // 2 · what the price implies
     const r = l.reverse || {}, dg = l.dcf && l.dcf.growth, hg = l.history && l.history.revCagr;
-    const gRows = [["Growth the price implies", r.impliedGrowth, "imp"], ["Our DCF assumption (Y1–5)", dg], ["Historical revenue CAGR", hg]].filter((x) => x[1] != null);
+    const gRows = [["Growth the price implies", r.impliedGrowth, "imp"], ["Modeling Lab DCF assumption (Y1–5)", dg], ["Historical revenue CAGR", hg]].filter((x) => x[1] != null);
     const gMax = Math.max(...gRows.map((x) => Math.abs(x[1])), 1);
-    const wRows = [["WACC the price implies", r.impliedWacc], ["Our WACC", l.dcf && l.dcf.wacc], ["Terminal growth", l.dcf && l.dcf.terminalG]].filter((x) => x[1] != null);
+    const wRows = [["WACC the price implies", r.impliedWacc], ["Modeling Lab WACC", l.dcf && l.dcf.wacc], ["Terminal growth", l.dcf && l.dcf.terminalG]].filter((x) => x[1] != null);
     const c2 = gRows.length || wRows.length ? card("What today's price implies", `<div class="table-wrap"><table class="dt ws-t ws-bt"><tr><th>Revenue growth, % a year</th><th></th><th class="ws-bt-bar"></th></tr>
       ${gRows.map((x) => `<tr class="${x[2] ? "ws-self" : ""}"><td class="nm">${x[0]}</td><td>${n1(x[1])}%</td><td class="ws-bt-bar">${cellBar(x[1], gMax, x[2] ? "imp" : null)}</td></tr>`).join("")}
       ${wRows.length ? `<tr><th>Discount rate</th><th></th><th class="ws-bt-bar"></th></tr>${wRows.map((x) => `<tr><td class="nm">${x[0]}</td><td>${n1(x[1])}%</td><td class="ws-bt-bar"></td></tr>`).join("")}` : ""}</table></div>`,
-      r.impliedGrowth != null ? `At ${px(l.price)} the DCF needs about <b>${n1(r.impliedGrowth)}%</b> revenue growth a year for five years${r.bounded ? "" : r.side === "above" ? " or more" : " or less"}${dg != null ? ` — ${r.impliedGrowth > dg ? "more" : "less"} than our ${n1(dg)}%` : ""}.` : "") : "";
+      r.impliedGrowth != null ? `At ${px(l.price)} the market is pricing in about <b>${n1(r.impliedGrowth)}%</b> revenue growth a year for five years (reverse cash-flow model)${r.bounded ? "" : r.side === "above" ? " or more" : " or less"}${dg != null ? ` — ${r.impliedGrowth > dg ? "more" : "less"} than our ${n1(dg)}%` : ""}.` : "") : "";
     // 3 · the multiple against its own history
     const bandRow = (name, bb) => {
       if (!bb || bb.current == null || !(bb.max > bb.min)) return "";
@@ -436,7 +436,7 @@ ${v} ${UNIT}`)}"></i></span></td></tr>`;
     const c3 = bl.length ? card("Multiple against its own 5-year history", `${bl.map((x) => bandRow(x[0], x[1])).join("")}
       <div class="table-wrap"><table class="dt ws-t"><tr><th>Multiple</th><th>Now</th><th>Median</th><th>IQR</th><th>vs median</th></tr>${bl.map(([n, bb]) => { const d = (bb.current / bb.med - 1) * 100; return `<tr><td class="nm">${n}</td><td>${n1(bb.current)}×</td><td>${n1(bb.med)}×</td><td>${n1(bb.p25)}–${n1(bb.p75)}×</td><td class="${d > 0 ? "down" : "up"}">${sgn(d, 0)}</td></tr>`; }).join("")}</table></div>`,
       "Shaded: interquartile range · grey tick: median · amber marker: today.") : "";
-    return panel("VALUATION LENS", `<div class="ws-three ws-cards">${c1}${c2 || card("What today's price implies", `<div class="ws-empty">Reverse DCF not available.</div>`)}${c3 || card("Multiple against its own history", `<div class="ws-empty">Not enough price history.</div>`)}</div>`,
+    return panel("VALUATION LENS", `<div class="ws-three ws-cards">${c1}${c2 || card("What today's price implies", `<div class="ws-empty">Market-implied growth not available.</div>`)}${c3 || card("Multiple against its own history", `<div class="ws-empty">Not enough price history.</div>`)}</div>`,
       { icon: "scale", sub: "target build · implied expectations · multiple history", tools: tabLink("models", "Modeling Lab") });
   }
   function thManagement(co) {
@@ -759,7 +759,7 @@ ${v} ${UNIT}`)}"></i></span></td></tr>`;
     }
     cal.sort((a, b) => (a.next === b.next ? (a.next ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)) : a.next ? -1 : 1));
     const calP = cal.length ? panel("CALENDAR", `<ul class="ws-upd">${cal.map((x) => `<li class="${x.next ? "next" : ""}"><span class="d">${fd(x.date)}</span><span class="t">${esc(x.text)}</span><em class="rp-tag">${esc(x.tag)}</em></li>`).join("")}</ul>`, { icon: "cal", sub: "upcoming first" }) : "";
-    const news = p && p.news && p.news.length ? panel("IN THE NEWS", `<ul class="ws-upd">${p.news.map((n) => `<li><span class="d">${fd(n.date)}</span><span class="t">${link(n.url, esc(n.title))}</span><em class="rp-tag">${esc(n.publisher)}</em></li>`).join("")}</ul>`, { icon: "news", sub: "dated headlines", tools: tabLink("news", "News & Sentiment") }) : "";
+    const news = p && p.news && p.news.length ? panel("IN THE NEWS", `<ul class="ws-upd">${p.news.map((n) => `<li><span class="d">${fd(n.date)}</span><span class="t">${link(n.url, esc(n.title))}</span><em class="rp-tag">${esc(n.publisher)}</em></li>`).join("")}</ul>`, { icon: "news", sub: "dated headlines" }) : "";
     if (!p) return [row([[panel("NEWS & EVENTS", `<div class="rp-skel"><i></i><i></i><i></i></div>`, { icon: "news", sub: "loading…" }), 12]])];
     return [row([[calP, 5], [news, 7]]) || row([[panel("NEWS & EVENTS", `<div class="ws-empty">No dated events or headlines found.</div>`, { icon: "news" }), 12]])];
   }
@@ -861,6 +861,20 @@ ${v} ${UNIT}`)}"></i></span></td></tr>`;
   }
   function repaintPeers() { const r = document.getElementById("wsRel"); if (r) r.innerHTML = relChart(); }
   /* data arrived → rebuild the panes that use it (only those already built) */
+  /* valuation lens on the research basis — market by default, the Modeling Lab DCF
+     only when the user switched it on for this company (DCFUSE, terminal-modules.js) */
+  function loadLens(symbol, tok) {
+    const url = `/api/company/${encodeURIComponent(symbol)}/valuation-lens`;
+    const get = typeof DCFUSE !== "undefined" ? DCFUSE.fetch(url, symbol) : api(url);
+    get.then((l) => { if (S.tok !== tok) return; S.lens = l; refresh(["overview", "thesis"]); }).catch(() => { if (S.tok === tok) { S.lens = {}; refresh(["thesis"]); } });
+  }
+  const relens = (e, needLab) => {
+    if (!S.co || !e.detail || e.detail.symbol !== S.co.symbol) return;
+    if (needLab && !(typeof DCFUSE !== "undefined" && DCFUSE.on(S.co.symbol))) return;
+    loadLens(S.co.symbol, S.tok);
+  };
+  document.addEventListener("mt:dcf-basis", (e) => relens(e, false));
+  document.addEventListener("mt:valuation-model", (e) => relens(e, true));
   function refresh(names) { names.forEach((n) => { if (S.built.has(n)) update(n); }); const o = document.getElementById("wsOwnTgt"); if (o) o.innerHTML = ownTarget(); syncTabs(); }
   function syncTabs() {
     const est = document.querySelector('.ws-tab[data-ws="estimates"]');
@@ -920,7 +934,7 @@ ${v} ${UNIT}`)}"></i></span></td></tr>`;
     // data — all in parallel; each arrival rebuilds only the panes that use it
     const sym = encodeURIComponent(co.symbol);
     api(`/api/company/${sym}/pack`).then((p) => { if (S.tok !== tok) return; S.pack = p; refresh(["overview", "financials", "segments", "shareholding", "news", "filings"]); }).catch(() => { if (S.tok !== tok) return; S.pack = {}; refresh(["overview", "financials", "segments", "shareholding", "news", "filings"]); });
-    api(`/api/company/${sym}/valuation-lens`).then((l) => { if (S.tok !== tok) return; S.lens = l; refresh(["overview", "thesis"]); }).catch(() => { if (S.tok === tok) { S.lens = {}; refresh(["thesis"]); } });
+    loadLens(co.symbol, tok);
     api(`/api/earnings/summary/${sym}`).then((e) => { if (S.tok !== tok) return; S.est = e || { available: false }; refresh(["estimates", "news"]); }).catch(() => { if (S.tok === tok) { S.est = { available: false }; refresh(["estimates"]); } });
     api(`/api/segments/${sym}`).then((s) => { if (S.tok !== tok) return; S.seg = s; if (s && s.available) refresh(["overview", "segments"]); }).catch(() => { });
     loadPeers(co.symbol).then(() => { if (S.tok === tok) repaintPeers(); });
@@ -928,5 +942,9 @@ ${v} ${UNIT}`)}"></i></span></td></tr>`;
   }
 
   // shared with the report renderer so both show identical year-wise ratios
-  return { render, show, yearRatios, spark, ratioFmt, RATIO_GROUPS, get state() { return S; } };
+  return {
+    render, show, yearRatios, spark, ratioFmt, RATIO_GROUPS, get state() { return S; },
+    // the workstation's building blocks, shared by the Earnings Call page so both look identical
+    kit: { panel, row, chart, drawCharts, wireTips, legend, spark, ic, PAL },
+  };
 })();

@@ -14,6 +14,9 @@
 
   const SECTOR = {
     view: "overview",         // 'overview' | 'detail'
+    country: "us",            // 'us' = Yahoo sector feed; any other code = screener country build
+    countries: null,          // [{code,name}] for the market picker
+    exchange: "",             // Yahoo exchange code within the country ("" = all exchanges)
     sectorKey: null,
     overview: null,           // cached overview payload
     detail: null,             // current sector detail payload
@@ -56,6 +59,38 @@
   const pxF = (v) => F.px(v, curOf());
   const pctF = (v, dp = 2) => F.pct(v, dp);
   const clsF = (v) => (v == null ? "" : v >= 0 ? "up" : "down");
+  const wF = (v) => (v == null || !isFinite(v) ? "—" : v.toFixed(2) + "%");
+  /* country mode: sectors come from the screener, so the return column is the
+     cap-weighted 52-week change (no YTD / multi-year sector index exists there) */
+  const isCountry = () => SECTOR.country !== "us";
+  const retKey = () => (isCountry() ? "y1Pct" : "ytdPct");
+  const retLbl = () => (isCountry() ? "1Y Return" : "YTD Return");
+  /* One exchange at a time avoids counting a company once per exchange (NSE + BSE).
+     India opens on NSE; every other market opens on all exchanges. */
+  const DEFAULT_EXCHANGE = { in: "NSI" };
+  const qsCountry = () => (isCountry() ? `?country=${encodeURIComponent(SECTOR.country)}${SECTOR.exchange ? `&exchange=${encodeURIComponent(SECTOR.exchange)}` : ""}` : "");
+  const countryName = () => { const c = (SECTOR.countries || []).find((x) => x.code === SECTOR.country); return c ? c.name : SECTOR.country.toUpperCase(); };
+  const exchangeName = () => (SECTOR.overview && SECTOR.overview.exchangeName) || "";
+  const marketLabel = () => esc(countryName()) + (SECTOR.exchange && exchangeName() ? ` · ${esc(exchangeName())}` : "");
+  function countryPicker() {
+    const list = SECTOR.countries || [{ code: SECTOR.country, name: countryName() }];
+    const exs = isCountry() && SECTOR.overview && SECTOR.overview.exchanges || [];
+    const exSel = exs.length > 1
+      ? `<label class="sec-country"><span>Exchange</span><select id="secExchange"><option value=""${!SECTOR.exchange ? " selected" : ""}>All exchanges</option>${exs.map((e) => `<option value="${esc(e.code)}"${e.code === SECTOR.exchange ? " selected" : ""}>${esc(e.name)} · ${e.companies.toLocaleString("en-IN")}</option>`).join("")}</select></label>`
+      : "";
+    return `<div class="sec-pickers"><label class="sec-country"><span>Market</span><select id="secCountry">${list.map((c) => `<option value="${c.code}"${c.code === SECTOR.country ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>${exSel}</div>`;
+  }
+  function wireCountry() {
+    const reload = () => { SECTOR.overview = null; SECTOR.detail = null; clearTimeout(SECTOR._pollTimer); loadOverview(); };
+    const sel = document.getElementById("secCountry");
+    if (sel) sel.addEventListener("change", () => { SECTOR.country = sel.value; SECTOR.exchange = DEFAULT_EXCHANGE[sel.value] || ""; reload(); });
+    const ex = document.getElementById("secExchange");
+    if (ex) ex.addEventListener("change", () => { SECTOR.exchange = ex.value; reload(); });
+  }
+  async function loadCountries() {
+    if (SECTOR.countries) return;
+    try { SECTOR.countries = (await api("/api/sectors/countries")).countries; } catch { /* picker falls back to the current market */ }
+  }
 
   /* ── diverging day-return colour scale — rich brick red ↔ slate ↔ forest green.
      cap ±3% with a sqrt ease so typical ±1–2% moves saturate quickly (small moves
@@ -224,11 +259,17 @@
   async function loadOverview() {
     SECTOR.view = "overview"; SECTOR.sectorKey = null;
     const r = root();
-    r.innerHTML = loadingHTML("Loading the live global sector & industry taxonomy — market weights, market caps, day and YTD returns straight from the exchange feed…");
+    r.innerHTML = loadingHTML(isCountry()
+      ? `Building ${marketLabel() || esc(countryName())} — every listed company, sector by sector, from Yahoo's equity screener. The first load of a market takes a little while; it is then cached for 30 minutes…`
+      : "Loading the live global sector & industry taxonomy — market weights, market caps, day and YTD returns straight from the exchange feed…");
+    const want = SECTOR.country;
+    await loadCountries();
     poll();
     async function poll() {
+      if (want !== SECTOR.country) return;
       try {
-        const res = await fetch("/api/sectors");
+        if (want !== SECTOR.country) return; // market switched while loading
+        const res = await fetch("/api/sectors" + qsCountry());
         if (res.status === 202) {
           const j = await res.json();
           updateProgress(j.progress);
@@ -240,13 +281,15 @@
         SECTOR.overview = data;
         renderOverview();
       } catch (e) {
-        r.innerHTML = `<div class="sec-wrap"><div class="empty-mini">Sector scan unavailable here — this runs live in your environment. ${e.message || ""}</div></div>`;
+        if (want !== SECTOR.country) return;
+        r.innerHTML = `<div class="sec-wrap"><div class="sec-head"><div class="sec-head-l"><div class="sec-title">Sector Analysis</div>${countryPicker()}</div></div><div class="empty-mini">${isCountry() ? esc(countryName()) + " could not be loaded right now" : "Sector scan unavailable here"}${e.message ? " — " + esc(String(e.message)) : ""}. Yahoo limits bursts of requests; try again in a few minutes.</div></div>`;
+        wireCountry();
       }
     }
   }
   function updateProgress(p) {
     const bar = document.getElementById("secProgBar"), lbl = document.getElementById("secProgLbl");
-    if (bar && p && p.total) { bar.style.width = Math.round((p.done / p.total) * 100) + "%"; lbl.textContent = `Classifying constituents… ${p.done} / ${p.total}`; }
+    if (bar && p && p.total) { bar.style.width = Math.max(6, Math.round((p.done / p.total) * 100)) + "%"; lbl.textContent = isCountry() ? `Fetching ${countryName()} — sector ${Math.min(p.done + 1, p.total)} of ${p.total}…` : `Classifying constituents… ${p.done} / ${p.total}`; }
   }
 
   function renderOverview() {
@@ -258,10 +301,13 @@
           <div class="sec-head-l">
             <div class="sec-title">Sector Analysis</div>
             <div class="sec-sub">Analyze the market by sector and industry. Understand market leadership, sector rotation, industry composition and individual company performance.</div>
+            ${countryPicker()}
           </div>
           <div class="sec-summary">
             <div class="sec-sum-cell"><div class="sec-sum-l">Total Sectors</div><div class="sec-sum-v">${d.totalSectors}</div></div>
-            <div class="sec-sum-cell"><div class="sec-sum-l">Total Industries</div><div class="sec-sum-v">${d.totalIndustries}</div></div>
+            ${isCountry()
+              ? `<div class="sec-sum-cell"><div class="sec-sum-l">Listed Companies</div><div class="sec-sum-v">${(d.totalCompanies || 0).toLocaleString("en-IN")}</div></div>`
+              : `<div class="sec-sum-cell"><div class="sec-sum-l">Total Industries</div><div class="sec-sum-v">${d.totalIndustries}</div></div>`}
             <div class="sec-sum-cell"><div class="sec-sum-l">Total Market Cap</div><div class="sec-sum-v">${capF(d.totalMcap)}</div></div>
           </div>
         </div>
@@ -269,7 +315,7 @@
           <div class="sec-panel">
             <div class="sec-panel-h"><h4>Select a Sector for a Visual Breakdown</h4></div>
             <div class="sec-panel-body">${sectorTableHTML(d.sectors)}</div>
-            <div class="sec-note">Percentage on the heatmap indicates the current day return. Sectors, industries, market caps and weights are the live global taxonomy (all listed constituents), not a sampled universe.</div>
+            <div class="sec-note">${isCountry() ? countryNote(d) : "Percentage on the heatmap indicates the current day return. Sectors, industries, market caps and weights are Yahoo's live US sector taxonomy."}</div>
           </div>
           <div class="sec-panel">
             <div class="sec-panel-h"><h4 id="secTmapTitle">All Sectors</h4><span class="sub">size · market cap  ·  colour · day return</span></div>
@@ -281,6 +327,7 @@
         </div>
       </div>`;
     // table interactions
+    wireCountry();
     wireSectorTable();
     // treemap
     renderTreemap(document.getElementById("secTmap"), sectorTiles(d.sectors), sectorTmapOpts());
@@ -289,14 +336,14 @@
 
   /* — SectorTable — */
   function sectorTableHTML(sectors) {
-    const allDay = wcap(sectors, "dayPct"), allYtd = wcap(sectors, "ytdPct");
-    const rows = [{ key: "__all", name: "All Sectors", weight: 100, ytdPct: allYtd, all: true }].concat(sectors);
+    const rk = retKey();
+    const rows = [{ key: "__all", name: "All Sectors", weight: 100, [rk]: wcap(sectors, rk), all: true }].concat(sectors);
     const maxW = 100;
-    return `<table class="sec-tbl"><thead><tr><th>Sector</th><th>Market Weight</th><th>YTD Return</th></tr></thead><tbody>${rows.map((s) => `
+    return `<table class="sec-tbl"><thead><tr><th>Sector</th><th>Market Weight</th><th>${retLbl()}</th></tr></thead><tbody>${rows.map((s) => `
       <tr data-key="${s.key}" class="${s.key === "__all" ? "sel" : ""}">
-        <td><span class="sec-row-name">${s.name}</span>${s.all ? "" : `<span class="sec-row-sub">${s.companies} co · ${s.industries} ind</span>`}</td>
-        <td><div class="sec-wcell"><div class="sec-wbar"><i style="width:${Math.min(100, (s.weight / maxW) * 100)}%"></i></div><span class="sec-wpct">${s.weight.toFixed(2)}%</span></div></td>
-        <td><span class="sec-ret ${clsF(s.ytdPct)}">${pctF(s.ytdPct)}</span></td>
+        <td><span class="sec-row-name">${s.name}</span>${s.all ? "" : `<span class="sec-row-sub">${(s.companies || 0).toLocaleString("en-IN")} co${s.industries != null ? ` · ${s.industries} ind` : ""}</span>`}</td>
+        <td><div class="sec-wcell"><div class="sec-wbar"><i style="width:${Math.min(100, ((s.weight || 0) / maxW) * 100)}%"></i></div><span class="sec-wpct">${wF(s.weight)}</span></div></td>
+        <td><span class="sec-ret ${clsF(s[rk])}">${pctF(s[rk])}</span></td>
       </tr>`).join("")}</tbody></table>`;
   }
   function wireSectorTable() {
@@ -327,10 +374,10 @@
       onClick: (s) => openSector(s.key),
       tip: (s) => `<b>${s.name}</b>
         <div class="tip-row"><span>Market cap</span><span>${capF(s.mcap)}</span></div>
-        <div class="tip-row"><span>Weight</span><span>${s.weight.toFixed(2)}%</span></div>
+        <div class="tip-row"><span>Weight</span><span>${wF(s.weight)}</span></div>
         <div class="tip-row"><span>Day</span><span class="${clsF(s.dayPct)}">${pctF(s.dayPct)}</span></div>
-        <div class="tip-row"><span>YTD</span><span class="${clsF(s.ytdPct)}">${pctF(s.ytdPct)}</span></div>
-        <div class="tip-row"><span>Companies</span><span>${s.companies}</span></div>`,
+        <div class="tip-row"><span>${isCountry() ? "1Y" : "YTD"}</span><span class="${clsF(s[retKey()])}">${pctF(s[retKey()])}</span></div>
+        <div class="tip-row"><span>Companies</span><span>${(s.companies || 0).toLocaleString("en-IN")}</span></div>`,
     };
   }
 
@@ -344,9 +391,9 @@
     SECTOR.sort = { key: "mcap", dir: -1 };
     if (SECTOR.chart) { SECTOR.chart.destroy(); SECTOR.chart = null; }
     const r = root();
-    r.innerHTML = loadingHTML("Building the sector workstation — industries, constituents, valuation columns and performance series…");
+    r.innerHTML = loadingHTML(isCountry() ? `Building ${esc(countryName())} · this sector — tagging every company with its industry…` : "Building the sector workstation — industries, constituents, valuation columns and performance series…");
     try {
-      const data = await api(`/api/sectors/${encodeURIComponent(key)}`);
+      const data = await api(`/api/sectors/${encodeURIComponent(key)}` + qsCountry());
       SECTOR.detail = data;
       renderDetail();
     } catch (e) {
@@ -360,7 +407,7 @@
     const r = root();
     r.innerHTML = `
       <div class="sec-wrap">
-        <button class="sec-crumb" id="secBack"><span class="arw">‹</span> Sectors&nbsp;/&nbsp;<span class="cur">${d.name}</span></button>
+        <button class="sec-crumb" id="secBack"><span class="arw">‹</span> Sectors${isCountry() ? `&nbsp;·&nbsp;${marketLabel()}` : ""}&nbsp;/&nbsp;<span class="cur">${d.name}</span></button>
         <div class="sec-head">
           <div class="sec-head-l">
             <div class="sec-title">${d.name}</div>
@@ -369,13 +416,13 @@
           </div>
           <div class="sec-summary">
             <div class="sec-sum-cell"><div class="sec-sum-l">Market Cap</div><div class="sec-sum-v">${capF(d.mcap)}</div></div>
-            <div class="sec-sum-cell"><div class="sec-sum-l">Market Weight</div><div class="sec-sum-v">${d.weight.toFixed(2)}%</div></div>
+            <div class="sec-sum-cell"><div class="sec-sum-l">Market Weight</div><div class="sec-sum-v">${wF(d.weight)}</div></div>
             <div class="sec-sum-cell"><div class="sec-sum-l">Industries</div><div class="sec-sum-v">${d.industriesCount}</div></div>
-            <div class="sec-sum-cell"><div class="sec-sum-l">Companies</div><div class="sec-sum-v">${d.companiesCount}</div></div>
+            <div class="sec-sum-cell"><div class="sec-sum-l">Companies</div><div class="sec-sum-v">${(d.companiesCount || 0).toLocaleString("en-IN")}</div></div>
           </div>
         </div>
 
-        <div class="sec-perf" id="secPerf">
+        ${isCountry() ? countryMetricsHTML(d) : `<div class="sec-perf" id="secPerf">
           <div class="sec-perf-top">
             <div class="sec-plegend">
               <span class="sec-pl-item"><span class="dot" style="background:${COLORS.sector}"></span>${d.name}</span>
@@ -392,7 +439,7 @@
         </div>
 
         <div class="sec-metrics" id="secMetrics">${metricsHTML(d.metrics, null)}</div>
-        <div class="sec-metric-note">Sector performance is cap-weighted across live constituents; benchmark series are rebased for relative comparison.</div>
+        <div class="sec-metric-note">Sector performance is cap-weighted across live constituents; benchmark series are rebased for relative comparison.</div>`}
 
         <div class="sec-block-title">Industries in this Sector</div>
         <div class="sec-cols">
@@ -419,19 +466,15 @@
 
     document.getElementById("secBack").addEventListener("click", loadOverview);
     wireDescToggle();
-    wireBenchmark();
-    wireRanges();
-    wireChartTools();
+    if (!isCountry()) { wireBenchmark(); wireRanges(); wireChartTools(); }
     // industries
     wireIndustryTable();
     renderTreemap(document.getElementById("secIndTmap"), industryTiles(d.industries), industryTmapOpts());
     // companies
     wireCoToggle();
     renderCompanyArea();
-    // perf chart
-    initChart();
-    loadChart();
-    loadBenchmarkMetrics();
+    // perf chart — US only (Yahoo publishes sector indices for the US market)
+    if (!isCountry()) { initChart(); loadChart(); loadBenchmarkMetrics(); }
     bindResize();
   }
 
@@ -508,13 +551,13 @@
 
   /* — IndustryTable — */
   function industryTableHTML(inds) {
-    const allYtd = wcap(inds, "ytdPct");
-    const rows = [{ key: "ALL", name: "All Industries", weight: 100, ytdPct: allYtd, all: true }].concat(inds);
-    return `<table class="sec-tbl"><thead><tr><th>Industry</th><th>Market Weight</th><th>YTD Return</th></tr></thead><tbody>${rows.map((s) => `
+    const rk = retKey();
+    const rows = [{ key: "ALL", name: "All Industries", weight: 100, [rk]: wcap(inds, rk), all: true }].concat(inds);
+    return `<table class="sec-tbl"><thead><tr><th>Industry</th><th>Market Weight</th><th>${retLbl()}</th></tr></thead><tbody>${rows.map((s) => `
       <tr data-ikey="${s.key}" class="${s.key === SECTOR.industryFilter ? "sel" : ""}">
         <td><span class="sec-row-name">${s.name}</span>${s.all || s.companies == null ? "" : `<span class="sec-row-sub">${s.companies} co</span>`}</td>
-        <td><div class="sec-wcell"><div class="sec-wbar"><i style="width:${Math.min(100, s.weight)}%"></i></div><span class="sec-wpct">${s.weight.toFixed(2)}%</span></div></td>
-        <td><span class="sec-ret ${clsF(s.ytdPct)}">${pctF(s.ytdPct)}</span></td>
+        <td><div class="sec-wcell"><div class="sec-wbar"><i style="width:${Math.min(100, s.weight || 0)}%"></i></div><span class="sec-wpct">${wF(s.weight)}</span></div></td>
+        <td><span class="sec-ret ${clsF(s[rk])}">${pctF(s[rk])}</span></td>
       </tr>`).join("")}</tbody></table>`;
   }
   function wireIndustryTable() {
@@ -533,9 +576,9 @@
       onClick: (s) => { SECTOR.industryFilter = s.key; SECTOR.page = 0; wireIndustryTable(); $$("#sectorRoot .sec-tbl tbody tr[data-ikey]").forEach((x) => x.classList.toggle("sel", x.dataset.ikey === s.key)); renderCompanyArea(); },
       tip: (s) => `<b>${s.name}</b>
         <div class="tip-row"><span>Market cap</span><span>${capF(s.mcap)}</span></div>
-        <div class="tip-row"><span>Weight</span><span>${s.weight.toFixed(2)}%</span></div>
+        <div class="tip-row"><span>Weight</span><span>${wF(s.weight)}</span></div>
         <div class="tip-row"><span>Day</span><span class="${clsF(s.dayPct)}">${pctF(s.dayPct)}</span></div>
-        <div class="tip-row"><span>YTD</span><span class="${clsF(s.ytdPct)}">${pctF(s.ytdPct)}</span></div>`,
+        <div class="tip-row"><span>${isCountry() ? "1Y" : "YTD"}</span><span class="${clsF(s[retKey()])}">${pctF(s[retKey()])}</span></div>`,
     };
   }
 
@@ -595,6 +638,20 @@
     { k: "ytdPct", l: "YTD %", num: true, fmt: (v) => pctF(v), col: true },
     { k: "rating", l: "Analyst Rating", num: false, fmt: (v) => ratingBadge(v) },
   ];
+  /* country listings: prices in each listing's own currency; P/E and 52-week move
+     instead of the US feed's target price / YTD (not available from the screener) */
+  const COLS_COUNTRY = [
+    { k: "name", l: "Company", num: false },
+    { k: "exchange", l: "Exchange", num: false },
+    { k: "price", l: "Last Price", num: true, fmt: (v, c) => F.px(v, c && c.currency) },
+    { k: "weight", l: "Mkt Weight", num: true, fmt: (v) => wF(v) },
+    { k: "mcap", l: "Market Cap", num: true, fmt: (v) => capF(v) },
+    { k: "dayPct", l: "Day %", num: true, fmt: (v) => pctF(v), col: true },
+    { k: "y1Pct", l: "52W %", num: true, fmt: (v) => pctF(v), col: true },
+    { k: "pe", l: "P/E (TTM)", num: true, fmt: (v) => (v == null ? "—" : v.toFixed(1) + "×") },
+    { k: "rating", l: "Analyst Rating", num: false, fmt: (v) => ratingBadge(v) },
+  ];
+  const cols = () => (isCountry() ? COLS_COUNTRY : COLS);
   function ratingBadge(v) {
     if (!v) return "—";
     const cls = { "Strong Buy": "sb", "Buy": "b", "Hold": "h", "Underperform": "u", "Sell": "s" }[v] || "h";
@@ -617,13 +674,14 @@
     const start = SECTOR.page * SECTOR.pageSize;
     const rows = all.slice(start, start + SECTOR.pageSize);
     const arrow = (k) => SECTOR.sort.key === k ? `<span class="sort-i">${SECTOR.sort.dir < 0 ? "▼" : "▲"}</span>` : "";
-    const head = COLS.map((c) => `<th data-k="${c.k}">${c.l}${arrow(c.k)}</th>`).join("");
-    const body = rows.map((c) => `<tr data-sym="${c.symbol}">${COLS.map((col) => {
-      if (col.k === "name") return `<td><div class="sec-co-name"><span class="sec-co-tkr">${c.ticker}</span><span class="sec-co-full">${c.name}</span></div></td>`;
+    const head = cols().map((c) => `<th data-k="${c.k}">${c.l}${arrow(c.k)}</th>`).join("");
+    const body = rows.map((c) => `<tr data-sym="${c.symbol}">${cols().map((col) => {
+      if (col.k === "name") return `<td><div class="sec-co-name"><span class="sec-co-tkr">${esc(c.ticker)}</span><span class="sec-co-full">${esc(c.name)}</span></div></td>`;
       if (col.k === "ticker") return `<td>${c.ticker}</td>`;
+      if (col.k === "exchange") return `<td class="sec-co-ex">${c.exchange || "—"}</td>`;
       const val = c[col.k];
       const cls = col.col ? clsF(val) : "";
-      return `<td class="${cls}">${col.fmt ? col.fmt(val) : (val == null ? "—" : val)}</td>`;
+      return `<td class="${cls}">${col.fmt ? col.fmt(val, c) : (val == null ? "—" : val)}</td>`;
     }).join("")}</tr>`).join("");
     const tools = `
       <div class="sec-co-tools">
@@ -639,13 +697,13 @@
           <button class="mini-btn" id="secNext" ${SECTOR.page >= pages - 1 ? "disabled" : ""}>Next ›</button>
         </div>
       </div>` : "";
-    return tools + `<div class="sec-cotbl-wrap"><table class="sec-cotbl"><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${COLS.length}" style="text-align:center;color:var(--muted-ink);padding:24px">No companies match.</td></tr>`}</tbody></table></div>` + pager;
+    return tools + `<div class="sec-cotbl-wrap"><table class="sec-cotbl"><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${cols().length}" style="text-align:center;color:var(--muted-ink);padding:24px">No companies match.</td></tr>`}</tbody></table></div>` + pager;
   }
   function wireCompanyTable() {
     $$("#secCoArea .sec-cotbl thead th").forEach((th) => th.addEventListener("click", () => {
       const k = th.dataset.k;
       if (SECTOR.sort.key === k) SECTOR.sort.dir *= -1;
-      else SECTOR.sort = { key: k, dir: (COLS.find((c) => c.k === k).num ? -1 : 1) };
+      else SECTOR.sort = { key: k, dir: (cols().find((c) => c.k === k).num ? -1 : 1) };
       renderCompanyArea();
     }));
     $$("#secCoArea .sec-cotbl tbody tr[data-sym]").forEach((tr) => tr.addEventListener("click", () => loadCompany(tr.dataset.sym)));
@@ -663,11 +721,11 @@
       mode: "heatmap",
       onClick: (c) => loadCompany(c.symbol),
       tip: (c) => `<b>${c.name} · ${c.ticker}</b>
-        <div class="tip-row"><span>Price</span><span>${pxF(c.price)}</span></div>
+        <div class="tip-row"><span>Price</span><span>${F.px(c.price, c.currency || curOf())}</span></div>
         <div class="tip-row"><span>Day</span><span class="${clsF(c.dayPct)}">${pctF(c.dayPct)}</span></div>
-        <div class="tip-row"><span>YTD</span><span class="${clsF(c.ytdPct)}">${pctF(c.ytdPct)}</span></div>
+        <div class="tip-row"><span>${isCountry() ? "52W" : "YTD"}</span><span class="${clsF(c[isCountry() ? "y1Pct" : "ytdPct"])}">${pctF(c[isCountry() ? "y1Pct" : "ytdPct"])}</span></div>
         <div class="tip-row"><span>Market cap</span><span>${capF(c.mcap)}</span></div>
-        <div class="tip-row"><span>Weight</span><span>${c.weight.toFixed(2)}%</span></div>`,
+        <div class="tip-row"><span>Weight</span><span>${wF(c.weight)}</span></div>${c.exchange ? `<div class="tip-row"><span>Exchange</span><span>${c.exchange}</span></div>` : ""}`,
     };
   }
 
@@ -836,6 +894,29 @@
     if (range === "5D") return d.toLocaleDateString([], { day: "2-digit", month: "short" }) + (full ? " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "");
     if (["1M", "3M", "6M", "YTD", "1Y"].includes(range)) return d.toLocaleDateString([], { day: "2-digit", month: "short" }) + (full ? " '" + String(d.getFullYear()).slice(2) : "");
     return d.toLocaleDateString([], { month: "short", year: "2-digit" });
+  }
+
+  /* ── country mode pieces ── */
+  function countryNote(d) {
+    const fx = Object.entries(d.fx || {}).filter(([c]) => c === d.currency).map(([c, v]) => `1 ${c} = US$${v < 0.01 ? v.toPrecision(3) : v.toFixed(4)}`);
+    return `Every equity listed in ${esc(d.countryName)} (Yahoo screener · region ${esc(d.country.toUpperCase())} · all market caps). Size = market cap in ${esc(d.currency)}, colour = day return; 1Y = cap-weighted 52-week change. `
+      + `Listings quoted in another currency are converted at live rates${fx.length ? " (" + fx.join(", ") + ")" : ""}. ${d.exchange ? `Showing ${esc(d.exchangeName)} listings only, so each company is counted once.` : `All exchanges combined: a company listed on several exchanges (e.g. NSE and BSE) appears once per listing — pick an exchange above to count each company once.`}`
+      + (d.truncated ? " Very large sectors are aggregated over their 2,000 largest listings." : "")
+      + (d.stale ? ` Showing the last good snapshot from ${new Date(d.staleAsOf).toLocaleString()}.` : "");
+  }
+  function countryMetricsHTML(d) {
+    const mk = SECTOR.overview || {};
+    const rows = [["Day Return", d.metrics.day, mk.dayPct], ["1-Year Return (52W)", d.metrics.y1, mk.y1Pct]];
+    return `<div class="sec-metrics sec-metrics-2">${rows.map(([lbl, sv, bv]) => `
+      <div class="sec-metric">
+        <div class="sec-metric-l">${lbl}</div>
+        <div class="sec-metric-grid">
+          <div class="sec-metric-k">Sector</div><div class="sec-metric-k" style="text-align:right">${esc(countryName())} market</div>
+          <div class="sec-metric-v ${clsF(sv)}">${pctF(sv)}</div>
+          <div class="sec-metric-v ${clsF(bv)}" style="text-align:right">${bv == null ? "—" : pctF(bv)}</div>
+        </div>
+      </div>`).join("")}</div>
+      <div class="sec-metric-note">Cap-weighted across ${(d.fetched || 0).toLocaleString("en-IN")} listings, market caps in ${esc(d.currency)}. Yahoo publishes no sector index outside the US, so there is no sector price chart for this market.</div>`;
   }
 
   /* ── misc helpers ── */

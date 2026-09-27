@@ -612,7 +612,7 @@ async function loadValuation(symbol) {
   if (vo) vo.innerHTML = `<div class="loading mono" style="padding:30px">Computing EV/EBITDA · P/E · PEG · Residual Income · DDM · SOTP…</div>`;
   if (mo) mo.innerHTML = `<div class="loading mono" style="padding:30px">Running 5,000 Monte Carlo simulations…</div>`;
   try {
-    const d = await api("/api/valuation/" + encodeURIComponent(symbol));
+    const d = await DCFUSE.fetch("/api/valuation/" + encodeURIComponent(symbol), symbol);
     if (d.error) { if (vo) vo.innerHTML = `<div class="empty-mini">${d.error}</div>`; if (mo) mo.innerHTML = ""; return; }
     $("#valFor") && ($("#valFor").textContent = d.meta.name + " · " + d.meta.currency);
     $("#mcFor") && ($("#mcFor").textContent = d.monteCarlo ? d.monteCarlo.runs.toLocaleString() + " runs" : "");
@@ -641,14 +641,14 @@ function renderValuationMethods(v, meta) {
     <div class="vf-axis"><span>${px(lo)}</span><span>${px(hi)}</span></div>
   </div>`;
   // detail tables (workings)
-  const detail = methods.map((m) => `<div class="vm-card"><div class="vm-h"><span>${m.name}</span><b>${px(m.value)}</b></div>
+  const detail = methods.map((m) => `<div class="vm-card"><div class="vm-h"><span>${m.name}${m.weight != null ? ` <i class="vm-w">${m.weight > 0 ? (m.weight * 100).toFixed(0) + "%" : "cross-check"}</i>` : ""}</span><b>${px(m.value)}</b></div>
     <table class="vm-t">${Object.entries(m.inputs).map(([k, val]) => `<tr><td>${k}</td><td>${typeof val === "number" ? (Math.abs(val) > 1e6 ? N(val / (ccy === "INR" ? 1e7 : 1e6), 0) + (ccy === "INR" ? " Cr" : " Mn") : N(val, 2)) : (val ?? "—")}</td></tr>`).join("")}</table>
     <div class="vm-note">${m.note}</div></div>`).join("");
   const blendUp = v.upside;
   return `<div class="vm-verdict"><div><span class="l">BLENDED TARGET</span><span class="n">${px(v.blended)}</span></div><div><span class="l">CURRENT</span><span class="n">${px(v.price)}</span></div><div><span class="l">UPSIDE</span><span class="n ${blendUp >= 0 ? "up" : "down"}">${blendUp == null ? "—" : (blendUp >= 0 ? "+" : "") + N(blendUp, 1) + "%"}</span></div></div>
     <div class="panel-sub mono" style="margin:14px 0 8px">FOOTBALL FIELD — value per share by method</div>${field}
     <div class="panel-sub mono" style="margin:16px 0 8px">METHOD WORKINGS</div><div class="vm-grid">${detail}</div>
-    <div class="vm-disc">Blended target weights the DCF 40% and the average of the relative methods 60%, per institutional convention. Each method is a cross-check, not a point forecast; the spread between them is itself information about valuation uncertainty.</div>`;
+    <div class="vm-disc">Blended target: ${esc(v.targetMethod || "40% DCF + 60% average of the relative methods")}.${v.basis === "market" ? " The Modeling Lab DCF is switched off for this company — switch on <b>Use this DCF in research</b> above to make it the 40% intrinsic anchor." : ""} Each method is a cross-check, not a point forecast; the spread between them is itself information about valuation uncertainty.</div>`;
 }
 
 function renderMonteCarlo(mc, meta) {
@@ -664,7 +664,7 @@ function renderMonteCarlo(mc, meta) {
   </div>
   <canvas id="mcChart" class="mc-canvas"></canvas>
   <div class="mc-range"><span>5–95% range: <b>${px(mc.p5)} – ${px(mc.p95)}</b></span><span>interquartile: <b>${px(mc.p25)} – ${px(mc.p75)}</b></span></div>
-  <div class="vm-disc">${mc.runs.toLocaleString()} simulations drawing revenue growth (±40% relative), EBITDA margin (±15%), WACC (±1.2pp) and terminal growth (±0.8pp) from bounded normal distributions. The histogram is the resulting distribution of intrinsic value per share; the dashed line marks the current price.</div>`;
+  <div class="vm-disc">${mc.runs.toLocaleString()} simulations on the DCF model itself — ${esc(mc.shocks || "growth, margin, WACC and terminal-growth shocks")} — from a seeded, reproducible random stream (the Excel export replays the same draws). The histogram is the resulting distribution of intrinsic value per share; the dashed line marks the current price.</div>`;
 }
 
 function drawMonteCarlo(mc, meta) {
@@ -831,8 +831,9 @@ TABS.reports = {
     try {
       // ── Inject valuationModelState snapshot if available for this symbol ──
       const vms = valuationModelState.snapshot();
-      const vmsForSymbol = vms && vms.symbol === symbol ? vms : null;
-      const body = { symbol, type };
+      const useLab = DCFUSE.on(symbol);
+      const vmsForSymbol = useLab && vms && vms.symbol === symbol ? vms : null;
+      const body = { symbol, type, useLabDcf: useLab };
       if (vmsForSymbol) {
         // Pass the pre-computed idcf so the server can skip recalculation
         body._idcfSnapshot = {
@@ -852,9 +853,11 @@ TABS.reports = {
       }
       $("#aiMode").textContent = rep.meta.mode === "ai" ? "AI narrative (Claude)" : "Research Report - Not an Invesetment Advice";
       // Show VMS sync status
-      const vmsNote = vmsForSymbol
-        ? `<span class="vms-tag vms-ev" style="margin-left:8px">VALUATION SYNCED FROM MODELING LAB</span>`
-        : `<span class="vms-tag vms-adj" style="margin-left:8px">INDEPENDENT DCF (open Modeling Lab first for user-adjusted assumptions)</span>`;
+      const vmsNote = !useLab
+        ? `<span class="vms-tag vms-ev" style="margin-left:8px">MARKET-BASED VALUATION · MODELING LAB DCF OFF</span>`
+        : vmsForSymbol
+          ? `<span class="vms-tag vms-adj" style="margin-left:8px">VALUATION ANCHORED ON YOUR MODELING LAB DCF</span>`
+          : `<span class="vms-tag vms-adj" style="margin-left:8px">MODELING LAB DCF ON · ENGINE DEFAULT ASSUMPTIONS</span>`;
       this._vmsNote = vmsNote;
       RG.title(`${rep.meta.name} · ${rep.meta.symbol}`);
       $("#reportActions").hidden = false;
@@ -1349,22 +1352,26 @@ function renderReport(rep) {
 
 
       <h2>9 · Valuation</h2>
-      <p>${idcf ? `We value ${m.name} using a five-year explicit DCF (FCFF) discounted at a ${N(idcf.assumptions.wacc, 1)}% WACC with ${N(idcf.assumptions.terminalG, 1)}% terminal growth, cross-checked against comparable multiples and the 52-week trading range. Consistent with institutional practice, our headline target blends the intrinsic (DCF) and relative (multiples) approaches rather than relying on a single method.` : "A full DCF was not available for this issuer; valuation rests on relative multiples versus the peer set."}</p>
+      <p>${idcf ? `We value ${m.name} using a five-year explicit DCF (FCFF) discounted at a ${N(idcf.assumptions.wacc, 1)}% WACC with ${N(idcf.assumptions.terminalG, 1)}% terminal growth, cross-checked against comparable multiples and the 52-week trading range. Consistent with institutional practice, our headline target blends the intrinsic (DCF) and relative (multiples) approaches rather than relying on a single method.` : m.valuationBasis === "market"
+        ? `Our 12-month target is market-based — ${esc(m.targetMethod || "the average of the relative valuation methods")}. The Modeling Lab DCF is not switched on for this company, so no discounted-cash-flow value enters the target or the rating${m.fairValue ? `; ${esc(m.fairValue.provider)}'s published fair value (${px(m.fairValue.value)}, "${esc(m.fairValue.label || "")}") takes the intrinsic slot instead` : ""}.`
+        : "A full DCF was not available for this issuer; valuation rests on relative multiples versus the peer set."}</p>
       ${(() => {
         // the official target, method by method — the same object the headline target,
         // the rating and the Equity Research valuation panel are built from
         const V = d.valuation;
         if (!V || V.blended == null) return idcf ? `<div class="ir-src">Target = DCF value ${px(idcf.target)} (relative methods unavailable for this issuer).</div>` : "";
         const ok = (V.methods || []).filter((x) => x.value != null && x.value > 0);
-        const dcfM = ok.find((x) => x.name.startsWith("DCF"));
-        const rel = ok.filter((x) => !x.name.startsWith("DCF") && x.name !== "Sum-of-the-Parts");
-        const w = (x) => (dcfM && rel.length ? (x === dcfM ? 0.4 : 0.6 / rel.length) : 1 / ok.length);
+        const isAnchor = (x) => x.name.startsWith("DCF") || x.name.startsWith("Fair value (");
+        const dcfM = ok.find(isAnchor);
+        const rel = ok.filter((x) => !isAnchor(x) && x.name !== "Sum-of-the-Parts" && (x.weight == null || x.weight > 0));
+        const xc = (V.crossChecks || []).map((n) => { const x = ok.find((y) => y.name === n); return x ? `${esc(n)} ${px(x.value)}` : null; }).filter(Boolean);
+        const w = (x) => (x.weight != null ? x.weight : dcfM && rel.length ? (x === dcfM ? 0.4 : 0.6 / rel.length) : 1 / ok.length);
         const rows = [...(dcfM ? [dcfM] : []), ...rel];
         const up = V.price ? (V.blended / V.price - 1) * 100 : null;
         return `<table class="ir-fin"><tr class="ir-hd"><td>Method</td><th>Est. value/share</th><th>Weight</th><th>Contribution</th></tr>
           ${rows.map((x) => `<tr><td>${esc(x.name)}</td><td>${px(x.value)}</td><td>${(w(x) * 100).toFixed(0)}%</td><td>${px(x.value * w(x))}</td></tr>`).join("")}
           <tr class="ir-tot"><td><b>12-month target price</b></td><td><b>${px(V.blended)}</b></td><td></td><td class="${up >= 0 ? "ir-up" : "ir-down"}"><b>${P(up)}</b></td></tr>
-        </table><div class="ir-src">Target = 40% DCF + 60% equal-weighted average of the relative methods (peer EV/EBITDA and P/E, PEG, residual income, dividend discount). Sell-side consensus is not an input to the target. Source: M-Terminal.</div>`;
+        </table><div class="ir-src">Target = ${esc(V.targetMethod || (dcfM ? "40% DCF + 60% equal-weighted average of the relative methods" : "equal-weighted average of the relative methods"))}.${V.basis === "market" ? " Market basis: the Modeling Lab DCF is switched off for this company." : ""} ${V.basis === "market" ? "" : " Sell-side consensus is not an input to the target."}${xc.length ? ` Fundamental cross-checks (not weighted): ${xc.join(" · ")}.` : ""} Source: M-Terminal.</div>`;
       })()}
       ${dcfSection}
       ${RS && has(RS.valuation) ? `<h4 class="ir-sub">What the valuation embeds</h4>${P2(RS.valuation)}` : ""}
@@ -1393,7 +1400,7 @@ function renderReport(rep) {
       <h2>12 · Recommendation</h2>
       <div class="ir-concl">
         ${RS && has(RS.recommendation) ? P2(RS.recommendation) : `<p><b>Investment thesis summary.</b> ${(nv.thesis || "").slice(0, 600)}</p>`}
-        <p><b>Valuation summary.</b> ${idcf ? `Base-case DCF fair value ${px(idcf.target)} (${P(idcf.upside)} vs current); bull ${px(idcf.bull.perShare)} / bear ${px(idcf.bear.perShare)}.` : "Valuation anchored to relative metrics."}${d.street?.targetMean ? ` Sell-side consensus target ${px(d.street.targetMean)}${nv.streetUpside != null ? ` (${nv.streetUpside >= 0 ? "+" : ""}${nv.streetUpside.toFixed(1)}%)` : ""}.` : ""}${nv.blendedUpside != null ? ` Blended target ${px(m.price * (1 + nv.blendedUpside / 100))} implies <b class="${nv.blendedUpside >= 0 ? "ir-up" : "ir-down"}">${nv.blendedUpside >= 0 ? "+" : ""}${nv.blendedUpside.toFixed(1)}%</b> over a 12-month horizon.` : ""}</p>
+        <p><b>Valuation summary.</b> ${idcf ? `Base-case DCF fair value ${px(idcf.target)} (${P(idcf.upside)} vs current); bull ${px(idcf.bull.perShare)} / bear ${px(idcf.bear.perShare)}.` : m.valuationBasis === "market" ? `Market-based valuation (${esc(m.targetMethod || "relative methods")}); no DCF is used.` : "Valuation anchored to relative metrics."}${d.street?.targetMean ? ` Sell-side consensus target ${px(d.street.targetMean)}${nv.streetUpside != null ? ` (${nv.streetUpside >= 0 ? "+" : ""}${nv.streetUpside.toFixed(1)}%)` : ""}.` : ""}${nv.blendedUpside != null ? ` Blended target ${px(m.price * (1 + nv.blendedUpside / 100))} implies <b class="${nv.blendedUpside >= 0 ? "ir-up" : "ir-down"}">${nv.blendedUpside >= 0 ? "+" : ""}${nv.blendedUpside.toFixed(1)}%</b> over a 12-month horizon.` : ""}</p>
         ${RS && has(RS.recommendation) ? "" : `<p><b>Key catalysts.</b> ${(nv.catalysts || []).join("; ")}.</p>
         <p><b>Risk assessment.</b> ${(nv.risks || []).slice(0, 3).join("; ")}.</p>`}
 
@@ -2986,46 +2993,6 @@ TABS.portfolio = {
 
 
 
-/* ════════ NEWS & SENTIMENT ════════ */
-TABS.news = {
-  init() {
-    $("#newsGo").addEventListener("click", () => this.load());
-    $("#newsQuery").addEventListener("keydown", (e) => { if (e.key === "Enter") this.load(); });
-    $("#newsMode").addEventListener("change", () => this.load());
-    if (typeof CURRENT !== "undefined" && CURRENT && CURRENT.symbol) {
-      $("#newsQuery").value = CURRENT.symbol;
-    }
-    this.load();
-  },
-  /* persistent company context */
-  syncContext() {
-    if (!CURRENT || !CURRENT.symbol) return;
-    const q = $("#newsQuery");
-    if (q && q.value.trim().toUpperCase() !== CURRENT.symbol) { q.value = CURRENT.symbol; this.load(); }
-  },
-  async load() {
-    const q = $("#newsQuery").value.trim() || "NIFTY";
-    const mode = $("#newsMode").value;
-    $("#newsList").innerHTML = `<div class="loading mono">loading…</div>`;
-    try {
-      const d = await api(`/api/newsintel?q=${encodeURIComponent(q)}&mode=${mode}`);
-      if (d.error) { $("#newsList").innerHTML = `<div class="loading">${d.error}</div>`; return; }
-      const trendIcon = d.trend === "improving" ? "▲ improving" : d.trend === "deteriorating" ? "▼ deteriorating" : "▬ flat";
-      const trendCls = d.trend === "improving" ? "up" : d.trend === "deteriorating" ? "down" : "";
-      const toneCls = d.tone === "Positive" ? "up" : d.tone === "Negative" ? "down" : "";
-      const total = d.count || 1;
-      $("#newsAgg").innerHTML = `<div class="senti">
-        <div class="senti-gauge"><div class="senti-score ${toneCls}">${d.sentimentScore}<small>/100</small></div><div class="senti-tone">${d.tone.toUpperCase()} · <span class="${trendCls}">${trendIcon}</span></div>
-          <div class="senti-dist"><span class="sd-pos" style="width:${(d.pos / total) * 100}%"></span><span class="sd-neu" style="width:${(d.neu / total) * 100}%"></span><span class="sd-neg" style="width:${(d.neg / total) * 100}%"></span></div>
-          <div class="senti-leg"><span class="up">${d.pos} positive</span> · <span>${d.neu} neutral</span> · <span class="down">${d.neg} negative</span></div></div>
-        <div class="senti-meta"><div class="sm-l">SCOPE</div><div class="sm-v">${mode === "industry" ? "Industry / sector" : mode === "market" ? "Broad market" : "Company"}</div><div class="sm-l">HEADLINES</div><div class="sm-v">${d.count}</div><div class="sm-note">Sentiment is a keyword-lexicon score over recent headlines (50 = neutral); trend compares newer vs older headlines. Directional, not a market signal.</div></div>
-      </div>`;
-      $("#newsCount").textContent = d.count + " headlines";
-      $("#newsList").innerHTML = d.items.map((it) => `<div class="news-item"><span class="sent ${esc(it.sentiment)}">${esc((it.sentiment || "").slice(0, 3).toUpperCase())}</span><span class="nt"><a href="${escUrl(it.link)}" target="_blank" rel="noopener">${esc(it.title)}</a> ${(it.tags || []).map((t) => `<span class="tag">${esc(t)}</span>`).join(" ")}</span><span class="np">${esc(it.publisher || "")} · ${F.ago(it.time)}</span></div>`).join("") || `<div class="empty-mini">No headlines found for "${esc(q)}".</div>`;
-    } catch (e) { $("#newsList").innerHTML = `<div class="loading">news unavailable: ${e.message}</div>`; }
-  },
-};
-
 /* ════════ LIBRARY ════════
    Signed in  → server store (/api/library), reachable from any device.
    Signed out → this browser's localStorage, kept until the user clears site
@@ -3143,7 +3110,7 @@ const SCN = {
     const sc = this.list(IDCF.symbol).find((x) => x.id === id);
     if (!sc || !IDCF.symbol || IDCF.busy) return;
     const u = IDCF.uiState;
-    u.forecastHorizon = sc.ui.forecastHorizon ?? 5;
+    u.forecastHorizon = sc.ui.forecastHorizon ?? 10;
     u.terminalMethod = sc.ui.terminalMethod || "perpetual";
     u.exitMultiple = sc.ui.exitMultiple ?? 12;
     const blank3 = () => [null, null, null];
@@ -3410,6 +3377,43 @@ const valuationModelState = {
   },
 };
 
+/* ════════════════════════════════════════════════════════════════════════════
+   DCF IN RESEARCH — per-company switch (Modeling Lab).
+   OFF (default): Company Analysis, reports, Risk Center and the valuation panel
+   run on the market basis — relative methods, plus a published third-party fair
+   value where one exists. ON: the Modeling Lab DCF anchors the target
+   (40% DCF + 60% relative). Stored per browser; a preference, not data.
+   ════════════════════════════════════════════════════════════════════════════ */
+const DCFUSE = {
+  KEY: "mt.useLabDcf",
+  _read() { try { return JSON.parse(localStorage.getItem(this.KEY) || "{}") || {}; } catch { return {}; } },
+  on(sym) { return !!(sym && this._read()[String(sym).toUpperCase()]); },
+  set(sym, v) {
+    sym = String(sym || "").toUpperCase(); if (!sym) return;
+    const m = this._read(); if (v) m[sym] = true; else delete m[sym];
+    try { localStorage.setItem(this.KEY, JSON.stringify(m)); } catch { /* private mode — lasts this page */ }
+    document.dispatchEvent(new CustomEvent("mt:dcf-basis", { detail: { symbol: sym, on: !!v } }));
+  },
+  /** the user's Modeling Lab result for `sym`, when the switch is on and a model is built */
+  summary(sym) {
+    const vms = valuationModelState, i = vms.idcf;
+    if (!this.on(sym) || !i || i.error || vms.symbol !== String(sym).toUpperCase()) return null;
+    return {
+      target: i.target, upside: i.upside, terminalShare: i.base && i.base.terminalShare,
+      bear: i.bear && i.bear.perShare, base: i.base && i.base.perShare, bull: i.bull && i.bull.perShare,
+      wacc: i.assumptions && i.assumptions.wacc, terminalG: i.assumptions && i.assumptions.terminalG,
+      growth: i.assumptions && i.assumptions.growthY1_5, costEquity: i.waccBuild && i.waccBuild.costEquity,
+    };
+  },
+  /** GET `url` on the right basis: market (default) · lab with the user's model · lab with engine defaults */
+  fetch(url, sym) {
+    if (!this.on(sym)) return api(url);
+    const s = this.summary(sym);
+    if (s) return api(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ dcfMode: "lab", labDcf: s }) });
+    return api(url + (url.includes("?") ? "&" : "?") + "dcf=lab");
+  },
+};
+
 /* ════════ INSTITUTIONAL DCF — 17-section analyst model (Modeling Lab) ════════ */
 const IDCF = {
   data: null, symbol: null, busy: false,
@@ -3417,9 +3421,9 @@ const IDCF = {
   // None of this is set until the user opens "Expand & Edit". When empty/default
   // the server treats the call exactly like the legacy non-expanded path.
   uiState: {
-    expandedMode: false,
+    expandedMode: true,                // always expanded (the Expand & Edit switch was removed)
     expandedRows: new Set(),           // which assumption rows are disclosed
-    forecastHorizon: 5,                // 3 / 5 / 7 / 10
+    forecastHorizon: 10,               // 3 / 5 / 7 / 10 — the assumption engine plans 10 years
     terminalMethod: "perpetual",       // "perpetual" | "exitMultiple"
     exitMultiple: 12,
     // Active tab inside the Integrated Forecast Financial Model (Section 2)
@@ -3457,7 +3461,7 @@ const IDCF = {
   collectOverrides(scalarOverrides) {
     const u = this.uiState;
     const ov = { ...(scalarOverrides || {}) };
-    // Always send forecast horizon (server treats 5 as default no-op)
+    // Always send forecast horizon (the plan's 10 years is the default)
     ov.forecastHorizon = u.forecastHorizon;
     // Terminal method
     if (u.terminalMethod === "exitMultiple") {
@@ -3524,7 +3528,7 @@ const IDCF = {
     // "isRecompute" remains true only if there is a meaningful user delta (not
     // the implicit forecastHorizon=5 default).
     const meaningfulKeys = Object.keys(mergedOverrides).filter((k) => {
-      if (k === "forecastHorizon") return +mergedOverrides[k] !== 5;
+      if (k === "forecastHorizon") return +mergedOverrides[k] !== 10;
       return mergedOverrides[k] != null;
     });
     const isRecompute = meaningfulKeys.length > 0;
@@ -3543,6 +3547,9 @@ const IDCF = {
       // ── Update single source of truth ──────────────────────────────────
       valuationModelState.update(data);
       valuationModelState.userOverrides = overrides || {};
+      this.renderBasis();
+      // research views on the lab basis follow the user's latest model
+      document.dispatchEvent(new CustomEvent("mt:valuation-model", { detail: { symbol } }));
 
       // ── Render ─────────────────────────────────────────────────────────
       const dcfFor = $("#dcfFor");
@@ -3562,6 +3569,8 @@ const IDCF = {
         : `<span class="vms-tag vms-ev">EVIDENCE-BASED</span>`;
       this.setStatus(`${statusTag} <span class="vms-ts">Model updated ${ts} · edit any assumption to recompute</span>`, true);
 
+      this.pollPlanAI();
+
       // ── Reveal the Export-to-Excel button (hidden until first model build)
       const expBtn = $("#idcfExportExcel");
       if (expBtn) {
@@ -3577,6 +3586,45 @@ const IDCF = {
 
     } catch (e) { this.setStatus("failed: " + e.message); }
     this.busy = false;
+  },
+
+  /** The AI analyst rationale on the default plan arrives after the model — poll, then repaint. */
+  pollPlanAI() {
+    const d = this.data, st = d && d.planAI;
+    if (!st || st.status !== "running" || !st.key) return;
+    const sym = this.symbol, key = st.key, t0 = Date.now();
+    clearTimeout(this._aiTimer);
+    const tick = async () => {
+      if (this.symbol !== sym || !this.data || !this.data.planAI || this.data.planAI.key !== key) return;
+      let r = null; try { r = await api("/api/idcf-rationale/" + key); } catch { /* retry */ }
+      if (r && (r.status === "done" || r.status === "failed")) {
+        this.data.planAI = { key, status: r.status, result: r.result || null, reason: r.status === "failed" ? "AI rationale could not be generated — engine rationale shown" : null };
+        const root = document.getElementById("aplRoot");
+        if (root) root.outerHTML = renderAssumptionPlan(this.data);
+        return;
+      }
+      if (Date.now() - t0 < 120000) this._aiTimer = setTimeout(tick, 4000);
+    };
+    this._aiTimer = setTimeout(tick, 3000);
+  },
+
+  /** "Use this DCF in research" switch — off by default for every company. */
+  renderBasis() {
+    const el = $("#idcfBasis"); if (!el || !this.symbol) return;
+    const on = DCFUSE.on(this.symbol);
+    el.hidden = false;
+    el.classList.toggle("on", on);
+    el.innerHTML = `<label class="idcf-switch"><input type="checkbox" id="idcfUseToggle"${on ? " checked" : ""}><span class="idcf-switch-track"><i></i></span>
+        <b>Use this DCF in research</b></label>
+      <span class="idcf-basis-note">${on
+        ? `On for ${esc(this.symbol)} — this model is the intrinsic anchor of the target (40% DCF + 60% relative methods) in Company Analysis, the research report and Risk Center.`
+        : `Off — research on ${esc(this.symbol)} uses market-based valuation — peer EV/EBITDA and P/E, growth-adjusted P/E, the stock’s own 5-year multiple, the street consensus target, and a published third-party fair value where one exists. This DCF stays in the Modeling Lab until you switch it on.`}</span>`;
+    const t = $("#idcfUseToggle");
+    if (t) t.addEventListener("change", () => {
+      DCFUSE.set(this.symbol, t.checked);
+      this.renderBasis();
+      if (typeof loadValuation === "function") loadValuation(this.symbol);
+    });
   },
 
   renderAssumptionPanel(overrides) {
@@ -3604,8 +3652,8 @@ const IDCF = {
       { k: "growthY1_5",  label: "Revenue Growth Y1 (%)", val: effVal("growthY1_5", a.growthY1_5),  step: 0.5,
         rec: ev.revenueGrowth?.recommended,    conf: ev.revenueGrowth?.confidence,
         hist: ev.revenueGrowth?.historical,    src: ev.revenueGrowth?.sourceStatus },
-      { k: "fade",        label: "Annual Fade (%)",        val: a.fade,        step: 0.25,
-        rec: null, conf: "Medium", hist: null, src: "Analyst Estimate" },
+      // with an engine plan, growth follows the year-by-year path — no single fade rate
+      ...(this.data.plan ? [] : [{ k: "fade", label: "Annual Fade (%)", val: a.fade, step: 0.25, rec: null, conf: "Medium", hist: null, src: "Analyst Estimate" }]),
       { k: "ebitdaMargin",label: "EBITDA Margin (%)",      val: effVal("ebitdaMargin", a.ebitdaMargin),step: 0.5,
         rec: ev.ebitdaMargin?.recommended,     conf: ev.ebitdaMargin?.confidence,
         hist: ev.ebitdaMargin?.historical,     src: ev.ebitdaMargin?.sourceStatus },
@@ -3678,7 +3726,7 @@ const IDCF = {
       <span class="ap-label">WACC (DERIVED)</span>
       <div>
         <span class="ap-wacc-val">${(+a.wacc).toFixed(1)}%</span>
-        <span class="ap-wacc-formula">rf ${w.rf}% + β${w.beta.toFixed(2)} × ERP${w.erp}%</span>
+        <span class="ap-wacc-formula">Ke ${(+w.costEquity).toFixed(2)}% = rf ${(+w.rf).toFixed(2)}% + β${(+w.beta).toFixed(2)} × ERP${(+w.erp).toFixed(1)}%${this.data.plan && this.data.plan.wacc.premium ? ` + ${this.data.plan.wacc.premium.toFixed(2)}% premium` : ""} · ${(+w.weightDebt).toFixed(0)}% debt</span>
       </div>
     </div>`;
 
@@ -3687,11 +3735,7 @@ const IDCF = {
 
     // Expand & Edit pill — sits at the top of the sidebar, full width.
     // Clicking re-renders the right column to show the year-wise table.
-    const isExpanded = this.uiState.expandedMode;
-    const expandPillHtml = `<button class="ap-expand-pill ap-full" id="apExpandPill" data-expanded="${isExpanded ? 1 : 0}">
-      <span class="ap-expand-pill-lbl">${isExpanded ? "« COLLAPSE" : "EXPAND & EDIT"}</span>
-      <span class="ap-expand-pill-icon">${isExpanded ? "×" : "›"}</span>
-    </button>`;
+    const expandPillHtml = `<div class="ap-engine-note ap-full"><b>Engine defaults.</b> Every input below is set by the assumption engine — see the assumption table for how each is built. Change a value only if you disagree; the year-wise table on the right edits individual years.</div>`;
 
     // Everything lives inside .ap-rows so grid handles all spanning and containment.
     // ap-mqs, ap-legend, ap-wacc-derived, ap-full all get grid-column:1/-1 via CSS.
@@ -3701,7 +3745,7 @@ const IDCF = {
         ${rowsHtml}
         ${waccHtml}
         ${resetBtnHtml}
-        <div class="note ap-full">Edit any value to recompute the full model. Recommended (AI) values shown in amber. Overrides highlighted in amber border.${isExpanded ? "" : " Click <b>Expand &amp; Edit</b> for year-wise assumptions."}</div>
+        <div class="note ap-full">Edits recompute the whole model. Overrides carry an amber border; ↺ Reset returns every input to the engine default.</div>
       </div>`;
 
     // ── Debounced recompute on input ─────────────────────────────────────
@@ -3735,19 +3779,7 @@ const IDCF = {
       this.load(this.symbol);
     });
 
-    // Expand & Edit toggle — just flips the flag and re-renders the right column.
-    // We don't refetch; the existing data has everything needed.
-    const expandEl = $("#apExpandPill");
-    if (expandEl) expandEl.addEventListener("click", () => {
-      this.uiState.expandedMode = !this.uiState.expandedMode;
-      // If we're opening for the first time and the user hasn't set any yearwise
-      // values yet, leave them as null (nulls render as "—" in locked cells in
-      // the disclosed view, and as the model-default value when shown editable).
-      this.renderAssumptionPanel(overrides);
-      const idcfOut = $("#idcfOut");
-      if (idcfOut && this.data) idcfOut.innerHTML = renderAssumptionIntelligence(this.data, this.uiState) + renderInstitutionalDCF(this.data, this.uiState);
-      this.wireExpandedPanel();
-    });
+
   },
 
   /** Reset all expanded-mode UI state back to defaults (called on full reset
@@ -3814,6 +3846,9 @@ const IDCF = {
           capitalStructure: this.uiState.capitalStructure,
         },
         statements,
+        // research basis + peer set, so the valuation sheets match the Valuation Methods panel
+        dcfMode: DCFUSE.on(this.symbol) ? "lab" : "market",
+        peers: typeof PEER_CUSTOM !== "undefined" && Array.isArray(PEER_CUSTOM) && PEERS && PEERS[0] && PEERS[0].symbol === this.symbol ? PEER_CUSTOM : null,
       };
 
       const res = await fetch(`/api/idcf/${this.symbol}/excel`, {
@@ -3849,7 +3884,7 @@ const IDCF = {
   },
 
   resetUiState() {
-    this.uiState.forecastHorizon = 5;
+    this.uiState.forecastHorizon = 10;
     this.uiState.terminalMethod = "perpetual";
     this.uiState.exitMultiple = 12;
     this.uiState.activeFinTab = "income";
@@ -4223,17 +4258,16 @@ function renderAssumptionIntelligence(data, uiState) {
 
   // Expanded year-wise table — rendered only when uiState.expandedMode is on.
   // Sits between MODEL DIAGNOSTICS and the ASSUMPTION EVIDENCE TABLE per spec.
-  const expandedHtml = (uiState && uiState.expandedMode)
-    ? renderExpandedAssumptions(data, uiState)
-    : "";
+  // always expanded — the year-wise table is the model's input sheet
+  const expandedHtml = renderExpandedAssumptions(data, uiState || IDCF.uiState);
 
   const html = `<div class="ai-layer">
   
     ${statusCard}
     ${mqsDetail}
     ${diagHtml}
+    ${data.plan ? renderAssumptionPlan(data) : evidenceTable}
     ${expandedHtml}
-    ${evidenceTable}
   </div>`;
 
   // Wire up expand toggles after render (deferred)
@@ -4251,6 +4285,136 @@ function renderAssumptionIntelligence(data, uiState) {
 
   return html;
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ASSUMPTION TABLE — the engine's default plan (server/lib/dcfAssumptions.js).
+   Every driver: the path used, how it is built (components, weights, sources),
+   every adjustment factor applied, and the rationale — the AI analyst note when
+   it has arrived, the engine's own explanation otherwise. Always expanded.
+   ════════════════════════════════════════════════════════════════════════════ */
+function renderAssumptionPlan(data) {
+  const p = data.plan;
+  if (!p) return "";
+  const open = !(IDCF.uiState && IDCF.uiState.planOpen === false);      // expanded by default
+  const ai = (data.planAI && data.planAI.result) || null;
+  const aiState = data.planAI ? data.planAI.status : "off";
+  const N1 = (v) => (v != null && isFinite(v) ? (+v).toFixed(1) : "—");
+  const N2 = (v) => (v != null && isFinite(v) ? (+v).toFixed(2) : "—");
+  const fy = (y) => "FY" + String(y).slice(2);
+  const conf = (c) => `<span class="ap-conf ${c === "High" ? "conf-h" : c === "Medium" ? "conf-m" : "conf-l"}" title="${esc(c || "")} confidence">${esc((c || "?")[0])}</span>`;
+  const yrs = p.years || [];
+  const show = [0, 1, 4, 9].filter((k) => k < yrs.length);                 // Y1 Y2 Y5 Y10
+  const D = p.drivers, w = p.wacc, t = p.terminal, q = p.quality || {};
+  const nCols = 2 + show.length + 1;
+  const band = (n, title) => `<tr class="apl-band"><td colspan="${nCols}">${n}. ${title}</td></tr>`;
+  const isPct = (lbl) => !/beta|β|asset intensity/i.test(lbl);
+  const buildList = (b) => (b && b.length ? b.map((x) => `<div class="apl-li"><span class="apl-li-l">${esc(x.label)}</span><b>${x.value == null ? "—" : N2(x.value)}${isPct(x.label) ? "%" : "×"}</b>${x.weight != null ? `<i class="apl-w">×${Math.round(x.weight * 100)}%</i>` : ""}${x.source ? `<div class="apl-li-s">${esc(x.source)}</div>` : ""}</div>`).join("") : `<span class="muted">—</span>`);
+  const adjList = (a) => (a && a.length ? a.map((x) => `<div class="apl-li"><span class="apl-li-l">${esc(x.label)}</span><i class="apl-eff">${esc(x.effect || "")}</i><div class="apl-li-s">${esc(x.why || "")}</div></div>`).join("") : `<span class="muted">None</span>`);
+  const cm = data.commentary || null, corr = (ai && ai.corroboration) || {};
+  // AI corroboration of one assumption: verdict, the value it would use, one line of evidence — never applied
+  const check = (k) => { const c = corr[k]; if (!c) return ""; return `<div class="apl-chk apl-chk-${esc(c.verdict)}"><span class="apl-tag">AI check</span><b>${esc(c.verdict)}</b>${c.suggested != null ? ` · would use ${N2(c.suggested)}%` : ""} — ${esc(c.reason)}</div>`; };
+  const why = (aiKey, engine, k) => `<div class="apl-eng"><span class="apl-tag apl-tag-eng">Engine</span>${esc(engine)}</div>${ai && ai[aiKey] ? `<div class="apl-ai"><span class="apl-tag">AI</span>${esc(ai[aiKey])}</div>` : ""}${check(k)}`;
+  const row = (k, aiKey, termCell) => {
+    const d = D[k]; if (!d) return "";
+    const h = d.hist;
+    return `<tr class="apl-row">
+      <td class="apl-name"><div class="apl-name-l">${esc(d.label)} ${conf(d.confidence)}</div><div class="apl-hist">${h ? `hist ${h.n}y avg ${N1(h.avg)}% · ${N1(h.min)}–${N1(h.max)}%${h.cagr != null ? ` · CAGR ${N1(h.cagr)}%` : ""}` : "no history"}</div></td>
+      <td class="apl-num apl-latest">${d.latest != null ? N1(d.latest) + "%" : "—"}</td>
+      ${show.map((i) => `<td class="apl-num">${N1(d.path[i])}%</td>`).join("")}
+      <td class="apl-num apl-term">${termCell || "—"}</td>
+    </tr>
+    <tr class="apl-detail"><td colspan="${nCols}"><div class="apl-detail-g">
+      <div><div class="apl-dh">How it is built</div>${buildList(d.build)}</div>
+      <div><div class="apl-dh">Adjustment factors</div>${adjList(d.adjustments)}</div>
+      <div><div class="apl-dh">Rationale</div>${why(aiKey, d.rationale, k)}</div>
+    </div></td></tr>`;
+  };
+  const s2 = t.stage2Years ? `+${t.stage2Years}y fade` : "";
+  const driverTable = `<div class="ai-table-wrap"><table class="apl-t">
+    <thead><tr><th>Driver</th><th class="apl-num">Latest</th>${show.map((i) => `<th class="apl-num">${fy(yrs[i])}E</th>`).join("")}<th class="apl-num">Terminal</th></tr></thead>
+    <tbody>
+      ${band(1, "Growth &amp; profitability")}
+      ${row("growth", "growth", `${N1(t.value)}%<div class="apl-sub2">${s2}</div>`)}
+      ${row("ebitdaMargin", "ebitdaMargin", `${N1(D.ebitdaMargin.path.at(-1))}%`)}
+      ${band(2, "Reinvestment")}
+      ${row("depPctRev", "reinvestment", `${N1(D.depPctRev.path.at(-1))}%`)}
+      ${row("capexPctRev", "reinvestment", `${N1(t.reinvestmentRate)}%<div class="apl-sub2">of NOPAT</div>`)}
+      ${row("wcPctRev", "workingCapital", `${N1(D.wcPctRev.path.at(-1))}%`)}
+      ${band(3, "Tax")}
+      ${row("taxRate", "taxRate", `${N1(D.taxRate.path.at(-1))}%`)}
+    </tbody></table></div>`;
+
+  // cost of capital & terminal value — sectioned: component · value · basis
+  const premAdj = w.adjustments.filter((a) => /cost of equity/.test(a.effect || ""));
+  const otherW = w.adjustments.filter((a) => !/cost of equity/.test(a.effect || ""));
+  const kv = (label, value, basis, cls = "") => `<tr class="apl-row ${cls}"><td class="apl-name">${label}</td><td class="apl-num">${value}</td><td class="apl-txt apl-basis">${basis}</td></tr>`;
+  const capTable = `<div class="ai-table-wrap"><table class="apl-t apl-kv">
+    <thead><tr><th>Component</th><th class="apl-num">Value</th><th>Basis &amp; source</th></tr></thead>
+    <tbody>
+      <tr class="apl-band"><td colspan="3">A. Cost of equity</td></tr>
+      ${kv("Risk-free rate", `${N2(w.rf.value)}%`, `${esc(w.rf.source)}${w.rf.live ? "" : ` <span class="apl-flag">house fallback</span>`}`)}
+      ${kv("Beta (β)", N2(w.beta.used), `${esc(w.beta.why)}${w.beta.source ? ` · ${esc(w.beta.source)}` : ""}${otherW.length ? ` · ${otherW.map((a) => `${esc(a.label)}: ${esc(a.effect)}`).join("; ")}` : ""}`)}
+      ${kv("Equity risk premium", `${N2(w.erp.value)}%`, esc(w.erp.source))}
+      ${kv("Company-specific premium", `${N2(w.premium)}%`, premAdj.length ? premAdj.map((a) => `${esc(a.label)} <i class="apl-eff">${esc(a.effect)}</i>`).join(" · ") : "No earnings-quality, distress or size flags")}
+      ${kv("Cost of equity", `${N2(w.costEquity)}%`, "rf + β × ERP + premium (CAPM)", "apl-total")}
+      <tr class="apl-band"><td colspan="3">B. Cost of debt</td></tr>
+      ${kv("Pre-tax cost of debt", `${N2(w.costDebt.pre)}%`, `${esc(w.costDebt.why)}${w.costDebt.rating ? ` · rating ${esc(w.costDebt.rating)}` : ""}`)}
+      ${kv("Tax shield rate", `${N2(w.costDebt.taxRate)}%`, "statutory rate — interest is deductible at the statutory rate")}
+      ${kv("After-tax cost of debt", `${N2(w.costDebt.post)}%`, "Kd × (1 − t)", "apl-total")}
+      <tr class="apl-band"><td colspan="3">C. Capital structure</td></tr>
+      ${kv("Weight of equity / debt", `${N1(w.weights.equity)}% / ${N1(w.weights.debt)}%`, esc(w.weights.basis))}
+      ${kv("WACC", `${N2(w.value)}%`, "We × Ke + Wd × Kd × (1 − t)", "apl-total")}
+      <tr class="apl-band"><td colspan="3">D. Terminal value</td></tr>
+      ${kv("Stage-2 fade", t.stage2Years ? `${t.stage2Years} yrs` : "none", t.stage2Years ? `growth fades from ${N1(t.stage2From)}% (FY${String(yrs.at(-1)).slice(2)}) to the perpetuity rate over ${t.stage2Years} further years — the ${esc(t.moat || "")} moat's competitive-advantage period` : "no moat — the perpetuity starts after the explicit forecast")}
+      ${kv("Terminal growth", `${N2(t.value)}%`, t.adjustments.length ? t.adjustments.map((a) => `${esc(a.label)} <i class="apl-eff">${esc(a.effect)}</i>`).join(" · ") : "long-run anchor below nominal GDP and the risk-free rate")}
+      ${kv("Return on new capital (RONIC)", `${N1(t.ronic)}%`, `moat ${esc(t.moat || "not rated")} — sets the reinvestment each unit of growth needs`)}
+      ${kv("Terminal reinvestment rate", `${N1(t.reinvestmentRate)}%`, "of NOPAT = g ÷ RONIC — keeps the perpetuity internally consistent")}
+      ${kv("Terminal FCFF", "formula", "NOPAT × (1 − g ÷ RONIC), valued with a Gordon perpetuity after the stage-2 fade", "apl-total")}
+      ${(() => { const b = data.idcf && data.idcf.base, lr = b && b.rows && b.rows.at(-1); if (!b || !lr || !(lr.ebitda > 0) || !(b.tv > 0)) return ""; const m = b.tv / lr.ebitda; return kv("Implied exit EV/EBITDA", `${N1(m)}×`, `terminal value ÷ FY${String(lr.year).slice(2)} EBITDA — the multiple the perpetuity implies at the end of the forecast${m < 6 ? " (conservative)" : m > 25 ? " (demanding — check growth and RONIC)" : ""}`) + kv("Terminal value share of EV", `${N1(b.terminalShare * 100)}%`, b.terminalShare > 0.75 ? "high — the valuation leans on the perpetuity" : "the explicit forecast carries a healthy share of value"); })()}
+    </tbody></table></div>
+    <div class="apl-note"><div class="apl-eng"><span class="apl-tag apl-tag-eng">Engine</span>${esc(w.rationale)} ${esc(t.rationale)}</div>${ai && ai.wacc ? `<div class="apl-ai"><span class="apl-tag">AI</span>${esc(ai.wacc)}</div>` : ""}${ai && ai.terminal ? `<div class="apl-ai"><span class="apl-tag">AI</span>${esc(ai.terminal)}</div>` : ""}${check("wacc")}${check("terminalG")}</div>`;
+
+  const allAdj = (p.adjustments || []).map((a) => `<tr class="apl-row"><td class="apl-name">${esc(a.driver)}</td><td class="apl-txt"><b>${esc(a.label)}</b></td><td class="apl-num apl-eff-c">${esc(a.effect || "")}</td><td class="apl-txt apl-basis">${esc(a.why || "")}</td></tr>`).join("");
+  const adjTable = allAdj ? `<div class="ai-table-wrap"><table class="apl-t apl-kv"><thead><tr><th>Driver</th><th>Factor</th><th class="apl-num">Effect</th><th>Why</th></tr></thead><tbody>${allAdj}</tbody></table></div>` : `<div class="muted apl-empty">No adjustments — the defaults are the evidence as built.</div>`;
+
+  const aiNote = aiState === "running" ? `<span class="apl-pending">AI rationale is being written…</span>`
+    : aiState === "done" ? `<span class="apl-ok">engine commentary + AI check · ${esc((data.planAI.result && data.planAI.result.model) || "Gemini")}</span>`
+    : `<span class="muted">engine commentary${data.planAI && data.planAI.reason ? ` · ${esc(data.planAI.reason)}` : ""}</span>`;
+  const qual = `<div class="apl-quality">
+      <span>Earnings quality <b>${esc(q.earningsQualityGrade || "—")}</b></span><span>Moat <b>${esc(q.moat || "—")}</b></span>
+      <span>ROIC <b>${q.roic != null ? N1(q.roic) + "%" : "—"}</b></span><span>Cash conversion <b>${q.cashConversion != null ? N2(q.cashConversion) + "×" : "—"}</b></span>
+      <span>Beneish M <b>${q.beneish != null ? N2(q.beneish) : "—"}</b></span><span>Altman zone <b>${esc(q.altmanZone || "—")}</b></span>
+      <span>WACC <b>${N2(w.value)}%</b></span><span>Terminal g <b>${N2(t.value)}%</b></span></div>`;
+
+  return `<div class="apl" id="aplRoot">
+    <div class="apl-hdr">
+      <button class="apl-toggle" type="button" data-apl-toggle aria-expanded="${open}"><span class="apl-caret">${open ? "▾" : "▸"}</span><span class="ai-sec-ttl">ASSUMPTION TABLE — HOW EVERY DEFAULT IS SET</span></button>
+      <span class="ai-sec-sub">${esc(p.marketLabel)} · ${yrs.length}-year forecast ${fy(yrs[0])}–${fy(yrs.at(-1))}${t.stage2Years ? ` + ${t.stage2Years}-year fade` : ""} · ${aiNote}</span>
+    </div>
+    ${(p.warnings || []).map((x) => `<div class="apl-warn">⚠ ${esc(x)}</div>`).join("")}
+    ${qual}
+    <div class="apl-body"${open ? "" : " hidden"}>
+      ${cm && cm.overview ? `<div class="apl-overview"><span class="apl-tag apl-tag-eng">Engine</span>${esc(cm.overview)}</div>` : ""}
+      ${ai && ai.overview ? `<div class="apl-overview"><span class="apl-tag">AI</span>${esc(ai.overview)}</div>` : ""}
+      ${driverTable}
+      <div class="apl-sub">COST OF CAPITAL &amp; TERMINAL VALUE</div>
+      ${capTable}
+      <div class="apl-two">
+        <div><div class="apl-sub">EVERY ADJUSTMENT FACTOR APPLIED</div>${adjTable}</div>
+        <div><div class="apl-sub">WHAT WOULD CHANGE THESE ASSUMPTIONS</div>${(() => { const items = [...((cm && cm.watch) || []).map((x) => ({ t: x.text, ai: false })), ...((ai && ai.watch) || []).map((x) => ({ t: x, ai: true }))]; return items.length ? `<ul class="apl-watch">${items.map((x) => `<li>${x.ai ? `<span class="apl-tag">AI</span>` : ""}${esc(x.t)}</li>`).join("")}</ul>` : `<div class="muted apl-empty">—</div>`; })()}
+          ${(p.notes || []).length ? `<div class="apl-sub" style="margin-top:12px">DATA NOTES</div><ul class="apl-watch">${p.notes.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}</div>
+      </div>
+    </div>
+  </div>`;
+}
+/* expand / collapse the assumption table (state kept for the session) */
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-apl-toggle]");
+  if (!b) return;
+  IDCF.uiState.planOpen = IDCF.uiState.planOpen === false;
+  const root = document.getElementById("aplRoot");
+  if (root && IDCF.data) root.outerHTML = renderAssumptionPlan(IDCF.data);
+});
 
 /* ════════════════════════════════════════════════════════════════════════════
    EXPANDED YEAR-WISE ASSUMPTIONS TABLE  (Modeling Lab — expanded mode)
@@ -4304,7 +4468,7 @@ function renderExpandedAssumptions(data, ui) {
   const horizonHtml = horizons.map((h) => `<button class="ape-horiz-btn${h === horizon ? " is-active" : ""}" data-ape-horizon="${h}">${h} YR</button>`).join("");
 
   const headerHtml = `<div class="ape-hdr">
-    <span class="ai-sec-ttl">EXPANDED ASSUMPTIONS <span class="ape-hdr-sub">(EDIT NEXT 3 YEARS ONLY)</span></span>
+    <span class="ai-sec-ttl">YEAR-WISE MODEL INPUTS <span class="ape-hdr-sub">(engine defaults · Y1–Y3 editable if you disagree)</span></span>
     <div class="ape-hdr-right">
       <span class="ape-hdr-lbl">Forecast Horizon</span>
       <div class="ape-horiz-grp">${horizonHtml}</div>
@@ -4642,7 +4806,7 @@ function renderExpandedAssumptions(data, ui) {
   // ── Footer notes ──────────────────────────────────────────────────────────
   const footerHtml = `<div class="ape-footer">
     <span class="ape-foot-icon">ⓘ</span>
-    Editable up to next 3 years (FY${String(fcRows[0]?.year || "").slice(2)}–FY${String(fcRows[2]?.year || "").slice(2)}). Years beyond Y3 are auto-derived based on fade/expansion logic.
+    Every year is set by the assumption engine (see the assumption table above). FY${String(fcRows[0]?.year || "").slice(2)}–FY${String(fcRows[2]?.year || "").slice(2)} can be edited; later years follow the engine's path from your edited level.
   </div>`;
 
   return `<div class="ape-block" id="apeRoot">
@@ -4872,7 +5036,17 @@ function renderInstitutionalDCF(data, uiState) {
       <div class="idcf-prose"><p>Each bar flexes one driver by an institutional-standard step while everything else holds. <b>${top.label}</b> dominates the valuation (${px(top.lowPx)}–${px(top.highPx)} per share across ±${top.step}pp) — that is the assumption to underwrite hardest, and where new information should move your target most. Drivers at the bottom are second-order; do not spend diligence time there.</p></div>`);
   })();
 
-  return `<div class="idcf">${s1}${s2}${s3}${s4}${s5}${s6}${s7}${s8}${s9}${s10}${s11}${s12}${s13}${s14}${s15}${s16}${s17}${s18}${s19}</div>`;
+  // S20 — terminal-value cross-check (the Excel model's Terminal Value sheet, same figures)
+  const s20 = (() => {
+    const t = data.tvCheck; if (!t || !t.methods) return "";
+    const U2 = (v) => (v == null || !isFinite(v) ? "—" : sym + U(v));
+    const rows = t.methods.map((m) => `<tr class="${m.selected ? "sel" : ""}"><td class="nm">${esc(m.name)}${m.selected ? " ◆" : ""}</td><td>${U2(m.tv)}</td><td>${U2(m.tvPv)}</td><td>${m.tvShare == null ? "—" : N(m.tvShare, 1) + "%"}</td><td>${px(m.perShare)}</td><td class="${F.cls(m.upside)}">${P(m.upside)}</td><td class="tvx-basis">${esc(m.basis)}</td></tr>`).join("");
+    return sec(20, "Terminal Value Cross-Check", `same ${t.horizon}-year forecast · seven terminal-value methods · ◆ = the method in use`,
+      `<table class="idcf-t tvx-t"><tr><th>Method</th><th>TV (Year ${t.horizon})</th><th>PV of TV</th><th>TV % of EV</th><th>Value/share</th><th>vs current</th><th>Basis</th></tr>${rows}</table>
+      <div class="idcf-note">The explicit forecast is identical in every row; only the terminal value changes. A wide spread means the valuation leans on long-run assumptions — the Excel model's Terminal Value sheet reproduces each figure (plus P/E, P/B and value-driver variants) and lets you pick any of them.</div>`);
+  })();
+
+  return `<div class="idcf">${s1}${s2}${s3}${s4}${s5}${s6}${s7}${s8}${s9}${s10}${s11}${s12}${s13}${s14}${s15}${s16}${s17}${s18}${s19}${s20}</div>`;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -5992,128 +6166,6 @@ function computeIntegratedStatements(data, ui) {
   };
 }
 
-/* ════════ FORENSIC ANALYSIS (dedicated top-level module) ════════ */
-TABS.forensic = {
-  init() {
-    const load = $("#frcLoad"), sym = $("#frcSym");
-    if (load) load.addEventListener("click", () => { const s = (sym.value || "").trim().toUpperCase(); if (s) this.run(s); });
-    if (sym) sym.addEventListener("keydown", (e) => { if (e.key === "Enter") load.click(); });
-    if (CURRENT && CURRENT.symbol) { sym.value = CURRENT.symbol; this.run(CURRENT.symbol); }
-  },
-  /* persistent company context: re-align when the researched company changed */
-  syncContext() {
-    if (!CURRENT || !CURRENT.symbol || this._sym === CURRENT.symbol) return;
-    const sym = $("#frcSym"); if (sym) sym.value = CURRENT.symbol;
-    this.run(CURRENT.symbol);
-  },
-  async run(symbol) {
-    this._sym = symbol;
-    $("#frcStatus").textContent = "scanning statements…";
-    $("#frcOut").innerHTML = `<div class="loading mono" style="padding:50px">Running forensic models on ${symbol} — Piotroski · Altman · Beneish · cash quality…</div>`;
-    try {
-      const d = await api("/api/forensic/" + encodeURIComponent(symbol));
-      if (d.error) { $("#frcStatus").textContent = d.error; $("#frcOut").innerHTML = `<div class="empty-mini">${d.error}</div>`; return; }
-      if (!d.forensic) { $("#frcStatus").textContent = "insufficient history"; $("#frcOut").innerHTML = `<div class="empty-mini">Need at least two years of statements to run forensic models for ${symbol}.</div>`; return; }
-      $("#frcFor").textContent = d.meta.name + " · " + d.meta.currency;
-      $("#frcStatus").textContent = "complete";
-      $("#frcOut").innerHTML = renderForensic(d);
-    } catch (e) { $("#frcStatus").textContent = "failed: " + e.message; $("#frcOut").innerHTML = `<div class="empty-mini">${e.message}</div>`; }
-  },
-};
-
-function renderForensic(d) {
-  const f = d.forensic, ccy = d.meta.currency;
-  const N = (v, dp = 1) => (v == null || !isFinite(v) ? "—" : v.toLocaleString("en-IN", { minimumFractionDigits: dp, maximumFractionDigits: dp }));
-  const isINR = /INR|₹/i.test(ccy || "");
-  const money = (v) => { if (v == null || !isFinite(v)) return "—"; if (isINR) return "₹" + (v / 1e7).toLocaleString("en-IN", { maximumFractionDigits: 0 }) + " Cr"; return (v / 1e6).toLocaleString("en-US", { maximumFractionDigits: 0 }) + " M"; };
-  const gradeClass = (g) => ({ A: "frc-a", B: "frc-b", C: "frc-c", D: "frc-d", Strong: "frc-a", Moderate: "frc-c", Weak: "frc-d", Safe: "frc-a", Grey: "frc-c", Distress: "frc-d" }[g] || "");
-  const sec = (title, sub, inner) => `<div class="frc-sec"><div class="frc-sh"><h4>${title}</h4>${sub ? `<span>${sub}</span>` : ""}</div>${inner}</div>`;
-
-  // top scorecard — the 4 headline grades
-  const beneishGrade = f.beneish.score == null ? "n/a" : (f.beneish.score > f.beneish.threshold ? "Risk" : "Clean");
-  const scoreCard = `<div class="frc-cards">
-    <div class="frc-card ${gradeClass(f.earningsQualityGrade)}"><div class="frc-c-l">EARNINGS QUALITY</div><div class="frc-c-v">${f.earningsQualityGrade}</div><div class="frc-c-s">composite grade</div></div>
-    <div class="frc-card ${gradeClass(f.piotroski.grade)}"><div class="frc-c-l">PIOTROSKI F</div><div class="frc-c-v">${f.piotroski.score}<small>/9</small></div><div class="frc-c-s">${f.piotroski.grade} fundamentals</div></div>
-    <div class="frc-card ${gradeClass(f.altman.zone)}"><div class="frc-c-l">ALTMAN Z</div><div class="frc-c-v">${f.altman.score == null ? "—" : N(f.altman.score, 2)}</div><div class="frc-c-s">${f.altman.zone} zone</div></div>
-    <div class="frc-card ${beneishGrade === "Clean" ? "frc-a" : beneishGrade === "Risk" ? "frc-d" : ""}"><div class="frc-c-l">BENEISH M</div><div class="frc-c-v">${f.beneish.score == null ? "—" : N(f.beneish.score, 2)}</div><div class="frc-c-s">${f.beneish.flag.split(" ")[0]} ${f.beneish.flag.split(" ")[1] || ""} risk</div></div>
-  </div>`;
-
-  // red flags — with reasoning
-  const flagRows = (d.flags || []).map((fl) => `<div class="frc-flag ${fl.sev}"><span class="frc-flag-dot"></span><div><div class="frc-flag-t">${fl.t}</div>${fl.why ? `<div class="frc-flag-why">${fl.why}</div>` : ""}</div></div>`).join("");
-  const redFlags = sec("Red-Flag Detection", `${d.flags.filter((x) => x.sev !== "low").length} material item(s)`, `<div class="frc-flags">${flagRows}</div><div class="frc-note">Each flag states the metric that triggered it, the threshold breached and why it matters for earnings or solvency quality.</div>`);
-
-  // NEW: year-wise figures feeding the models
-  const fig = f.figures || [];
-  const figLine = (label, key, fmt) => `<tr><td>${label}</td>${fig.map((y) => `<td>${fmt(y[key])}</td>`).join("")}</tr>`;
-  const figuresSec = fig.length ? sec("Financial Figures Used", "year-wise inputs behind every calculation below",
-    `<div class="frc-scroll"><table class="frc-t frc-fig"><tr><th>${isINR ? "₹ Crore" : "Millions"}</th>${fig.map((y) => `<th>FY${String(y.year).slice(2)}</th>`).join("")}</tr>
-      ${figLine("Revenue", "revenue", money)}
-      ${figLine("Gross profit", "grossProfit", money)}
-      ${figLine("EBIT", "ebit", money)}
-      ${figLine("Net income", "netIncome", money)}
-      ${figLine("Operating cash flow", "ocf", money)}
-      ${figLine("Free cash flow", "fcf", money)}
-      ${figLine("Total assets", "assets", money)}
-      ${figLine("Current assets", "currentAssets", money)}
-      ${figLine("Current liabilities", "currentLiab", money)}
-      ${figLine("Long-term debt", "ltDebt", money)}
-      ${figLine("Shareholders' equity", "equity", money)}
-      ${figLine("Receivables", "receivables", money)}
-      ${figLine("Inventory", "inventory", money)}
-    </table></div><div class="frc-note">These reported figures are the raw inputs; every ratio and model score below is derived from them.</div>`) : "";
-
-  // earnings quality + cash flow quality (with benchmark column)
-  const cash = f.cash;
-  const eq = sec("Earnings Quality &amp; Cash-Flow Quality", "is reported profit backed by cash?",
-    `<table class="frc-t"><tr><th>Metric</th><th>Value</th><th>Benchmark</th><th style="text-align:left">Interpretation</th></tr>
-      <tr><td>Cash conversion (OCF / NI)</td><td>${cash.cashConversion == null ? "—" : N(cash.cashConversion, 2) + "×"}</td><td class="frc-bm">≥ 0.90×</td><td>${cash.cashConversion != null && cash.cashConversion >= 0.9 ? "Earnings well-backed by operating cash" : "Earnings exceed cash generation — monitor accruals"}</td></tr>
-      <tr><td>FCF margin</td><td>${cash.fcfMargin == null ? "—" : N(cash.fcfMargin, 1) + "%"}</td><td class="frc-bm">&gt; 0%</td><td>Free cash generated per unit of sales</td></tr>
-      <tr><td>Accrual ratio (NI − OCF)/assets</td><td>${cash.accrualRatio == null ? "—" : N(cash.accrualRatio, 1) + "%"}</td><td class="frc-bm">|x| &lt; 10%</td><td>${cash.accrualRatio != null && Math.abs(cash.accrualRatio) < 10 ? "Low accruals — clean earnings" : "Elevated accruals — scrutinise revenue recognition"}</td></tr>
-    </table>`);
-
-  // piotroski breakdown — now with calculation detail + benchmark
-  const pio = sec("Piotroski F-Score — fundamental strength", `${f.piotroski.score}/9 (${f.piotroski.grade})`,
-    `<table class="frc-t frc-pio-t"><tr><th style="text-align:left">Test</th><th style="text-align:left">Calculation</th><th>Benchmark</th><th>Pass</th></tr>
-      ${f.piotroski.components.map((c) => `<tr class="${c.ok ? "frc-pass" : "frc-fail"}"><td style="text-align:left">${c.t}</td><td style="text-align:left" class="frc-calc">${c.detail || "—"}</td><td class="frc-bm">${c.benchmark || "—"}</td><td class="frc-mark">${c.ok ? "✓" : "✗"}</td></tr>`).join("")}
-      <tr class="frc-tot"><td style="text-align:left">F-Score</td><td style="text-align:left">sum of passes</td><td class="frc-bm">≥ 7 strong</td><td>${f.piotroski.score}/9</td></tr>
-    </table>`);
-
-  // accounting quality = Beneish components (with benchmark)
-  const ben = f.beneish.components, benB = f.beneish.benchmarks || {};
-  const benLabels = { DSRI: "Days sales in receivables index", GMI: "Gross margin index", AQI: "Asset quality index", SGI: "Sales growth index", DEPI: "Depreciation index", SGAI: "SG&A expense index", LVGI: "Leverage index", TATA: "Total accruals / assets" };
-  const accounting = sec("Accounting Quality — Beneish M-Score", `${f.beneish.flag}`,
-    ben ? `<table class="frc-t"><tr><th>Variable</th><th>Value</th><th style="text-align:left">Benchmark</th><th style="text-align:left">What it captures</th></tr>
-      ${Object.keys(benLabels).map((k) => `<tr><td>${k}</td><td>${N(ben[k], 2)}</td><td style="text-align:left" class="frc-bm">${benB[k] || "—"}</td><td style="text-align:left">${benLabels[k]}</td></tr>`).join("")}
-      <tr class="frc-tot"><td>M-Score</td><td>${N(f.beneish.score, 2)}</td><td style="text-align:left" class="frc-bm">&gt; ${f.beneish.threshold} = risk</td><td style="text-align:left">−4.84 + 0.92·DSRI + 0.528·GMI + 0.404·AQI + 0.892·SGI + 0.115·DEPI − 0.172·SGAI + 4.679·TATA − 0.327·LVGI</td></tr>
-    </table>` : `<div class="empty-mini">Beneish components unavailable for this issuer.</div>`);
-
-  // altman breakdown — with raw inputs (backup) + benchmark
-  const alt = f.altman.components, altB = f.altman.backup, altW = f.altman.weights || {};
-  const altRows = [
-    ["Working capital / total assets", "wcTa", altB ? `WC ${money(altB.workingCapital)} ÷ TA ${money(altB.totalAssets)}` : ""],
-    ["Retained earnings / total assets", "reTa", altB ? `RE ${money(altB.retainedEarnings)} ÷ TA ${money(altB.totalAssets)}` : ""],
-    ["EBIT / total assets", "ebitTa", altB ? `EBIT ${money(altB.ebit)} ÷ TA ${money(altB.totalAssets)}` : ""],
-    ["Mkt value equity / total liabilities", "mveTl", altB ? `MVE ${money(altB.marketValueEquity)} ÷ TL ${money(altB.totalLiabilities)}` : ""],
-    ["Sales / total assets", "salesTa", altB ? `Sales ${money(altB.sales)} ÷ TA ${money(altB.totalAssets)}` : ""],
-  ];
-  const altman = sec("Altman Z-Score — financial-distress risk", `${f.altman.score == null ? "—" : N(f.altman.score, 2)} · ${f.altman.zone} zone`,
-    alt ? `<div class="frc-scroll"><table class="frc-t frc-z"><tr><th style="text-align:left">Component</th><th style="text-align:left">Calculation (backup)</th><th>Ratio</th><th>Weight</th><th>Contribution</th></tr>
-      ${altRows.map(([label, key, calc]) => `<tr><td style="text-align:left">${label}</td><td style="text-align:left" class="frc-calc">${calc || "—"}</td><td>${N(alt[key], 2)}</td><td>${altW[key] != null ? altW[key].toFixed(1) + "×" : "—"}</td><td>${alt[key] != null && altW[key] != null ? N(alt[key] * altW[key], 2) : "—"}</td></tr>`).join("")}
-      <tr class="frc-tot"><td style="text-align:left">Z-Score</td><td style="text-align:left">Σ contributions</td><td>${N(f.altman.score, 2)}</td><td></td><td>${f.altman.zone}</td></tr>
-    </table></div><div class="frc-note">&gt; 2.99 safe · 1.81–2.99 grey · &lt; 1.81 distress. Contribution = ratio × weight; the Z-score is their sum.</div>` : `<div class="empty-mini">Altman components unavailable for this issuer.</div>`);
-
-  // working capital trend (year-wise)
-  const wc = d.wcTrend || [];
-  const wcSec = wc.length ? sec("Working-Capital Analysis", "receivable / inventory days &amp; cash trend",
-    `<div class="frc-scroll"><table class="frc-t"><tr><th>FY</th>${wc.map((w) => `<th>${String(w.year).slice(2)}</th>`).join("")}<th style="text-align:left">Benchmark</th></tr>
-      <tr><td>Receivable days</td>${wc.map((w) => `<td>${w.recvDays ?? "—"}</td>`).join("")}<td class="frc-bm" style="text-align:left">stable/falling</td></tr>
-      <tr><td>Inventory days</td>${wc.map((w) => `<td>${w.invDays ?? "—"}</td>`).join("")}<td class="frc-bm" style="text-align:left">stable/falling</td></tr>
-      <tr><td>OCF / NI</td>${wc.map((w) => `<td>${w.ocfToNi ?? "—"}</td>`).join("")}<td class="frc-bm" style="text-align:left">&gt; 0.9×</td></tr>
-      <tr><td>Accrual %</td>${wc.map((w) => `<td>${w.accrual ?? "—"}</td>`).join("")}<td class="frc-bm" style="text-align:left">|x| &lt; 10%</td></tr>
-    </table></div><div class="frc-note">Rising receivable/inventory days or falling OCF/NI are classic quality-of-earnings warning signs.</div>`) : "";
-
-  return `<div class="frc">${scoreCard}${redFlags}${figuresSec}${eq}${pio}${accounting}${altman}${wcSec}</div>`;
-}
 
 /* ════════ RISK CENTER (dedicated top-level module) ════════ */
 TABS.risk = {
@@ -6134,7 +6186,7 @@ TABS.risk = {
     $("#rskStatus").textContent = "scoring risks…";
     $("#rskOut").innerHTML = `<div class="loading mono" style="padding:50px">Assessing ${symbol} — leverage, distress, valuation, governance, market & macro risk…</div>`;
     try {
-      const d = await api("/api/risk/" + encodeURIComponent(symbol));
+      const d = await DCFUSE.fetch("/api/risk/" + encodeURIComponent(symbol), symbol);
       if (d.error) { $("#rskStatus").textContent = d.error; $("#rskOut").innerHTML = `<div class="empty-mini">${d.error}</div>`; return; }
       $("#rskFor").textContent = d.meta.name + " · " + d.meta.currency;
       $("#rskStatus").textContent = "complete";
@@ -6204,204 +6256,7 @@ function renderRisk(d) {
   return `<div class="rsk">${head}${matrix}${regSec}${downside}</div>`;
 }
 
-/* ════════ EARNINGS CALL (dedicated top-level module) ════════ */
-TABS.earnings = {
-  _inMode: "text",
-  _pdfText: null,
-  _pdfName: null,
-  init() {
-    const load = () => this.loadCore(($("#ecSym").value || "").trim());
-    $("#ecLoad") && $("#ecLoad").addEventListener("click", load);
-    $("#ecSym") && $("#ecSym").addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });
-    $$("#ecInTabs .ec-tab").forEach((b) => b.addEventListener("click", () => this.switchInput(b.dataset.in)));
-    const an = $("#ecAnalyze");
-    if (an) an.addEventListener("click", () => this.analyze());
-    $("#ecNse") && $("#ecNse").addEventListener("click", () => this.loadNseTranscript());
-    $("#ecDocx") && $("#ecDocx").addEventListener("click", () => this.downloadDocx());
-    $("#ecPaste") && $("#ecPaste").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.ctrlKey) this.analyze(); });
-    this.wirePdf();
-  },
-
-  _currentText() { return this._inMode === "pdf" ? (this._pdfText || "") : (($("#ecPaste").value || "").trim()); },
-
-  async downloadDocx() {
-    const text = this._currentText();
-    if (!text || text.length < 100) { $("#ecStatus").innerHTML = `<span class="down">Add a transcript first (paste or import a PDF).</span>`; return; }
-    const btn = $("#ecDocx"); const orig = btn ? btn.textContent : "";
-    if (btn) { btn.disabled = true; btn.textContent = "building…"; }
-    try {
-      const sym = ($("#ecSym").value || "").trim().toUpperCase();
-      const res = await fetch("/api/earnings/report.docx", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ transcript: text, symbol: sym || undefined }) });
-      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || ("HTTP " + res.status)); }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = `${sym || "earnings"}_earnings_call_analysis.docx`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 4000);
-      $("#ecStatus").innerHTML = `<span class="up">DOCX report downloaded.</span>`;
-    } catch (e) {
-      $("#ecStatus").innerHTML = `<span class="down">${esc(e.message)}</span>`;
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = orig; }
-    }
-  },
-
-  switchInput(mode) {
-    this._inMode = mode;
-    $$("#ecInTabs .ec-tab").forEach((b) => b.classList.toggle("active", b.dataset.in === mode));
-    $("#ecInText").hidden = mode !== "text";
-    $("#ecInPdf").hidden = mode !== "pdf";
-  },
-
-  /* ── CORE: schedule (right) + recent calls (left) ── */
-  async loadCore(sym) {
-    if (!sym) { $("#ecCoreStatus").innerHTML = `<span class="down">Enter a ticker.</span>`; return; }
-    sym = sym.toUpperCase();
-    $("#ecCoreStatus").textContent = "loading earnings data…";
-    $("#ecCore").innerHTML = `<div class="ec-core-empty loading mono">fetching schedule &amp; recent calls for ${esc(sym)}…</div>`;
-    try {
-      const d = await api(`/api/earnings/summary/${encodeURIComponent(sym)}`);
-      if (!d.available) throw new Error(d.error || "no earnings data");
-      $("#ecCoreStatus").innerHTML = `<span class="up">${esc(d.name)}</span> · ${esc(d.exchange || "")} · live`;
-      $("#ecFor").textContent = `${d.name} — paste a transcript or import a PDF`;
-      this.renderCore(d);
-    } catch (e) {
-      $("#ecCore").innerHTML = `<div class="ec-core-empty empty-mini mono">Earnings data unavailable for ${esc(sym)} — ${esc(e.message || "")}. Check the ticker (use the exchange suffix, e.g. RELIANCE.NS).</div>`;
-      $("#ecCoreStatus").textContent = "";
-    }
-  },
-
-  renderCore(d) {
-    const ccy = d.currency || "";
-    const eps = (v) => (v == null ? "—" : F.px(v, ccy, Math.abs(v) < 10 ? 2 : 1));
-    const surpTxt = (v) => (v == null ? "—" : (v >= 0 ? "+" : "") + v.toFixed(1) + "%");
-    const cls = (v) => (v == null ? "" : v >= 0 ? "up" : "down");
-    const dfmt = (iso) => { if (!iso) return "—"; const dt = new Date(iso); return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); };
-
-    // LEFT — recent calls
-    const s = d.stats || {};
-    const hist = (d.history || []).slice(-8);
-    const maxAbs = Math.max(1, ...hist.map((h) => Math.abs(h.surprisePct || 0)));
-    const bars = hist.map((h) => {
-      const v = h.surprisePct;
-      const ht = v == null ? 0 : Math.max(4, (Math.abs(v) / maxAbs) * 58);
-      return `<div class="ec-surp-col" title="${dfmt(h.date)} · ${surpTxt(v)}"><div class="ec-surp-bar ${v >= 0 ? "up" : "down"}" style="height:${ht}px"></div><span class="ec-surp-x">${new Date(h.date).toLocaleDateString("en-GB", { month: "short", year: "2-digit" })}</span></div>`;
-    }).join("");
-    const histRows = hist.slice().reverse().map((h) => `<tr>
-      <td>${dfmt(h.date)}</td><td>${eps(h.epsActual)}</td><td>${eps(h.epsEstimate)}</td>
-      <td class="${cls(h.surprisePct)}">${surpTxt(h.surprisePct)}</td>
-      <td>${h.beat == null ? "—" : h.beat ? "<span class='up'>Beat</span>" : "<span class='down'>Miss</span>"}</td></tr>`).join("");
-    const left = `<div class="ec-panel">
-      <div class="ec-ph"><h4>Recent Earnings Calls</h4><span class="ec-ph-sub">${s.quarters || 0} quarters · actual vs estimate</span></div>
-      <div class="ec-pbody">
-        <div class="ec-stats">
-          <div class="ec-stat"><div class="l">Hit rate</div><div class="v ${s.hitRate >= 60 ? "up" : s.hitRate < 40 ? "down" : ""}">${s.hitRate == null ? "—" : Math.round(s.hitRate) + "%"}</div></div>
-          <div class="ec-stat"><div class="l">Beats / Misses</div><div class="v">${s.beats ?? "—"} / ${s.misses ?? "—"}</div></div>
-          <div class="ec-stat"><div class="l">Avg surprise</div><div class="v ${cls(s.avgSurprise)}">${s.avgSurprise == null ? "—" : surpTxt(s.avgSurprise)}</div></div>
-        </div>
-        ${hist.length ? `<div><div class="ec-lbl">Surprise history</div><div class="ec-surp">${bars}</div></div>` : ""}
-        ${hist.length ? `<table class="ec-tbl"><thead><tr><th>Quarter end</th><th>Actual</th><th>Estimate</th><th>Surprise</th><th>Result</th></tr></thead><tbody>${histRows}</tbody></table>` : `<div class="empty-mini mono">No reported-quarter history exposed for this ticker.</div>`}
-      </div></div>`;
-
-    // RIGHT — schedule
-    const n = d.next || {};
-    const cd = n.daysUntil == null ? "" : n.daysUntil < 0 ? `${Math.abs(n.daysUntil)}d ago` : n.daysUntil === 0 ? "today" : `in ${n.daysUntil} days`;
-    const fwdRows = (d.forward || []).map((f) => `<tr>
-      <td>${f.label}</td><td>${eps(f.epsAvg)}</td>
-      <td class="${cls(f.growthPct)}">${f.growthPct == null ? "—" : (f.growthPct >= 0 ? "+" : "") + f.growthPct.toFixed(0) + "%"}</td>
-      <td>${f.numAnalysts ?? "—"}</td></tr>`).join("");
-    const links = (d.links || []).map((l) => `<a class="ec-link" href="${l.url}" target="_blank" rel="noopener">${esc(l.label)} ↗</a>`).join("");
-    const right = `<div class="ec-panel">
-      <div class="ec-ph"><h4>Earnings Call Schedule</h4><span class="ec-ph-sub">next call · forward consensus</span></div>
-      <div class="ec-pbody">
-        <div class="ec-next">
-          <div class="ec-next-top"><span class="ec-next-date">${dfmt(n.date)}</span><span class="ec-next-cd">${cd}</span></div>
-          <div class="ec-next-tag">${n.date ? (n.isEstimate ? "estimated date" : "confirmed date") : "date not scheduled"}${d.exchange ? " · " + esc(d.exchange) : ""}</div>
-          <div class="ec-next-grid">
-            <div class="ec-next-cell"><div class="l">Consensus EPS</div><div class="v">${eps(n.epsEstimate)}</div></div>
-            <div class="ec-next-cell"><div class="l">Consensus revenue</div><div class="v">${n.revenueEstimate == null ? "—" : F.cap(n.revenueEstimate, ccy)}</div></div>
-          </div>
-        </div>
-        ${fwdRows ? `<div><div class="ec-lbl">Forward consensus (analyst estimates)</div><table class="ec-tbl"><thead><tr><th>Period</th><th>EPS est.</th><th>YoY</th><th>Analysts</th></tr></thead><tbody>${fwdRows}</tbody></table></div>` : ""}
-        <div><div class="ec-lbl">Transcripts &amp; filings</div><div class="ec-links">${links}</div></div>
-      </div></div>`;
-
-    $("#ecCore").innerHTML = left + right;
-  },
-
-  /* ── latest transcript filed with the exchange → same extraction → analyse ── */
-  async loadNseTranscript() {
-    const sym = ($("#ecSym").value || (typeof CURRENT !== "undefined" && CURRENT && CURRENT.symbol) || "").trim().toUpperCase();
-    if (!sym) { $("#ecStatus").innerHTML = `<span class="down">Enter an NSE ticker first (e.g. MARICO.NS).</span>`; return; }
-    const btn = $("#ecNse"), orig = btn ? btn.textContent : "";
-    if (btn) { btn.disabled = true; btn.textContent = "Fetching from NSE…"; }
-    this.switchInput("pdf");
-    $("#ecPdfName").textContent = `${sym} — locating the latest earnings-call transcript filed with the exchange…`;
-    $("#ecStatus").textContent = "";
-    try {
-      const d = await api(`/api/earnings/nse-transcript/${encodeURIComponent(sym)}`);
-      if (d.error || !d.text) throw new Error(d.error || "no transcript text");
-      this._pdfText = d.text; this._pdfName = `${sym} transcript ${d.date}`;
-      $("#ecPdfName").innerHTML = `Transcript filed with NSE on ${esc(d.date)} · ${d.pages || "?"} pages · ${d.words} words · <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">source filing</a>`;
-      await this.analyze();
-    } catch (e) {
-      $("#ecPdfName").textContent = "";
-      $("#ecStatus").innerHTML = `<span class="down">${esc(e.message)}</span>`;
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = orig; }
-    }
-  },
-
-  /* ── PDF import ── */
-  wirePdf() {
-    const inp = $("#ecPdf"), drop = $("#ecDrop");
-    if (!inp || !drop) return;
-    inp.addEventListener("change", () => { if (inp.files && inp.files[0]) this.handlePdf(inp.files[0]); });
-    ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("drag"); }));
-    ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("drag"); }));
-    drop.addEventListener("drop", (e) => { const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) this.handlePdf(f); });
-  },
-  async handlePdf(file) {
-    if (!/pdf$/i.test(file.name) && file.type !== "application/pdf") { $("#ecStatus").innerHTML = `<span class="down">Please choose a PDF file.</span>`; return; }
-    this._pdfText = null; this._pdfName = file.name;
-    $("#ecPdfName").textContent = `${file.name} — extracting…`;
-    $("#ecStatus").textContent = "";
-    try {
-      const buf = await file.arrayBuffer();
-      const b64 = _b64(buf);
-      const d = await api("/api/earnings/extract-pdf", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pdf: b64 }) });
-      if (d.error || !d.text) throw new Error(d.error || "could not read text from this PDF");
-      this._pdfText = d.text;
-      $("#ecPdfName").textContent = `${file.name} · ${d.pages || "?"} pages · ${d.words || d.text.split(/\s+/).length} words extracted · boilerplate removed`;
-      $("#ecStatus").innerHTML = `<span class="up">Ready — click Analyse.</span>`;
-    } catch (e) {
-      $("#ecPdfName").textContent = `${file.name} — ${e.message}`;
-      $("#ecStatus").innerHTML = `<span class="down">${esc(e.message)}. If it is a scanned PDF, paste the text instead.</span>`;
-    }
-  },
-
-  async analyze() {
-    const text = this._inMode === "pdf" ? (this._pdfText || "") : ($("#ecPaste").value || "").trim();
-    if (!text || text.length < 100) {
-      $("#ecStatus").innerHTML = `<span class="down">${this._inMode === "pdf" ? "Import a transcript PDF first (or one with less text than expected)." : "Paste a longer transcript (at least a few paragraphs)."}</span>`;
-      return;
-    }
-    $("#ecStatus").textContent = "analysing…";
-    ecAnimate($("#ecOut"), ["Cleaning transcript — stripping headers, footers & page numbers", "Segmenting speakers & Q&A", "Scoring management tone & guidance", "Extracting KPIs, risks & topics", "Composing the institutional report"]);
-    try {
-      const sym = ($("#ecSym").value || "").trim().toUpperCase();
-      const d = await api("/api/earnings/analyze", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ transcript: text, symbol: sym || undefined }) });
-      if (d.error) { $("#ecOut").innerHTML = `<div class="empty-mini">${esc(d.error)}</div>`; $("#ecStatus").textContent = ""; return; }
-      $("#ecStatus").textContent = `done · ${this._inMode === "pdf" ? "PDF" : "text"} · re-run anytime`;
-      $("#ecOut").innerHTML = renderEarnings(d);
-    } catch (e) {
-      $("#ecOut").innerHTML = `<div class="empty-mini">${esc(e.message)}</div>`;
-      $("#ecStatus").textContent = "";
-    }
-  },
-};
-
+/* ════════ EARNINGS CALL — the workstation lives in earnings-ws.js ════════ */
 /* base64-encode an ArrayBuffer (chunked to avoid call-stack limits) */
 function _b64(buf) {
   const bytes = new Uint8Array(buf);
@@ -6411,177 +6266,3 @@ function _b64(buf) {
   return btoa(bin);
 }
 
-/* staged progress animation in a container */
-function ecAnimate(host, steps) {
-  if (!host) return;
-  host.innerHTML = `<div class="ec-anim">
-    <div class="ec-anim-ring"></div>
-    <div class="ec-anim-bar"><i id="ecAnimBar"></i></div>
-    <div class="ec-anim-steps">${steps.map((s, i) => `<div class="ec-anim-step" data-i="${i}"><span class="dot"></span><span>${esc(s)}</span></div>`).join("")}</div>
-  </div>`;
-  let i = 0;
-  const els = [...host.querySelectorAll(".ec-anim-step")];
-  const bar = host.querySelector("#ecAnimBar");
-  const tick = () => {
-    if (!host.querySelector(".ec-anim") || i >= els.length) return;
-    els.forEach((e, k) => { e.classList.toggle("active", k === i); e.classList.toggle("done", k < i); });
-    if (bar) bar.style.width = Math.round(((i + 1) / els.length) * 100) + "%";
-    i++;
-    if (i <= els.length) setTimeout(tick, 620);
-  };
-  tick();
-}
-
-/* ── deterministic dashboard renderers ── */
-function ecBar(pct, color) {
-  const v = Math.max(0, Math.min(100, Math.round(pct || 0)));
-  const col = color || (v >= 70 ? "var(--up)" : v >= 45 ? "var(--amber)" : "var(--down)");
-  return `<div class="ecd-bar"><i style="width:${v}%;background:${col}"></i></div>`;
-}
-function ecLine(points) {
-  if (!points || points.length < 2) return "";
-  // generous side padding so the first/last labels never clip
-  const w = 360, h = 104, pl = 30, pr = 30, pt = 20, pb = 22, iw = w - pl - pr, ih = h - pt - pb;
-  const X = (i) => pl + (i / (points.length - 1)) * iw, Y = (v) => pt + (1 - v / 100) * ih;
-  const anchor = (i) => (i === 0 ? "start" : i === points.length - 1 ? "end" : "middle");
-  const path = points.map((p, i) => `${X(i).toFixed(1)},${Y(p.score).toFixed(1)}`).join(" ");
-  const dots = points.map((p, i) => `<circle cx="${X(i).toFixed(1)}" cy="${Y(p.score).toFixed(1)}" r="3" fill="var(--amber-bright)"/><text x="${X(i).toFixed(1)}" y="${(Y(p.score) - 7).toFixed(1)}" font-size="8" fill="var(--muted)" text-anchor="${anchor(i)}">${p.score}</text>`).join("");
-  const labels = points.map((p, i) => `<text x="${X(i).toFixed(1)}" y="${h - 5}" font-size="7.5" fill="var(--muted-ink)" text-anchor="${anchor(i)}">${esc(p.label)}</text>`).join("");
-  return `<svg class="ecd-line" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet"><line x1="${pl}" y1="${Y(50).toFixed(1)}" x2="${w - pr}" y2="${Y(50).toFixed(1)}" stroke="rgba(255,255,255,.12)" stroke-dasharray="3 3"/><polyline points="${path}" fill="none" stroke="var(--amber)" stroke-width="1.6"/>${dots}${labels}</svg>`;
-}
-function ecScatter(risks) {
-  if (!risks || !risks.length) return "";
-  const w = 380, h = 300, pl = 34, pr = 18, pt = 16, pb = 34, iw = w - pl - pr, ih = h - pt - pb;
-  const X = (p) => pl + (Math.max(0, Math.min(3, p)) / 3) * iw, Y = (i) => pt + (1 - Math.max(0, Math.min(3, i)) / 3) * ih;
-  // place numbered dots, then relax overlaps so labels never collide
-  // seed a tiny deterministic offset so coincident points don't start stacked
-  const P = risks.map((r, idx) => ({ x: X(r.probability) + Math.cos(idx * 2.399) * 0.6, y: Y(r.impact) + Math.sin(idx * 2.399) * 0.6, r, idx }));
-  const R = 10;
-  for (let it = 0; it < 80; it++) for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
-    let dx = P[j].x - P[i].x, dy = P[j].y - P[i].y, d = Math.hypot(dx, dy);
-    if (d < 0.6) { const ang = i * 2.399 + j * 1.7; dx = Math.cos(ang); dy = Math.sin(ang); d = 1; } // coincident → deterministic direction
-    if (d < R * 2) { const push = (R * 2 - d) / 2, ux = dx / d, uy = dy / d; P[i].x -= ux * push; P[i].y -= uy * push; P[j].x += ux * push; P[j].y += uy * push; }
-  }
-  P.forEach((p) => { p.x = Math.max(pl + R, Math.min(pl + iw - R, p.x)); p.y = Math.max(pt + R, Math.min(pt + ih - R, p.y)); });
-  const band = ["Low", "Med", "High"];
-  const axis = `<rect x="${pl}" y="${pt}" width="${iw}" height="${ih}" fill="none" stroke="rgba(255,255,255,.14)"/>` +
-    [1, 2].map((k) => `<line x1="${pl + (k / 3) * iw}" y1="${pt}" x2="${pl + (k / 3) * iw}" y2="${pt + ih}" stroke="rgba(255,255,255,.06)"/><line x1="${pl}" y1="${pt + (k / 3) * ih}" x2="${pl + iw}" y2="${pt + (k / 3) * ih}" stroke="rgba(255,255,255,.06)"/>`).join("") +
-    band.map((b, k) => `<text x="${pl + ((k + 0.5) / 3) * iw}" y="${h - 16}" font-size="7.5" fill="var(--muted-ink)" text-anchor="middle">${b}</text>`).join("") +
-    band.map((b, k) => `<text x="${pl - 6}" y="${pt + ((2.5 - k) / 3) * ih + 3}" font-size="7.5" fill="var(--muted-ink)" text-anchor="end">${b}</text>`).join("") +
-    `<text x="${pl + iw / 2}" y="${h - 4}" font-size="8" fill="var(--muted)" text-anchor="middle">Probability →</text>` +
-    `<text x="9" y="${pt + ih / 2}" font-size="8" fill="var(--muted)" text-anchor="middle" transform="rotate(-90 9 ${pt + ih / 2})">Impact →</text>`;
-  const dots = P.map((p) => {
-    const r = p.r, hot = r.probability >= 1.9 && r.impact >= 1.9, warm = r.probability >= 1.9 || r.impact >= 1.9;
-    const col = hot ? "#c0392b" : warm ? "#c8862a" : "#2e9e6b";
-    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${R}" fill="${col}" fill-opacity="0.9"><title>${esc(r.risk)} · ${r.mentions} mentions</title></circle><text x="${p.x.toFixed(1)}" y="${(p.y + 3).toFixed(1)}" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">${p.idx + 1}</text>`;
-  }).join("");
-  return `<svg class="ecd-scatter" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${axis}${dots}</svg>`;
-}
-function ecGauge(score10) {
-  const v = Math.max(0, Math.min(10, score10 || 0));
-  const col = v >= 6.5 ? "var(--up)" : v >= 4.5 ? "var(--amber)" : "var(--down)";
-  return `<div class="ecd-gauge"><div class="ecd-gauge-v" style="color:${col}">${v.toFixed(1)}<small>/10</small></div><div class="ecd-bar" style="height:7px"><i style="width:${v * 10}%;background:${col}"></i></div></div>`;
-}
-function ecCheck(items, cls) {
-  if (!items || !items.length) return `<div class="empty-mini mono">Not detected in the transcript.</div>`;
-  return `<ul class="ecd-check ${cls || ""}">${items.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>`;
-}
-function ecSec(n, title, sub, inner) {
-  return `<div class="ecd-sec"><div class="ecd-h"><span class="ecd-n">${n}</span><h4>${esc(title)}</h4>${sub ? `<span class="ecd-sub">${esc(sub)}</span>` : ""}</div><div class="ecd-body">${inner}</div></div>`;
-}
-
-function renderEarnings(d) {
-  const a = d.analysis;
-  if (a.error) return `<div class="empty-mini">${esc(a.error)}</div>`;
-  const r = a.report || {};
-  const sum = d.summary;
-  const asmt = r.assessment || {};
-  const asmtCls = /Bullish/.test(asmt.label) ? "up" : /Bearish/.test(asmt.label) ? "down" : "mid";
-  const clsV = (v) => (v == null ? "" : v >= 0 ? "up" : "down");
-  const pctT = (v, dp = 1) => (v == null ? "—" : (v >= 0 ? "+" : "") + (+v).toFixed(dp) + "%");
-  const ccy = (sum && sum.currency) || "";
-  const eps = (v) => (v == null ? "—" : (ccy === "INR" ? "₹" : ccy === "USD" ? "$" : "") + (Math.abs(v) < 10 ? v.toFixed(2) : v.toFixed(1)));
-
-  // 1 · EXECUTIVE SUMMARY
-  const s1 = `<div class="ecd-grid ecd-2c">
-    <div class="ecd-assess ${asmtCls}">
-      <div class="ecd-assess-l">Overall Assessment</div>
-      <div class="ecd-assess-v">${esc(asmt.label || "—")}</div>
-      <div class="ecd-assess-m">Momentum ${asmt.momentum != null ? asmt.momentum.toFixed(1) : "—"}/10 · confidence ${asmt.confidence != null ? asmt.confidence + "%" : "—"}</div>
-      <div class="ecd-mini"><span>Management tone</span><b class="${asmt.tone >= 60 ? "up" : asmt.tone < 45 ? "down" : ""}">${asmt.tone}/100 · ${esc(asmt.toneLabel || "")}</b></div>
-      <div class="ecd-mini"><span>Positive vs cautionary</span><b>${a.sentimentDetail.pos}▲ ${a.sentimentDetail.neg}▼</b></div>
-      <div class="ecd-mini"><span>Forward statements · risks</span><b>${a.guidance.length} · ${a.riskCount}</b></div>
-    </div>
-    <div>
-      <div class="ecd-lbl">Key Highlights</div>
-      ${ecCheck((r.highlights || []).slice(0, 6), "pos")}
-    </div>
-  </div>`;
-
-  // 2 · FINANCIAL SNAPSHOT + DRIVERS
-  const snap = r.financialSnapshot || [];
-  const snapTbl = snap.length ? `<table class="ecd-t"><thead><tr><th>Metric</th><th style="text-align:right">Value</th><th style="text-align:right">YoY</th><th>Context</th></tr></thead><tbody>${snap.map((x) => `<tr><td class="b">${esc(x.metric)}</td><td class="mono" style="text-align:right">${esc(x.value || "—")}</td><td class="${clsV(x.yoy)}" style="text-align:right">${x.yoy == null ? "—" : pctT(x.yoy)}</td><td class="ecd-note">${esc(x.note || "")}${x.src === "consensus" ? ` <span class="ecd-src">est</span>` : ""}</td></tr>`).join("")}</tbody></table>` : `<div class="empty-mini mono">No quantified headline metrics detected in the transcript.</div>`;
-  const drivers = r.drivers || [];
-  const drvTbl = drivers.length ? `<div class="ecd-lbl" style="margin-top:12px">Key Drivers This Quarter</div><table class="ecd-t"><thead><tr><th>Driver</th><th style="text-align:right">Emphasis</th><th style="width:120px">Sentiment</th><th style="text-align:right">Read</th></tr></thead><tbody>${drivers.map((x) => `<tr><td>${esc(x.driver)}</td><td class="mono" style="text-align:right">${x.emphasis}</td><td>${ecBar(x.sentiment)}</td><td style="text-align:right" class="${x.sentiment >= 60 ? "up" : x.sentiment <= 42 ? "down" : ""}">${esc(x.read)}</td></tr>`).join("")}</tbody></table>` : "";
-  const s2 = snapTbl + drvTbl;
-
-  // 3 · MANAGEMENT ASSESSMENT
-  const sc = a.scorecard || {};
-  const order = [["Confidence", sc.confidence], ["Transparency", sc.transparency], ["Optimism", sc.optimism], ["Defensiveness", sc.defensiveness], ["Conservatism", sc.conservatism], ["Risk Awareness", sc.riskAwareness], ["Clarity", sc.clarity], ["Consistency", sc.consistency], ["Execution Confidence", sc.executionConfidence]];
-  const km = r.keyMessages || [];
-  const s3 = `<div class="ecd-grid ecd-2c">
-    <div>
-      <div class="ecd-lbl">Key Management Messages</div>
-      ${km.length ? `<ul class="ecd-quotes">${km.map((q) => `<li class="${q.tone === "pos" ? "q-pos" : q.tone === "neg" ? "q-neg" : ""}"><span class="ecd-qtag">${esc(q.tag || "")}</span>“${esc(q.quote)}”${q.speaker ? `<span class="ecd-qs">— ${esc(q.speaker)}</span>` : ""}</li>`).join("")}</ul>` : `<div class="empty-mini mono">No standout quotes detected.</div>`}
-    </div>
-    <div>
-      <div class="ecd-lbl">Sentiment Over the Call</div>
-      ${r.sentimentTimeline && r.sentimentTimeline.length ? ecLine(r.sentimentTimeline) : `<div class="empty-mini mono">Not enough structure to segment.</div>`}
-    </div>
-  </div>
-  <div class="ecd-lbl" style="margin-top:16px">Management Tone Scorecard <span style="color:var(--muted-ink)">· 0–100, computed from the transcript</span></div>
-  <div class="ecd-scorecard">${order.map(([k, v]) => `<div class="ecd-score"><span class="ecd-score-l">${k}</span>${ecBar(v, "var(--amber)")}<span class="ecd-score-v">${v == null ? "—" : v}</span></div>`).join("")}</div>`;
-
-  // 4 · BUSINESS SEGMENTS
-  const seg = r.segments || [];
-  const s4 = seg.length ? `<table class="ecd-t"><thead><tr><th>Segment / Business</th><th style="text-align:right">Figure</th><th>Commentary</th></tr></thead><tbody>${seg.map((x) => `<tr><td class="b">${esc(x.name)}</td><td class="mono" style="text-align:right">${esc(x.figure)}</td><td class="ecd-note">${esc(x.note)}</td></tr>`).join("")}</tbody></table>` : `<div class="empty-mini mono">No named business segments with figures were detected in the transcript.</div>`;
-
-  // 5 · GUIDANCE & OUTLOOK
-  const gi = r.guidanceItems || [];
-  const s5 = gi.length ? `<table class="ecd-t"><thead><tr><th>Guidance statement</th><th style="text-align:right">Direction</th><th style="width:130px">Confidence</th></tr></thead><tbody>${gi.map((g) => `<tr><td>${esc(g.statement)}</td><td style="text-align:right" class="${g.direction === "Upgrade" ? "up" : g.direction === "Downgrade" ? "down" : ""}">${esc(g.direction)}</td><td>${ecBar(g.confidence)}<span class="ecd-conf">${g.confidence}%</span></td></tr>`).join("")}</tbody></table>` : `<div class="empty-mini mono">No explicit forward guidance detected.</div>`;
-
-  // 6 · RISK ASSESSMENT
-  const rk = r.risks || [];
-  const lvl = (v) => (v >= 2.3 ? "High" : v >= 1.4 ? "Med" : "Low");
-  const lvlCls = (v) => (v >= 2.3 ? "down" : v >= 1.4 ? "" : "up");
-  const s6 = rk.length ? `<div class="ecd-risk2">
-    <div><div class="ecd-lbl">Risk Heat Map <span style="color:var(--muted-ink)">· probability × impact</span></div>${ecScatter(rk)}</div>
-    <div><div class="ecd-lbl">Risk Details</div><table class="ecd-t"><thead><tr><th style="width:20px">#</th><th>Risk</th><th style="text-align:right">Mentions</th><th style="text-align:right">Prob.</th><th style="text-align:right">Impact</th><th style="text-align:right">Horizon</th></tr></thead><tbody>${rk.map((x, i) => `<tr><td class="mono ecd-rn">${i + 1}</td><td class="b">${esc(x.risk)}</td><td class="mono" style="text-align:right">${x.mentions}</td><td style="text-align:right" class="${lvlCls(x.probability)}">${lvl(x.probability)}</td><td style="text-align:right" class="${lvlCls(x.impact)}">${lvl(x.impact)}</td><td style="text-align:right">${esc(x.horizon)}</td></tr>`).join("")}</tbody></table>
-    ${rk.some((x) => x.note) ? `<div class="ecd-lbl" style="margin-top:12px">Context</div><ul class="ecd-risknotes">${rk.filter((x) => x.note).slice(0, 5).map((x, i) => `<li><b>${esc(x.risk)}:</b> ${esc(x.note)}</li>`).join("")}</ul>` : ""}</div>
-  </div>` : `<div class="empty-mini mono">No notable risk language detected.</div>`;
-
-  // 7 · INVESTMENT THESIS
-  const s7 = `<div class="ecd-grid ecd-2c">
-    <div><div class="ecd-lbl up-l">Positives</div>${ecCheck(r.thesis ? r.thesis.positives : [], "pos")}</div>
-    <div><div class="ecd-lbl down-l">Watchpoints</div>${ecCheck(r.thesis ? r.thesis.watchpoints : [], "neg")}</div>
-  </div>
-  <div class="ecd-momentum"><div><div class="ecd-lbl">Transcript Momentum Score</div><div class="ecd-mini2">Composite of tone, beat history, guidance & risk load — based only on the call, not price.</div></div>${ecGauge(asmt.momentum)}</div>`;
-
-  // 8 · TRANSCRIPT EVIDENCE APPENDIX
-  const ev = r.evidence || [];
-  const s8 = ev.length ? `<div class="table-wrap"><table class="ecd-t"><thead><tr><th>#</th><th>Extracted statement</th><th>Figures</th><th>Speaker</th><th>Theme</th><th style="text-align:right">Conf.</th><th style="text-align:right">Impact</th></tr></thead><tbody>${ev.map((x) => `<tr><td class="mono">${x.n}</td><td class="ecd-note">${esc(x.extract)}</td><td class="mono">${esc(x.figures)}</td><td>${esc(x.speaker || "—")}</td><td>${esc(x.theme)}</td><td class="mono" style="text-align:right">${x.confidence}%</td><td style="text-align:right" class="${x.impact === "Positive" ? "up" : x.impact === "Negative" ? "down" : ""}">${esc(x.impact)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty-mini mono">No quantified statements to cite.</div>`;
-
-  const disc = `<div class="ecd-disc">Fully deterministic — every score, table and chart is computed from the transcript text (method: ${esc(a.method)}). Figures are extracted verbatim; a value is shown only where it appears. This is a reading aid, not investment advice.</div>`;
-
-  return `<div class="ecd">
-    ${ecSec(1, "EXECUTIVE SUMMARY", `${a.words.toLocaleString()} words`, s1)}
-    ${ecSec(2, "FINANCIAL SNAPSHOT & DRIVERS", "extracted figures", s2)}
-    ${ecSec(3, "MANAGEMENT ASSESSMENT", "tone · sentiment · messages", s3)}
-    ${ecSec(4, "BUSINESS SEGMENTS", seg.length ? seg.length + " detected" : "", s4)}
-    ${ecSec(5, "GUIDANCE & OUTLOOK", gi.length ? gi.length + " statements" : "", s5)}
-    ${ecSec(6, "RISK ASSESSMENT", rk.length ? rk.length + " risks" : "", s6)}
-    ${ecSec(7, "INVESTMENT THESIS", "", s7)}
-    ${ecSec(8, "TRANSCRIPT EVIDENCE APPENDIX", ev.length ? ev.length + " citations" : "", s8)}
-    ${disc}
-  </div>`;
-}
