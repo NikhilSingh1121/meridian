@@ -172,50 +172,25 @@ function calendarView(events, actions) {
   return { upcoming: upcoming.slice(0, 4), lastResults, actions: act, upcomingActions: act.filter((a) => (a.exDate || a.recordDate) >= today) };
 }
 
-/* ── exchange sections with a last-good fallback ──────────────────────────
-   NSE refuses requests in bursts (bot protection; worse from cloud hosts), and a
-   refused call looks exactly like "no data". Each section is therefore cached on
-   its own: a success is kept (memory + disk snapshot); a failure throws, so the
-   durable cache serves the last good copy instead of a blank. Only a section that
-   has never loaded comes back null — and the pack records it as unavailable. */
-const SECTION_TTL = { quarterly: 3 * 3_600_000, shareholding: 6 * 3_600_000, pledge: 6 * 3_600_000, insiders: 3 * 3_600_000, calendar: 3 * 3_600_000, actions: 6 * 3_600_000, filings: 3 * 3_600_000 };
-function section(name, symbol, fn) {
-  return cachedDurable(`nsesec:${name}:${symbol}`, SECTION_TTL[name], async () => {
-    const v = await fn();
-    if (v == null) throw new Error(`NSE ${name} unavailable`);
-    return v;
-  }).catch(() => null);
-}
-
 /* ── the pack ─────────────────────────────────────────────────────────── */
 async function buildPack(symbol, co) {
   const IN = isIndian(symbol);
   const today = new Date().toISOString().slice(0, 10);
   const co0 = shortName(co.name);
   const [quarterly, shp, pledge, pit, events, actions, filings, news] = await Promise.all([
-    // no results: tell "never filed" (empty list) apart from "NSE didn't answer" (null)
-    IN ? section("quarterly", symbol, async () => {
-      const q = await quarterlyResults(symbol);
-      if (q) return q;
-      const all = await nse.resultsFilings(symbol);
-      return Array.isArray(all) && !all.length ? { none: true } : null;
-    }) : null,
-    IN ? section("shareholding", symbol, () => nse.shareholdingPattern(symbol)) : null,
-    IN ? section("pledge", symbol, () => nse.pledgeSummary(symbol)) : null,
-    IN ? section("insiders", symbol, () => nse.insiderTrades(symbol)) : null,
-    IN ? section("calendar", symbol, () => nse.eventCalendar(symbol)) : null,
-    IN ? section("actions", symbol, () => nse.corporateActions(symbol)) : null,
-    IN ? section("filings", symbol, () => materialFilings(symbol, today)) : null,
+    IN ? settle(quarterlyResults(symbol)) : null,
+    IN ? settle(nse.shareholdingPattern(symbol)) : null,
+    IN ? settle(nse.pledgeSummary(symbol)) : null,
+    IN ? settle(nse.insiderTrades(symbol)) : null,
+    IN ? settle(nse.eventCalendar(symbol)) : null,
+    IN ? settle(nse.corporateActions(symbol)) : null,
+    IN ? settle(materialFilings(symbol, today)) : null,
     settle(googleNews(`"${co0}" when:120d`, today)),
   ]);
-  // exchange sections that failed and had no earlier copy to fall back on
-  const unavailable = IN ? Object.entries({ quarterly, shareholding: shp, insiders: pit, calendar: events, filings }).filter(([, v]) => v == null).map(([k]) => k) : [];
-  const quarterlyData = quarterly && !quarterly.none ? quarterly : null;
   const re = new RegExp(`\\b${co0.split(/\s+/)[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i");
   return {
     symbol, name: co.name, asOf: new Date().toISOString(), layer: 1, currency: co.currency,
-    quarterly: quarterlyData,
-    unavailable,                                   // [] when every exchange section loaded
+    quarterly,
     annualBridge: annualBridge(co.statements),
     shareholding: shareholdingView(shp, pledge, shp ? await shareholdingDetail(shp).catch(() => null) : null),
     insiders: insiderView(pit),

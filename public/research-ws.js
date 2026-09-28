@@ -721,8 +721,7 @@ ${v} ${UNIT}`)}"></i></span></td></tr>`;
       ${funds.length ? `<div class="rp-sub">Top funds</div><div class="table-wrap"><table class="dt ws-t"><tr><th>Fund</th><th>% held</th></tr>${funds.map((i) => `<tr><td class="nm">${esc(i.name)}</td><td>${i.pct == null ? "—" : n1(i.pct, 2) + "%"}</td></tr>`).join("")}</table></div>` : ""}`, { icon: "users", sub: "data provider" }) : "";
     out.push(row([[hold, 6], [D && D.trend && D.trend.length > 1 ? instTrend(D) : "", 6]]));
     out.push(row([[insT, 12]]));
-    const shpDown = ((S.pack && S.pack.unavailable) || []).includes("shareholding");
-    if (!out.some(Boolean)) out.push(row([[panel("SHAREHOLDING", `<div class="ws-empty">${shpDown ? "The shareholding pattern couldn't be fetched from NSE just now." : "Ownership disclosure is not available for this issuer."}</div>`, { icon: "users" }), 12]]));
+    if (!out.some(Boolean)) out.push(row([[panel("SHAREHOLDING", `<div class="ws-empty">Ownership disclosure is not available for this issuer.</div>`, { icon: "users" }), 12]]));
     return out;
   }
 
@@ -829,17 +828,7 @@ ${v} ${UNIT}`)}"></i></span></td></tr>`;
 
   /* ═══════════════════════════ build · tabs · refresh ═══════════════════════════ */
   const PANES = { overview: paneOverview, thesis: paneThesis, financials: paneFinancials, estimates: paneEstimates, peers: panePeers, segments: paneSegments, ratios: paneRatios, shareholding: paneShareholding, news: paneNews, filings: paneFilings };
-  /* NSE sometimes refuses requests for a while; say so instead of implying the company
-     has no such disclosure (the pack lists the sections it couldn't fetch) */
-  const NSE_DEPS = { overview: ["shareholding", "quarterly"], financials: ["quarterly"], segments: ["quarterly"], shareholding: ["shareholding", "insiders"], news: ["calendar"], filings: ["filings"] };
-  const NSE_LABEL = { quarterly: "quarterly results", shareholding: "shareholding pattern", insiders: "insider trades", calendar: "corporate calendar", filings: "exchange filings" };
-  function nseNote(name) {
-    const miss = ((S.pack && S.pack.unavailable) || []).filter((k) => (NSE_DEPS[name] || []).includes(k));
-    if (!miss.length) return null;
-    const what = miss.map((k) => NSE_LABEL[k] || k).join(" and ");
-    return { html: `<div class="ws-foot" data-nse-note><span class="ws-nse-dot"></span>NSE didn't return the ${esc(what)} just now — the exchange limits automated requests at times. ${S.packRetried ? "Still unavailable; reopen the company in a few minutes." : "Retrying automatically in about two minutes…"}</div>` };
-  }
-  const paneRows = (name) => [nseNote(name), ...PANES[name](S.co)].filter(Boolean).map((r) => (typeof r === "string" ? { html: r } : r)).filter((r) => r.html);
+  const paneRows = (name) => PANES[name](S.co).filter(Boolean).map((r) => (typeof r === "string" ? { html: r } : r)).filter((r) => r.html);
   const gridOf = (r) => (/^<div class="ws-(related|foot)"/.test(r.html) ? `<div class="ws-grid ws-grid-note">${r.html}</div>` : `<div class="ws-grid">${r.html}</div>`);
   function build(name) {
     const el = document.querySelector(`.ws-pane[data-pane="${name}"]`);
@@ -944,16 +933,7 @@ ${v} ${UNIT}`)}"></i></span></td></tr>`;
     show(tab);
     // data — all in parallel; each arrival rebuilds only the panes that use it
     const sym = encodeURIComponent(co.symbol);
-    // exchange data: when NSE refused some sections, retry once after the server's short
-    // retry window (the refusals are bursty and usually clear within a minute or two)
-    const PACK_PANES = ["overview", "financials", "segments", "shareholding", "news", "filings"];
-    const loadPack = (retry) => api(`/api/company/${sym}/pack`).then((p) => {
-      if (S.tok !== tok) return;
-      S.pack = p; S.packRetried = retry;
-      refresh(PACK_PANES);
-      if (!retry && p && Array.isArray(p.unavailable) && p.unavailable.length) setTimeout(() => { if (S.tok === tok) loadPack(true); }, 100_000);
-    }).catch(() => { if (S.tok !== tok) return; if (!retry) S.pack = {}; refresh(PACK_PANES); });
-    loadPack(false);
+    api(`/api/company/${sym}/pack`).then((p) => { if (S.tok !== tok) return; S.pack = p; refresh(["overview", "financials", "segments", "shareholding", "news", "filings"]); }).catch(() => { if (S.tok !== tok) return; S.pack = {}; refresh(["overview", "financials", "segments", "shareholding", "news", "filings"]); });
     loadLens(co.symbol, tok);
     api(`/api/earnings/summary/${sym}`).then((e) => { if (S.tok !== tok) return; S.est = e || { available: false }; refresh(["estimates", "news"]); }).catch(() => { if (S.tok === tok) { S.est = { available: false }; refresh(["estimates"]); } });
     api(`/api/segments/${sym}`).then((s) => { if (S.tok !== tok) return; S.seg = s; if (s && s.available) refresh(["overview", "segments"]); }).catch(() => { });
