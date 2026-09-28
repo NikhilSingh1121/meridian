@@ -1,12 +1,66 @@
 /** Fundamentals provider — wraps yahoo-finance2 (handles Yahoo auth/crumbs).
     Live company fundamentals: statements, ratios inputs, holders, estimates, news. */
 
+/* ── Yahoo session fallback ─────────────────────────────────────────────────
+   Most Yahoo endpoints need a "crumb" (a session token). The library asks
+   query1…/v1/test/getcrumb for it, and from cloud IPs Yahoo sometimes answers 429
+   for a long while — typically right after a redeploy, when the process has no
+   session cached, so every fundamentals call fails ("Failed to get crumb, status
+   429"). Fallback: take the session cookie from fc.yahoo.com, ask query2 (then
+   query1) for the crumb, and store both in the library's cookie jar, which it
+   checks before minting its own. Every later call then reuses that session. */
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const CRUMB_ERR = /Failed to get crumb|Could not find crumb|Invalid Crumb|Unauthorized/i;
+let _seeding = null, _seededAt = 0;
+function seedYahooSession(inst) {
+  if (_seeding) return _seeding;
+  if (Date.now() - _seededAt < 30_000) return Promise.resolve(false);   // don't hammer Yahoo
+  _seeding = (async () => {
+    const jar = inst && inst._opts && inst._opts.cookieJar;
+    if (!jar) return false;
+    const r1 = await fetch("https://fc.yahoo.com/", { headers: { "User-Agent": UA }, redirect: "manual", signal: AbortSignal.timeout(10_000) }).catch(() => null);
+    const sc = r1 && r1.headers.getSetCookie ? r1.headers.getSetCookie() : [];
+    if (sc.length) await jar.setFromSetCookieHeaders(sc, "https://fc.yahoo.com/");
+    for (const host of ["query2", "query1"]) {
+      const url = `https://${host}.finance.yahoo.com/v1/test/getcrumb`;
+      const r2 = await fetch(url, {
+        headers: { "User-Agent": UA, cookie: await jar.getCookieString(url), accept: "*/*", origin: "https://finance.yahoo.com", referer: "https://finance.yahoo.com/" },
+        signal: AbortSignal.timeout(10_000),
+      }).catch(() => null);
+      if (!r2 || r2.status !== 200) continue;
+      const crumb = (await r2.text().catch(() => "")).trim();
+      if (crumb && crumb.length < 64 && !/[\s<{]/.test(crumb)) {
+        await jar.setCookie(`crumb=${crumb}`, "http://config.yf2/");
+        console.log(`[yahoo] session re-established via fc.yahoo.com + ${host} (library crumb request was refused)`);
+        return true;
+      }
+    }
+    console.warn("[yahoo] session fallback failed — Yahoo is refusing this host for now");
+    return false;
+  })().finally(() => { _seeding = null; _seededAt = Date.now(); });
+  return _seeding;
+}
+
 let yfPromise = null;
 async function yf() {
   if (!yfPromise) {
     yfPromise = import("yahoo-finance2").then((m) => {
       const inst = new m.default({ suppressNotices: ["yahooSurvey", "ripHistorical"] });
-      return inst;
+      // every library call: on a session (crumb) failure, re-establish the session through
+      // the fallback above and retry that call once
+      return new Proxy(inst, {
+        get(target, prop) {
+          const v = target[prop];
+          if (typeof v !== "function") return v;
+          return async (...args) => {
+            try { return await v.apply(target, args); }
+            catch (e) {
+              if (!CRUMB_ERR.test(String(e && e.message)) || !(await seedYahooSession(target))) throw e;
+              return v.apply(target, args);
+            }
+          };
+        },
+      });
     });
   }
   return yfPromise;

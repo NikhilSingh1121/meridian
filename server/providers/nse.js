@@ -59,23 +59,53 @@ async function warmUp(force = false) {
   } catch { return false; }
 }
 
+/* NSE's bot manager rotates its cookies on API responses too; keeping the jar in
+   step with them is what stops a warm session from turning into "Access Denied"
+   half-way through a burst of requests */
+function absorbCookies(r) {
+  const raw = r && r.headers && r.headers.getSetCookie ? r.headers.getSetCookie() : [];
+  if (!raw.length) return;
+  const jar = new Map(String(_cookie || "").split("; ").filter(Boolean).map((c) => [c.split("=")[0], c]));
+  for (const c of raw) { const kv = c.split(";")[0]; if (kv) jar.set(kv.split("=")[0], kv); }
+  _cookie = [...jar.values()].join("; ");
+}
+// after repeated refusals NSE is blocking this host for a while: fail fast instead of
+// queueing more doomed requests (each one would otherwise wait out its own timeout)
+const BLOCK_MS = 60_000;
+let _refusals = 0, _blockedUntil = 0;
+
+/* one JSON call → parsed body, or null when NSE did not answer usefully.
+   A failed attempt (network error, timeout, 401/403/429/5xx, or the HTML bot page
+   served with 200) re-warms the session and is retried once after a short pause. */
 function nseGet(path, timeout = REQ_TIMEOUT) {
   const job = _chain.then(async () => {
+    if (Date.now() < _blockedUntil) return null;
     await new Promise((r) => setTimeout(r, SPACING_MS));
     if (!(await warmUp())) return null;
-    const headers = {
-      "User-Agent": UA, Accept: "application/json, text/plain, */*",
-      "Accept-Language": "en-US,en;q=0.9", Referer: BASE + "/",
-      ...(_cookie ? { Cookie: _cookie } : {}),
-    };
-    let r = await fetchWithTimeout(BASE + path, { headers }, timeout).catch(() => null);
-    if (r && (r.status === 401 || r.status === 403)) {
-      if (await warmUp(true)) r = await fetchWithTimeout(BASE + path, { headers: { ...headers, Cookie: _cookie } }, timeout).catch(() => null);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (attempt) { await new Promise((r) => setTimeout(r, 900)); if (!(await warmUp(true))) return null; }
+      const headers = {
+        "User-Agent": UA, Accept: "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9", Referer: BASE + "/",
+        ...(_cookie ? { Cookie: _cookie } : {}),
+      };
+      const r = await fetchWithTimeout(BASE + path, { headers }, timeout).catch(() => null);
+      if (r) absorbCookies(r);
+      if (r && r.ok) {
+        const text = await r.text().catch(() => "");
+        if (text && !text.trimStart().startsWith("<")) {
+          try { const j = JSON.parse(text); _refusals = 0; return j; } catch { /* malformed — retry */ }
+        }
+      } else if (r && r.status === 404) {
+        return null;                                   // a real "no such resource"; retrying won't help
+      }
+      if (r && (r.status === 401 || r.status === 403) && ++_refusals >= 4) {
+        _blockedUntil = Date.now() + BLOCK_MS; _refusals = 0;
+        console.warn(`[nse] access refused repeatedly — pausing NSE calls for ${BLOCK_MS / 1000}s`);
+        return null;
+      }
     }
-    if (!r || !r.ok) return null;
-    const text = await r.text().catch(() => "");
-    if (!text || text.trimStart().startsWith("<")) return null;
-    try { return JSON.parse(text); } catch { return null; }
+    return null;
   });
   _chain = job.catch(() => {});
   return job;
@@ -601,10 +631,15 @@ async function resultsFilings(symbol) {
 /* a filing document from the public archive (XBRL / XML); size-capped */
 async function archiveText(url, maxBytes = 3_000_000) {
   if (!/^https:\/\/nsearchives\.nseindia\.com\//i.test(url || "")) return null;
-  const r = await fetchWithTimeout(url, { headers: { "User-Agent": UA } }, 15000).catch(() => null);
-  if (!r || !r.ok) return null;
-  const t = await r.text().catch(() => "");
-  return t && t.length <= maxBytes ? t : null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, 900));
+    const r = await fetchWithTimeout(url, { headers: { "User-Agent": UA } }, 15000).catch(() => null);
+    if (r && r.status === 404) return null;
+    if (!r || !r.ok) continue;                      // transient — one more try
+    const t = await r.text().catch(() => "");
+    if (t && !t.trimStart().startsWith("<!DOCTYPE html") && !/<TITLE>Access Denied/i.test(t.slice(0, 300))) return t.length <= maxBytes ? t : null;
+  }
+  return null;
 }
 
 async function corporateAnnouncements(symbol) {
