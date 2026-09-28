@@ -1160,246 +1160,57 @@ function initMagnetic() {
   });
 }
 
-/* ════ REAL PRODUCT EXPERIENCE — immersive terminal walkthrough ════
-   Manual carousel over 18 real screenshots. Lazy-loads current ±1 only,
-   adapts layout to each screenshot's shape, keyboard + swipe + dots,
-   IntersectionObserver-driven enter/leave immersion, reduced-motion aware. */
+/* ════ REAL PRODUCT EXPERIENCE — the product film ════
+   The thumbnail is a facade: no YouTube code or cookies load until the visitor
+   presses play (privacy-enhanced youtube-nocookie.com, then autoplay). Keeps the
+   chapter's enter/leave fade and the nav re-skin over the dark stage. */
 function initProductExperience() {
   const root = document.getElementById("experience");
-  const area = document.getElementById("pxSlideArea");
-  if (!root || !area) return;
+  const player = document.getElementById("pxPlayer");
+  if (!root || !player) return;
 
-  const P = "/product/";
-  const S = [
-    { f: "01-portfolio-overview.webp", w: 1600, h: 1190, lay: "square",
-      t: "Portfolio Overview", s: "A twenty-company technical command center — every holding scanned, scored and signalled in one screen.",
-      feats: ["15-indicator screener: SMA cross, BB%, ATR, VWAP, MFI, CCI, Stochastics, S/R and 52-week positioning", "Composite 0–100 technical score with Accumulate / Watch / Hold signal badges", "Score distribution, sector allocation and signal donuts refresh with every scan", "Typed alert cards — breakouts, golden crosses, RSI extremes, volume spikes — each with a sparkline"],
-      why: "One screen answers the analyst's first question every morning: <b>what does my book look like right now?</b>" },
-    { f: "02-candlestick-workspace.webp", w: 1600, h: 1000, lay: "wide",
-      t: "Interactive Candlestick Workspace", s: "A full charting engine scoped to your own portfolio — built from scratch on canvas, no third-party chart library.",
-      feats: ["Wheel-zoom anchored at the cursor, drag-to-pan, crosshair with live OHLC / volume / change readout", "Volume pane plus a selectable momentum panel — RSI, MACD, ADX, ATR, OBV, MFI, ROC or CCI", "Overlay toggles: EMAs, VWAP, Bollinger, Supertrend, Ichimoku, S/R levels, auto trendlines", "Nine timeframes from intraday 1D to MAX, per-company navigator with live prices"],
-      why: "TradingView-class interaction, <b>scoped to the names you actually hold</b> — no tab-switching to a separate charting product." },
-    { f: "03-pattern-intelligence.webp", w: 1600, h: 998, lay: "wide",
-      t: "Pattern Intelligence", s: "Nineteen classical candlestick patterns detected in context — the same shape reads differently after a decline than after an advance.",
-      feats: ["Context-aware detection: a hammer requires a decline into it; the identical candle after an advance is a hanging man", "Refractory suppression — a sustained run reads as one event, not thirty repeated flags", "Recent-pattern stack with strength labels and a chronological timeline strip", "Click any marker or timeline chip to focus the chart and update the insight panel instantly"],
-      why: "Patterns are treated as <b>alerts, not orders</b> — every detection is judged against trend, structure and volume before it earns a score." },
-    { f: "04-pattern-detail.webp", w: 1035, h: 1799, lay: "tall",
-      t: "Pattern Detail Engine", s: "A ten-section institutional briefing generated for every detected pattern — anatomy to risk management.",
-      feats: ["Candle-by-candle anatomy quoting the actual OHLC of the signal bar", "Market-psychology narrative explaining who is trapped and why it matters", "Live confluence checklist — trend, structure, EMA alignment, momentum, volume, confirmation — each ✓ or ✗", "Trading strategy with entry, stop and target expressed in R-multiples; invalidation defined before entry"],
-      why: "The engine teaches the <b>why</b> behind every signal — analysis you can defend in an interview, not a black-box arrow." },
-    { f: "05-market-dashboard.webp", w: 1600, h: 1150, lay: "square",
-      t: "Market Dashboard", s: "The day's context before any single-name work — indices, rates, currencies, commodities and breadth in one view.",
-      feats: ["Interactive price chart for any instrument — index, stock, currency, commodity or crypto, 1D to 5Y", "Global tape: NIFTY, SENSEX, S&P 500, NASDAQ, FTSE, Nikkei, gold, crude, USD/INR, US yields, BTC/ETH", "NIFTY-universe breadth: advancers vs decliners, A/D ratio, names near 52-week highs and lows", "NSE sector heatmap coloured by day change"],
-      why: "Top-down discipline made effortless — <b>read the market before you read the stock</b>." },
-    { f: "06-sector-heatmap.webp", w: 1600, h: 852, lay: "wide",
-      t: "Sector Heatmap", s: "Eleven GICS sectors and forty-nine industries across ₹259 lakh crore of market cap, mapped by size and day return.",
-      feats: ["Cap-weighted squarified treemap — tile size is market cap, colour is the day's move", "Sector table with market weights and YTD returns, sorted for rotation reads", "Hover tooltips with cap, weight, day and YTD detail per sector", "Click any sector to drill into its industries and constituents"],
-      why: "Sector rotation is visible <b>in one glance</b> — where money is flowing today, and what it has done all year." },
-    { f: "07-sector-industry.webp", w: 1600, h: 1448, lay: "square",
-      t: "Sector & Industry Analysis", s: "Every sector benchmarked against NIFTY 50, S&P 500, NASDAQ or Russell — then decomposed into its industries.",
-      feats: ["Dual-line performance chart, rebased to zero, with crosshair, zoom-pan and PNG export", "Day / YTD / 1-year / 3-year / 5-year return grid, sector vs benchmark side by side", "Industry weight table with per-industry YTD and an industry-level treemap", "Constituent drill-down filters the company table beneath"],
-      why: "Leadership <b>within</b> the sector, quantified — the difference between owning a sector and owning its winner." },
-    { f: "08-news-sentiment.webp", w: 1600, h: 879, lay: "wide",
-      t: "News & Market Sentiment", s: "Headline flow quantified — a lexicon-scored sentiment gauge over live news, scoped to company, industry or the broad market.",
-      feats: ["0–100 sentiment score with trend read — improving, flat or deteriorating", "Positive / neutral / negative distribution bar over the last thirty headlines", "Scope switch: single company, its industry, or the whole market", "Every headline tagged, sourced and time-stamped with recency"],
-      why: "A <b>directional read on narrative</b> — honest about being a lexicon score, not a trading signal." },
-    { f: "09-company-overview.webp", w: 1600, h: 753, lay: "wide",
-      t: "Company Overview", s: "The thirty-second brief: identity, size, ownership, street view and an intraday chart on one card.",
-      feats: ["Market cap, enterprise value, 52-week range, beta, promoter and institutional holdings", "Street target and consensus view pulled live", "Full business description with segment detail and key management", "Intraday price chart with timeframe switch"],
-      why: "Everything a PM asks in the first thirty seconds of a pitch, <b>answered before they ask</b>." },
-    { f: "10-business-analysis.webp", w: 1600, h: 1110, lay: "square",
-      t: "Business Analysis", s: "The model behind the price — revenue bridge, margin structure and a scored read on business quality.",
-      feats: ["Revenue bridge: prior year → organic/price/mix delta → current year, with implied growth", "Margin structure: gross, operating and net, latest reported", "Business quality score 0–100 across growth, margin, capital returns and cash conversion", "Long-term CAGR snapshot — revenue, EBITDA, EPS, ROE, ROCE, FCF — each with a trend sparkline"],
-      why: "Separates <b>the business from the stock</b> — quality measured before valuation is discussed." },
-    { f: "11-ratio-analysis.webp", w: 1600, h: 863, lay: "wide",
-      t: "Ratio Analysis", s: "Twenty-four ratios across six lenses — each with a plain-English interpretation, not just a number.",
-      feats: ["Profitability, liquidity, leverage, efficiency, valuation and market lenses in one grid", "Trend sparklines on the ratios where history matters — ROE, ROCE, margins", "Every ratio annotated: what it measures and how to read it", "Capital allocation table — capex, dividends, debt reduction over four years — with a written verdict"],
-      why: "Numbers with <b>meaning attached</b> — the difference between a data dump and analysis." },
-    { f: "12-forensic-scorecard.webp", w: 1600, h: 385, lay: "wide",
-      t: "Forensic Scorecard", s: "Manipulation and distress screens before you trust the P&L — Piotroski, Altman and Beneish with reasoned red flags.",
-      feats: ["Composite earnings-quality grade A–D from cash conversion, accruals and model scores", "Piotroski F-Score with all nine tests, calculations and benchmarks behind it", "Altman Z with zone classification and full component backup", "Red flags state the metric, the threshold breached and why it matters — not just a warning icon"],
-      why: "A CA's instinct, systematised: <b>verify the accounting before valuing the business</b>." },
-    { f: "13-risk-assessment.webp", w: 1600, h: 767, lay: "wide",
-      t: "Risk Assessment", s: "Risk enumerated, weighted and mapped — eight categories rolled into one score, every risk placed on a probability × impact matrix.",
-      feats: ["Composite 0–100 risk score with severity band", "Eight category scores: valuation, industry, financial, governance, regulatory, ESG, business, market", "Each category names its top risk and counts the rest", "Probability × impact matrix places every lettered risk by likelihood and severity"],
-      why: "Replaces \u201cwhat could go wrong?\u201d hand-waving with a <b>structured, defensible risk register</b>." },
-    { f: "14-valuation-framework.webp", w: 1600, h: 1054, lay: "square",
-      t: "Valuation Framework", s: "Seven methods, one football field — the spread between them is itself information about valuation uncertainty.",
-      feats: ["Football field across EV/EBITDA, P/E, PEG, residual income, dividend discount, sum-of-the-parts and DCF", "Blended target weighting DCF 40% and relative methods 60%, per institutional convention", "Method workings shown in full — every multiple, every input, every intermediate figure", "5,000-run Monte Carlo over growth, margin, WACC and terminal assumptions with percentile bands and P(value &gt; price)"],
-      why: "A valuation <b>range with reasoning</b>, not a single number pretending to be precise." },
-    { f: "15-dcf-model.webp", w: 1600, h: 915, lay: "wide",
-      t: "Institutional DCF Model", s: "A ten-year driver-based FCFF model with editable assumptions, quality diagnostics and a reconciling Excel export.",
-      feats: ["Every driver anchored to four years of reported actuals — growth, margin, capex, working capital, tax", "Next-three-years assumptions editable with AI-recommended values and confidence tags", "Model-quality score with diagnostics — flags a WACC below market norms and suggests the fix", "One-click Excel export that ties out to the app at 0.00 difference"],
-      why: "An <b>audit-ready model</b>, not a black box — every number traceable to a driver, every driver to history." },
-    { f: "16-research-report.webp", w: 1315, h: 1623, lay: "tall",
-      t: "Research Report Generator", s: "From analysis to a publishable initiating-coverage note in one click — rating, target and evidence-backed highlights.",
-      feats: ["Rating band with 12-month target synced live from the Modeling Lab valuation", "Snapshot table: ticker, sector, price, target, upside, market cap, 52-week range, beta", "Highlights cite the evidence — moat points, growth trajectory, forensic grades, balance-sheet strength", "Print / PDF, Word download, and save-to-library in one bar"],
-      why: "The final mile of the workflow: <b>research that ships</b>, formatted like a sell-side note." },
-    { f: "17-learning-center.webp", w: 1600, h: 1216, lay: "square",
-      t: "Learning Center", s: "The terminal teaches the concepts it uses — plain-language finance from first principles to professional practice.",
-      feats: ["Structured tracks: foundations, valuation, analysis, startup & ESOP, professional finance", "Numbered walkthroughs with worked ₹ examples — DCF explained through a chai-shop purchase", "Visual explanations: discounting shown as future rupees shrinking to present value", "40+ term financial dictionary for quick reference"],
-      why: "Understanding compounds like capital — the platform <b>explains itself</b> instead of assuming prior knowledge." },
-    { f: "18-calculators.webp", w: 1600, h: 1287, lay: "square",
-      t: "Professional Calculators", s: "Practitioner-grade tools with the mathematics visible — an investment suite and a full ESOP suite.",
-      feats: ["Investment suite: SIP, SWP, lumpsum, retirement, inflation and multi-stage wealth projection", "ESOP suite: valuation, vesting schedule, India tax on exercise and sale, exit proceeds, dilution, waterfall", "Live FMV fetch for listed tickers; scenario table stress-tests the outcome across FMV moves", "Formula and payoff chart shown for every calculation — nothing hidden"],
-      why: "Tools that show their working — <b>trust through transparency</b>, exactly like the rest of the terminal." },
-  ];
-
-  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let cur = 0, inView = false;
-
-  /* build DOM */
-  const slides = S.map((d, i) => {
-    const el = document.createElement("article");
-    el.className = `px-slide px-slide--${d.lay}`;
-    el.setAttribute("role", "group");
-    el.setAttribute("aria-roledescription", "slide");
-    el.setAttribute("aria-label", `${i + 1} of ${S.length}: ${d.t}`);
-    el.innerHTML = `
-      <div class="px-frame"><img class="px-shot" data-src="${P}${d.f}" width="${d.w}" height="${d.h}" alt="${d.t} — M-Terminal screenshot" decoding="async"></div>
-      <div class="px-copy">
-        <div class="px-num mono">${String(i + 1).padStart(2, "0")}</div>
-        <div class="px-copy-body">
-          <h3 class="px-fname">${d.t}</h3>
-          <p class="px-fsub">${d.s}</p>
-          <ul class="px-feats">${d.feats.map((x) => `<li>${x}</li>`).join("")}</ul>
-          <div class="px-why"><b>Why it matters.</b> ${d.why}</div>
-        </div>
-      </div>`;
-    area.appendChild(el);
-    return el;
-  });
-
-  const ensure = (i) => {
-    for (const j of [i - 1, i, i + 1]) {
-      if (j < 0 || j >= slides.length) continue;
-      const img = slides[j].querySelector("img[data-src]");
-      if (img) { img.src = img.dataset.src; img.removeAttribute("data-src"); }
-    }
+  const play = () => {
+    if (player.classList.contains("playing")) return;
+    const f = document.createElement("iframe");
+    f.src = "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(player.dataset.yt) + "?autoplay=1&rel=0&modestbranding=1&playsinline=1";
+    f.title = "M-Terminal product film";
+    f.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen";
+    f.allowFullscreen = true;
+    f.referrerPolicy = "strict-origin-when-cross-origin";
+    player.classList.add("playing");
+    player.replaceChildren(f);
+    f.focus();
   };
-
-  /* controls */
-  const prevB = document.getElementById("pxPrev"), nextB = document.getElementById("pxNext");
-  const curEl = document.getElementById("pxCur"), totEl = document.getElementById("pxTotal");
-  const dotsEl = document.getElementById("pxDots");
-  totEl.textContent = String(S.length).padStart(2, "0");
-  const dots = S.map((d, i) => {
-    const b = document.createElement("button");
-    b.className = "px-dot"; b.setAttribute("role", "tab");
-    b.setAttribute("aria-label", `Slide ${i + 1}: ${d.t}`);
-    b.addEventListener("click", () => go(i));
-    dotsEl.appendChild(b); return b;
-  });
-
-  function go(i, from) {
-    i = Math.max(0, Math.min(slides.length - 1, i));
-    if (i === cur && from !== "init") return;
-    const dir = i >= cur ? 1 : -1;
-    slides.forEach((el, j) => {
-      el.classList.remove("on");
-      /* resting side: slides before the active one sit to the left,
-         slides after it to the right — so travel direction reads naturally */
-      el.classList.toggle("off-l", j < i);
-    });
-    const incoming = slides[i];
-    if (from !== "init" && !reduced) {
-      /* place the incoming slide on the side it travels in from, then reflow */
-      incoming.classList.toggle("off-l", dir === -1);
-      void incoming.offsetWidth;
+  const btn = document.getElementById("pxPlay");
+  if (btn) btn.addEventListener("click", play);
+  // warm the connection when the pointer approaches, so the click starts faster
+  let warmed = false;
+  player.addEventListener("pointerenter", () => {
+    if (warmed) return; warmed = true;
+    for (const h of ["https://www.youtube-nocookie.com", "https://i.ytimg.com"]) {
+      const l = document.createElement("link"); l.rel = "preconnect"; l.href = h; document.head.appendChild(l);
     }
-    incoming.classList.remove("off-l");
-    incoming.classList.add("on");
-    cur = i;
-    ensure(i);
-    curEl.textContent = String(i + 1).padStart(2, "0");
-    curEl.classList.remove("tick"); void curEl.offsetWidth; curEl.classList.add("tick");
-    dots.forEach((d, j) => d.classList.toggle("on", j === i));
-    prevB.disabled = i === 0;
-    nextB.disabled = i === slides.length - 1;
-  }
-  prevB.addEventListener("click", () => go(cur - 1));
-  nextB.addEventListener("click", () => go(cur + 1));
-
-  /* keyboard — active while the chapter is on screen or the carousel is focused */
-  document.addEventListener("keydown", (e) => {
-    if (!inView && document.activeElement !== document.getElementById("pxCarousel")) return;
-    if (e.key === "ArrowRight") { e.preventDefault(); go(cur + 1); }
-    else if (e.key === "ArrowLeft") { e.preventDefault(); go(cur - 1); }
-  });
-
-  /* swipe — axis-locked drag (Android fix).
-     The first significant finger movement decides the gesture's axis once:
-     · horizontal → we preventDefault() every subsequent move so the page
-       cannot scroll vertically, and the active slide follows the finger
-       (transform-only, GPU-composited);
-     · vertical → we never interfere and the page scrolls natively.
-     CSS `touch-action: pan-y` on the slide area keeps the browser from
-     claiming horizontal strokes before we do. */
-  let tx = 0, ty = 0, axis = null, dragX = 0, lastX = 0, lastT = 0, velX = 0;
-  const dragEl = () => slides[cur];
-  area.addEventListener("touchstart", (e) => {
-    if (e.touches.length !== 1) { axis = "y"; return; }
-    tx = lastX = e.touches[0].clientX; ty = e.touches[0].clientY;
-    lastT = performance.now(); axis = null; dragX = 0; velX = 0;
-  }, { passive: true });
-  area.addEventListener("touchmove", (e) => {
-    if (axis === "y") return;
-    const t = e.touches[0];
-    const dx = t.clientX - tx, dy = t.clientY - ty;
-    if (!axis) {
-      if (Math.abs(dx) < 7 && Math.abs(dy) < 7) return;      // not decided yet
-      axis = Math.abs(dx) > Math.abs(dy) * 1.15 ? "x" : "y";
-      if (axis === "y") return;                              // vertical → native scroll
-      dragEl().classList.add("dragging");
-    }
-    if (e.cancelable) e.preventDefault();                    // lock page scroll
-    const now = performance.now();
-    if (now - lastT > 16) { velX = (t.clientX - lastX) / (now - lastT); lastX = t.clientX; lastT = now; }
-    const atEdge = (dx > 0 && cur === 0) || (dx < 0 && cur === slides.length - 1);
-    dragX = dx * (atEdge ? 0.28 : 0.9);
-    dragEl().style.transform = "translateX(" + dragX.toFixed(1) + "px)";
-  }, { passive: false });
-  const endDrag = () => {
-    if (axis !== "x") { axis = null; return; }
-    const el = dragEl();
-    el.classList.remove("dragging");
-    const w = area.offsetWidth || 1;
-    const dir = dragX < 0 ? 1 : -1;
-    const target = cur + dir;
-    const fling = Math.abs(velX) > 0.45 && Math.sign(velX) === Math.sign(dragX);
-    const far = Math.abs(dragX) > w * 0.18;
-    el.classList.add("settling");
-    void el.offsetWidth;                       // commit .settling before moving
-    el.style.transform = "";
-    if ((far || fling) && target >= 0 && target < slides.length) go(target);
-    setTimeout(() => el.classList.remove("settling"), 500);
-    axis = null; dragX = 0;
-  };
-  area.addEventListener("touchend", endDrag, { passive: true });
-  area.addEventListener("touchcancel", endDrag, { passive: true });
+  }, { once: true });
 
   /* immersion: enter/leave + nav re-skin over the dark chapter */
   const nav = document.getElementById("nav");
   if ("IntersectionObserver" in window) {
     new IntersectionObserver((es) => es.forEach((en) => {
-      if (en.isIntersecting) { root.classList.add("in"); ensure(cur); }
+      if (en.isIntersecting) root.classList.add("in");
       else root.classList.remove("in");
     }), { threshold: 0.14 }).observe(root);
-  } else { root.classList.add("in"); ensure(cur); }
+  } else root.classList.add("in");
 
   const darkEls = [root, document.getElementById("process")].filter(Boolean);
   const navSync = () => {
-    const r = root.getBoundingClientRect();
-    const navH = nav ? nav.offsetHeight : 64;
-    inView = r.top < innerHeight * 0.7 && r.bottom > innerHeight * 0.3;
-    if (nav) {
-      let over = false;
-      for (const el of darkEls) {
-        const dr = el.getBoundingClientRect();
-        if (dr.top <= navH && dr.bottom >= navH) { over = true; break; }
-      }
-      nav.classList.toggle("over-dark", over);
+    if (!nav) return;
+    const navH = nav.offsetHeight || 64;
+    let over = false;
+    for (const el of darkEls) {
+      const dr = el.getBoundingClientRect();
+      if (dr.top <= navH && dr.bottom >= navH) { over = true; break; }
     }
+    nav.classList.toggle("over-dark", over);
   };
   let rafPending = false;
   addEventListener("scroll", () => {
@@ -1407,6 +1218,4 @@ function initProductExperience() {
     requestAnimationFrame(() => { navSync(); rafPending = false; });
   }, { passive: true });
   navSync();
-
-  go(0, "init");
 }

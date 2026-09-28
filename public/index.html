@@ -453,23 +453,22 @@
       <div class="ch-head">
         <span class="ch-no mono">06</span>
         <span class="ch-label">Real product experience</span>
-        <span class="ch-meta mono">18 SCREENS &middot; REAL DATA</span>
+        <span class="ch-meta mono">PRODUCT FILM &middot; 6:06</span>
       </div>
       <header class="px-head">
         <h2 class="px-title">See M-Terminal in action</h2>
-        <p class="px-sub">Real interface. Real data. Real workflows. Institutional-grade financial intelligence.</p>
       </header>
 
-      <div class="px-carousel" id="pxCarousel" tabindex="0" role="region" aria-roledescription="carousel" aria-label="Product tour">
-        <div class="px-slidearea" id="pxSlideArea"></div>
-
-        <div class="px-controls">
-          <button class="px-nav px-prev" id="pxPrev" aria-label="Previous slide">←</button>
-          <div class="px-progress mono" aria-live="polite"><span id="pxCur">01</span><i>/</i><span id="pxTotal">18</span></div>
-          <button class="px-nav px-next" id="pxNext" aria-label="Next slide">→</button>
+      <!-- Product film: the thumbnail is a lightweight facade; YouTube loads only on play -->
+      <div class="px-film">
+        <div class="px-player" id="pxPlayer" data-yt="d-GgPSVL4PY">
+          <button class="px-poster" type="button" id="pxPlay" aria-label="Play the M-Terminal product film (6 minutes 6 seconds)">
+            <img src="/product/product-film-poster.jpg" width="1920" height="1080" loading="lazy" decoding="async"
+              alt="M-Terminal product demo — live data, a linked Excel DCF and a full research report from one search bar" />
+            <span class="px-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg></span>
+          </button>
         </div>
-
-        <div class="px-dots" id="pxDots" role="tablist" aria-label="Slides"></div>
+        <a class="px-yt mono" href="https://youtu.be/d-GgPSVL4PY" target="_blank" rel="noopener">Watch on YouTube &#8599;</a>
       </div>
     </div>
   </section>

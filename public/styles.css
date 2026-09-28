@@ -248,74 +248,26 @@ a:hover .arr { transform: translateX(4px); }
 .px-title { font-family: var(--serif); font-size: clamp(24px, 3.2vw, 38px); font-weight: 700; letter-spacing: -.02em; margin: 10px 0 8px; color: #f2f3f5; }
 .px-sub { font-size: 13.5px; color: #8a93a0; max-width: 540px; margin: 0 auto; line-height: 1.55; }
 
-/* carousel shell */
-.px-carousel { position: relative; outline: none; }
-.px-carousel:focus-visible { outline: 2px solid rgba(232,163,61,.5); outline-offset: 8px; border-radius: 12px; }
-.px-slidearea { position: relative; }
-
-/* slide — one uniform screen-fit layout: image left · copy right */
-.px-slide { position: absolute; inset: 0; display: grid; gap: clamp(22px, 3vw, 42px);
-  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); align-items: center;
-  opacity: 0; transform: translateX(24px) scale(.99); pointer-events: none;
-  transition: opacity .5s cubic-bezier(.2,.7,.2,1), transform .5s cubic-bezier(.2,.7,.2,1); will-change: opacity, transform; }
-.px-slide.on { position: relative; opacity: 1; transform: none; pointer-events: auto; }
-.px-slide.off-l { transform: translateX(-24px) scale(.99); }
-
-/* premium frame — sized to always stay inside the viewport */
-.px-frame { position: relative; border-radius: 12px; background: linear-gradient(180deg, #141922, #10141b);
-  border: 1px solid rgba(138,147,160,.16); padding: 9px; justify-self: center; max-width: 100%;
-  box-shadow: 0 26px 70px rgba(0,0,0,.55), 0 6px 20px rgba(0,0,0,.4);
-  transition: transform .5s cubic-bezier(.2,.7,.2,1), box-shadow .5s ease; }
-.px-slide.on .px-frame:hover { transform: translateY(-3px);
-  box-shadow: 0 34px 88px rgba(0,0,0,.6), 0 0 40px rgba(232,163,61,.09); }
-.px-frame::before { content: ""; position: absolute; inset: 0; border-radius: 12px; padding: 1px; pointer-events: none;
-  background: linear-gradient(135deg, rgba(232,163,61,.32), rgba(232,163,61,0) 34%, rgba(94,140,180,.12) 78%, rgba(232,163,61,.14));
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
-.px-shot { display: block; border-radius: 7px; background: #0d1117;
-  width: auto; height: auto; max-width: 100%;
-  max-height: clamp(300px, 54vh, 600px); object-fit: contain; margin: 0 auto; }
-
-/* copy panel — compact, screen-fit */
-.px-copy { min-width: 0; }
-.px-num { font-family: var(--mono); font-size: clamp(30px, 3.4vh, 40px); font-weight: 700; color: rgba(232,163,61,.3); line-height: 1; letter-spacing: -.02em; margin-bottom: 6px; }
-.px-fname { font-family: var(--serif); font-size: clamp(19px, 2.4vh, 25px); font-weight: 700; color: #f2f3f5; margin: 0 0 6px; letter-spacing: -.015em; }
-.px-fsub { font-size: 12.5px; color: #8a93a0; margin-bottom: clamp(10px, 1.8vh, 16px); line-height: 1.5; }
-.px-feats { list-style: none; display: grid; gap: clamp(5px, 1vh, 8px); margin: 0 0 clamp(10px, 1.8vh, 16px); padding: 0; }
-.px-feats li { position: relative; padding-left: 19px; font-size: 12px; color: #b7bec8; line-height: 1.45; }
-.px-feats li::before { content: "→"; position: absolute; left: 0; color: #e8a33d; font-size: 11px; }
-.px-why { border-left: 2px solid rgba(232,163,61,.55); background: rgba(232,163,61,.05); border-radius: 0 8px 8px 0;
-  padding: 9px 13px; font-size: 11.5px; color: #9aa3ae; line-height: 1.55; }
-.px-why b { color: #d9ad62; font-weight: 600; }
-
-/* staged text reveal on the active slide */
-.px-slide .px-num, .px-slide .px-fname, .px-slide .px-fsub, .px-slide .px-feats, .px-slide .px-why {
-  opacity: 0; transform: translateY(10px); transition: opacity .45s ease, transform .45s cubic-bezier(.2,.7,.2,1); }
-.px-slide.on .px-num    { opacity: 1; transform: none; transition-delay: .08s; }
-.px-slide.on .px-fname  { opacity: 1; transform: none; transition-delay: .13s; }
-.px-slide.on .px-fsub   { opacity: 1; transform: none; transition-delay: .18s; }
-.px-slide.on .px-feats  { opacity: 1; transform: none; transition-delay: .23s; }
-.px-slide.on .px-why    { opacity: 1; transform: none; transition-delay: .28s; }
-
-/* controls — floating glass, tight under the slide */
-.px-controls { display: flex; align-items: center; justify-content: center; gap: 20px; margin-top: clamp(12px, 2.4vh, 24px); }
-.px-nav { width: 42px; height: 42px; border-radius: 50%; border: 1px solid rgba(138,147,160,.22);
-  background: rgba(20,25,34,.6); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  color: #c9d1d9; font-size: 16px; cursor: pointer; transition: border-color .2s ease, box-shadow .25s ease, color .2s ease, transform .2s ease; }
-.px-nav:hover { color: #e8a33d; border-color: rgba(232,163,61,.5); box-shadow: 0 0 20px rgba(232,163,61,.16); transform: translateY(-1px); }
-.px-nav:active { transform: translateY(0); }
-.px-nav:disabled { opacity: .32; cursor: default; box-shadow: none; transform: none; color: #c9d1d9; border-color: rgba(138,147,160,.22); }
-.px-progress { display: flex; align-items: baseline; gap: 6px; font-size: 12px; color: #8a93a0; letter-spacing: .08em; min-width: 78px; justify-content: center; }
-.px-progress span { color: #e8eaed; font-weight: 600; font-size: 14px; }
-.px-progress #pxCur { color: #e8a33d; display: inline-block; }
-.px-progress #pxCur.tick { animation: pxTick .3s cubic-bezier(.2,.7,.2,1); }
-@keyframes pxTick { 0% { opacity: 0; transform: translateY(6px); } 100% { opacity: 1; transform: none; } }
-.px-progress i { font-style: normal; color: #3a4553; }
-
-.px-dots { display: flex; justify-content: center; gap: 6px; margin-top: clamp(8px, 1.6vh, 14px); flex-wrap: wrap; }
-.px-dot { width: 6px; height: 6px; border-radius: 4px; border: 0; padding: 0; cursor: pointer;
-  background: rgba(138,147,160,.28); transition: width .3s cubic-bezier(.2,.7,.2,1), background .25s ease; }
-.px-dot:hover { background: rgba(232,163,61,.5); }
-.px-dot.on { width: 20px; background: #e8a33d; }
+/* product film — 16:9 player in a hairline frame, thumbnail facade until play */
+.px-film { max-width: 1120px; margin: 0 auto; }
+.px-player { position: relative; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #0d1117;
+  box-shadow: 0 40px 90px -40px rgba(0,0,0,.85), 0 0 0 1px rgba(138,147,160,.16); }
+.px-player::after { content: ""; position: absolute; inset: 0; border-radius: 14px; pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(232,163,61,.10); }
+.px-poster { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; cursor: pointer; background: none; display: block; }
+.px-poster img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .7s cubic-bezier(.2,.7,.2,1), filter .4s ease; }
+.px-poster:hover img { transform: scale(1.015); filter: brightness(1.06); }
+.px-play { position: absolute; left: 50%; top: 50%; width: 84px; height: 84px; margin: -42px 0 0 -42px; border-radius: 50%;
+  display: grid; place-items: center; color: #0a0c10; background: #e8a33d;
+  box-shadow: 0 0 0 10px rgba(232,163,61,.18), 0 18px 40px -12px rgba(0,0,0,.7);
+  transition: transform .3s cubic-bezier(.2,.7,.2,1), box-shadow .3s ease; }
+.px-play svg { width: 34px; height: 34px; margin-left: 4px; }
+.px-poster:hover .px-play { transform: scale(1.07); box-shadow: 0 0 0 14px rgba(232,163,61,.22), 0 22px 48px -12px rgba(0,0,0,.75); }
+.px-poster:focus-visible { outline: none; }
+.px-poster:focus-visible .px-play { box-shadow: 0 0 0 4px #0a0c10, 0 0 0 7px #e8a33d; }
+.px-player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.px-yt { display: table; margin: 14px auto 0; font-size: 11px; letter-spacing: .12em; color: #8a93a0; text-decoration: none; text-transform: uppercase; }
+.px-yt:hover { color: #e8a33d; }
 
 /* nav adapts over the dark chapter */
 .nav.over-dark { background: rgba(10,12,16,.82); border-bottom-color: rgba(138,147,160,.14); }
@@ -324,22 +276,20 @@ a:hover .arr { transform: translateX(4px); }
 
 @media (max-width: 900px) {
   .px { min-height: 0; }
-  .px-stage { padding: 26px 18px 34px; }
-  .px-slide { grid-template-columns: 1fr; gap: 18px; }
-  .px-shot { max-height: 44vh; }
+  .px-stage { padding: 26px 16px 34px; }
   .px-head { margin-bottom: 18px; }
-  .px-feats li { font-size: 11.5px; }
+  .px-player, .px-player::after { border-radius: 10px; }
+  .px-play { width: 64px; height: 64px; margin: -32px 0 0 -32px; box-shadow: 0 0 0 7px rgba(232,163,61,.18), 0 14px 30px -10px rgba(0,0,0,.7); }
+  .px-play svg { width: 26px; height: 26px; }
 }
 @media (max-height: 720px) and (min-width: 901px) {
   .px-head { margin-bottom: 10px; }
-  .px-sub { display: none; }
-  .px-shot { max-height: 52vh; }
+  .px-film { max-width: min(1120px, calc((100vh - 170px) * 16 / 9)); }
 }
 @media (prefers-reduced-motion: reduce) {
   .px-stage { transition: opacity .4s ease; transform: none; filter: none; }
-  .px-slide, .px-slide .px-num, .px-slide .px-fname, .px-slide .px-fsub, .px-slide .px-feats, .px-slide .px-why { transition: opacity .25s ease; transform: none !important; }
-  .px-frame, .px-slide.on .px-frame:hover { transform: none; }
-  .px-progress #pxCur.tick { animation: none; }
+  .px-poster img, .px-play { transition: none; }
+  .px-poster:hover img, .px-poster:hover .px-play { transform: none; }
 }
 
 /* ── RESPONSIVE ── */
@@ -1040,13 +990,6 @@ html.intro-hold, html.intro-hold body { overflow: hidden; height: 100%; }
 .btn-primary { transition: background .3s ease, transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .35s ease, opacity .9s cubic-bezier(.2,.7,.2,1); transition-delay: var(--d, 0s); }
 .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 18px 44px -18px rgba(194,24,27,.55); }
 @media (prefers-reduced-motion: reduce) { .btn-primary:hover { transform: none; box-shadow: none; } }
-
-/* ── PX GALLERY — Android touch behaviour ──
-   pan-y: vertical strokes stay native page scroll; horizontal strokes are
-   surrendered to JS, which locks the axis and drags the slide. */
-.px-slidearea { touch-action: pan-y; overscroll-behavior-x: contain; }
-.px-slide.dragging { transition: none !important; }
-.px-slide.settling { transition: opacity .45s cubic-bezier(.2,.7,.2,1), transform .45s cubic-bezier(.2,.7,.2,1); }
 
 /* ── SHINY TEXT (CSS port of React Bits <ShinyText/>) ──
    Periodic warm shine sweeping across the gallery chapter title.

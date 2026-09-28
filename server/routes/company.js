@@ -135,8 +135,14 @@ router.get("/company/:symbol", async (req, res) => {
    calendar, material filings and news. Shared by the workstation and the report;
    refreshed every 3 hours so results-day filings appear the same day. */
 const PACK_TTL = 3 * 60 * 60 * 1000;
-function packFor(symbol, co) {
-  return cachedDurable(`pack3:${symbol}`, PACK_TTL, () => buildPack(symbol, co));
+// a pack with exchange sections that NSE didn't return is kept only briefly, so the
+// next open retries them instead of showing blanks for the full 3 hours
+const PACK_RETRY_TTL = 90 * 1000;
+async function packFor(symbol, co) {
+  const key = `pack3:${symbol}`;
+  const p = await cachedDurable(key, PACK_TTL, () => buildPack(symbol, co));
+  if (p && Array.isArray(p.unavailable) && p.unavailable.length && !p.__retryShort) cacheSet(key, { ...p, __retryShort: true }, PACK_RETRY_TTL);
+  return p;
 }
 router.get("/company/:symbol/pack", async (req, res) => {
   const s = req.params.symbol.toUpperCase();

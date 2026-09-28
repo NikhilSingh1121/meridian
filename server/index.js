@@ -25,7 +25,7 @@ const CSP = [
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
   "connect-src 'self' https://accounts.google.com https://*.razorpay.com",
-  "frame-src https://accounts.google.com https://*.razorpay.com",
+  "frame-src https://accounts.google.com https://*.razorpay.com https://www.youtube-nocookie.com https://www.youtube.com",
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",
