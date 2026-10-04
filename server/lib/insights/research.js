@@ -31,6 +31,9 @@ const TIER2 = /reuters|bloomberg|ft\.com|economictimes|business-standard|moneyco
 const EXCHANGE = /nseindia|bseindia|sebi\.gov|sec\.gov|rbi\.org|gov\.in|nasdaq\.com\/market-activity|londonstockexchange/i;
 const KIND_TYPE = { results: "company_filing", press: "company_filing", presentation: "investor_presentation", call: "earnings_call", deal: "company_filing", people: "company_filing", capital: "company_filing", legal: "regulatory" };
 
+const DR = require("./docreader");
+const { estimate } = require("./budget");
+
 function normUrl(u) { return String(u || "").trim().replace(/[)\].,;]+$/, "").replace(/#.*$/, "").replace(/\/$/, "").toLowerCase(); }
 function numbersIn(s) {
   return [...String(s).matchAll(/\d[\d,]*(?:\.\d+)?/g)].map((m) => parseFloat(m[0].replace(/,/g, ""))).filter((v) => isFinite(v));
@@ -75,12 +78,14 @@ function documentPlan(filings) {
   const results = latest("results", 1);
   const near = (f) => results[0] && Math.abs(Date.parse(f.date) - Date.parse(results[0].date)) <= 4 * 86_400_000;
   const press = filings.filter((f) => f.kind === "press" && f.url && near(f)).slice(0, 1);
-  const pres = latest("presentation", 1);
-  const call = latest("call", 1);
+  // a presentation or call belongs to the latest results only when filed around them — an older one is stale
+  const within = (f, days) => !results[0] || Math.abs(Date.parse(f.date) - Date.parse(results[0].date)) <= days * 86_400_000;
+  const pres = filings.filter((f) => f.kind === "presentation" && f.url && within(f, 10)).slice(0, 1);
+  const call = filings.filter((f) => f.kind === "call" && f.url && within(f, 45)).slice(0, 1);
   const deals = latest("deal", 3);
   return {
-    results: [...results, ...press, ...pres],
-    management: [...call, ...(call.length ? [] : pres)],
+    results: [...results, ...press, ...(call.length ? pres : [])],
+    management: call.length ? call : pres,
     developments: deals,
   };
 }
@@ -193,7 +198,7 @@ const searchWanted = () => SEARCH_MODE() !== "off" && Date.now() >= searchOffUnt
  * @param onPass      (passKey, record) after each successful document pass
  * @returns { evidence, passes, searches, tokens, cutoff, mode, discovered }
  */
-async function conductDeepCompanyResearch({ report, profile, onProgress, donePasses = {}, onPass, resolve = resolveRedirect, deadline = Infinity }) {
+async function conductDeepCompanyResearch({ report, profile, onProgress, donePasses = {}, onPass, resolve = resolveRedirect, deadline = Infinity, budget = null, reserve = 0, known = "" }) {
   const m = report.meta, d = report.data || {};
   const site = d.profile && d.profile.website ? d.profile.website.replace(/^https?:\/\//, "").replace(/\/$/, "") : "";
   const peers = (d.peers || []).slice(1, 5).map((p) => String(p.name || "").replace(/\b(LIMITED|LTD\.?|INC\.?)\b/gi, "").trim()).filter(Boolean);
@@ -206,7 +211,7 @@ async function conductDeepCompanyResearch({ report, profile, onProgress, donePas
   const evidence = [...filingEvidence(src.filings, m.name), ...newsEvidence(src.news)];
   const plan = documentPlan(src.filings);
   const meta = [{ key: "filings", label: "Exchange filings", ok: true, count: src.filings.length }, { key: "news", label: "News headlines", ok: true, count: src.news.length }];
-  let searches = 0, tokens = 0, usedSearch = false;
+  let searches = 0, tokens = 0, reusedTokens = 0, usedSearch = false;
 
   const list = passes(ctx);
   for (let i = 0; i < list.length; i++) {
@@ -217,55 +222,82 @@ async function conductDeepCompanyResearch({ report, profile, onProgress, donePas
       evidence.push(...prior.items.map((x) => ({ ...x })));
       meta.push({ ...prior.meta, reused: true });
       searches += prior.searches || 0;
+      reusedTokens += (prior.meta && prior.meta.tokens) || 0;
       continue;
     }
     const docs = (plan[p.key] || []).map((f) => ({ ...f, source: `${m.name} — ${f.category} (exchange filing)` }));
     const withSearch = searchWanted();
     if (deadline - Date.now() < 30_000) { meta.push({ key: p.key, label: p.label, ok: false, count: 0, error: "time_budget" }); continue; }
-    if (!docs.length && !withSearch) { meta.push({ key: p.key, label: p.label, ok: true, count: 0, skipped: p.searchOnly ? "search grounding unavailable" : "no documents" }); continue; }
+    if (!docs.length && !(withSearch && p.searchOnly)) { meta.push({ key: p.key, label: p.label, ok: true, count: 0, skipped: p.searchOnly ? "search grounding off" : "no documents" }); continue; }
 
-    // document reading and web search are separate calls: given both tools at
-    // once the model tends to search instead of reading the filings it was given
     const sys = (how) => `You are a senior equity research associate gathering evidence for a report on ${m.name} dated ${m.date}. ${how} Report only what the sources state; copy figures exactly with their units and periods.`;
-    const call = (how, user, t) => gemini.chat({ feature: "research", messages: [{ role: "system", content: sys(how) }, { role: "user", content: user }], tools: t, reasoning: "low", maxTokens: 12000, timeoutMs: 120_000, deadline });
+    const call = (how, user, t, maxTokens) => gemini.chat({ feature: "research", tag: `${m.symbol} ${p.key}`, messages: [{ role: "system", content: sys(how) }, { role: "user", content: user }], tools: t, reasoning: "low", maxTokens, timeoutMs: 120_000, deadline });
+    // the terminal's own data comes first: the model is told what is already known and asked only for what adds to it
+    const brief = known ? `${p.brief}\n\nALREADY KNOWN from the terminal's own financial data — do not extract these again; report only facts that add to them (segments, volumes, KPIs, guidance, one-offs, management commentary, transactions):\n${known}` : p.brief;
     try {
-      const items = []; let dropped = 0, passSearches = 0, passTokens = 0, retrieved = 0, model = null;
+      const items = []; let dropped = 0, passSearches = 0, passTokens = 0, retrieved = 0, unreadable = 0, unverified = 0, model = null, skippedForBudget = false;
+      const spend = (r) => { const t = (r.usage && r.usage.total_tokens) || 0; passTokens += t; if (budget) budget.add(t); model = model || r.model; };
       if (docs.length) {
-        const read = async (list) => {
-          const docList = list.map((x, k) => `[D${k + 1}] ${x.date} · ${x.category} · ${x.url}`).join("\n");
-          const r = await call("Read every listed document with the URL context tool.", `${p.brief}\n\nDOCUMENTS:\n${docList}\n${FORMAT(m.date, false)}`, [{ url_context: {} }]);
-          const ev = parseDocEvidence(r.content, list, r.urls, { cutoff: m.date, pass: p.key });
-          items.push(...ev.items); dropped += ev.dropped; retrieved += (r.urls || []).filter((u) => u.ok).length;
-          passTokens += (r.usage && r.usage.total_tokens) || 0; model = model || r.model;
-        };
-        try { await read(docs); }
-        catch (e) {
-          // Google rejected the batch (e.g. one document too large or unreadable):
-          // read the documents one at a time and skip only the one it won't take
-          if (e.code !== "bad_request" || docs.length < 2) throw e;
-          for (const d of docs) { try { await read([d]); } catch (e2) { if (e2.code !== "bad_request") throw e2; } }
+        // 1 · download + extract on the server, send only the relevant pages
+        const texts = await Promise.all(docs.map((d) => DR.fetchDoc(d.url)));
+        let readable = docs.map((d, k) => ({ d, x: texts[k] && DR.relevant(texts[k], p.key, DR.charsFor(d.kind)) })).filter((r) => r.x && r.x.text);
+        unreadable = docs.length - readable.length;
+        // fit the budget: drop the least important documents (listed last) before skipping the pass
+        const promptChars = (list) => brief.length + 1200 + list.reduce((a, r) => a + r.x.text.length + 120, 0);
+        while (readable.length > 1 && budget && !budget.fits(estimate(promptChars(readable), 6000), reserve)) readable = readable.slice(0, -1);
+        if (readable.length && budget && !budget.fits(estimate(promptChars(readable), 6000), reserve)) { budget.skip(`${p.key}: documents`); readable = []; skippedForBudget = true; }
+        if (readable.length) {
+          const list = readable.map((r) => r.d);
+          const body = readable.map((r, k) => `=== [D${k + 1}] ${r.d.date} · ${r.d.category} · ${r.x.pages.length} of ${r.x.totalPages} pages (most relevant) ===\n${r.x.text}`).join("\n\n");
+          const r = await call("Read the document excerpts below.", `${brief}\n\nDOCUMENT EXCERPTS:\n${body}\n${FORMAT(m.date, false)}`, undefined, 6000);
+          spend(r);
+          const ev = parseDocEvidence(r.content, list, list.map((d) => ({ url: d.url, ok: true })), { cutoff: m.date, pass: p.key });
+          // every figure in a claim must appear in the excerpt it cites
+          const textOf = new Map(readable.map((x) => [normUrl(x.d.url), x.x.text]));
+          for (const it of ev.items) { if (figuresVerified(it.claim, textOf.get(normUrl(it.url)))) items.push(it); else unverified++; }
+          dropped += ev.dropped + unverified; retrieved += readable.length;
+        }
+        // 2 · optional: let Google fetch documents our server could not download (unbounded size — off by default)
+        const missed = docs.filter((d, k) => !texts[k] && d.kind !== "presentation");
+        if (missed.length && process.env.RESEARCH_URL_CONTEXT === "1") {
+          for (const d of missed.slice(0, 1)) {
+            if (budget && !budget.fits(60_000, reserve)) { budget.skip(`${p.key}: url-context`); break; }
+            try {
+              const r = await call("Read the listed document with the URL context tool.", `${brief}\n\nDOCUMENTS:\n[D1] ${d.date} · ${d.category} · ${d.url}\n${FORMAT(m.date, false)}`, [{ url_context: {} }], 6000);
+              spend(r);
+              const ev = parseDocEvidence(r.content, [d], r.urls, { cutoff: m.date, pass: p.key });
+              items.push(...ev.items); dropped += ev.dropped; retrieved += (r.urls || []).filter((u) => u.ok).length;
+            } catch (e) { if (e.code !== "bad_request") throw e; }
+          }
         }
       }
-      if (withSearch && deadline - Date.now() > 25_000) {
-        try {
-          const ask = () => call("Use Google Search.", `${p.brief}\n${p.search}\n${SEARCH_FORMAT(m.date)}`, [{ google_search: {} }]);
-          // an answer that arrives without grounding data cannot be traced to a page — ask once more
-          let r = await ask();
-          if (!(r.grounding && r.grounding.chunks.length) && deadline - Date.now() > 25_000) r = await ask();
-          usedSearch = true;
-          const ev = await parseSearchEvidence(r.content, r.grounding, { cutoff: m.date, site, pass: p.key, resolve });
-          items.push(...ev.items); dropped += ev.dropped;
-          passSearches = (r.grounding && r.grounding.queries || []).length;
-          passTokens += (r.usage && r.usage.total_tokens) || 0; model = model || r.model;
-        } catch (e) {
-          // no search-grounding quota on this key → documents and headlines only
-          if (e.code !== "quota") throw e;
-          searchOffUntil = Date.now() + 6 * 3600_000;
-          console.warn(`[research] search grounding unavailable for this key — continuing with filings, documents and headlines`);
+      // 3 · web search only where the filings left gaps (or for the industry pass), and only within budget
+      if (withSearch && (p.searchOnly || items.length < 6) && deadline - Date.now() > 25_000) {
+        if (budget && !budget.fits(estimate(brief.length + 1500, 4000) + 6000, reserve)) budget.skip(`${p.key}: search`);
+        else {
+          try {
+            const r = await call("Use Google Search.", `${brief}\n${p.search}\n${SEARCH_FORMAT(m.date)}`, [{ google_search: {} }], 4000);
+            spend(r);
+            usedSearch = true;
+            const ev = await parseSearchEvidence(r.content, r.grounding, { cutoff: m.date, site, pass: p.key, resolve });
+            items.push(...ev.items); dropped += ev.dropped;
+            passSearches = (r.grounding && r.grounding.queries || []).length;
+          } catch (e) {
+            // no search-grounding quota on this key → documents and headlines only
+            if (e.code !== "quota") throw e;
+            searchOffUntil = Date.now() + 6 * 3600_000;
+            console.warn(`[research] search grounding unavailable for this key — continuing with filings, documents and headlines`);
+          }
         }
       }
+      if (unreadable) console.warn(`[research] ${m.symbol} ${p.key}: ${unreadable} of ${docs.length} filing${docs.length > 1 ? "s" : ""} could not be downloaded — skipped`);
       searches += passSearches; tokens += passTokens;
-      const pm = { key: p.key, label: p.label, ok: true, count: items.length, dropped, documents: docs.length, retrieved, model, tokens: passTokens };
+      // not saved as done when nothing could be read (download refused) or the budget ran out — the next run retries it
+      if (!items.length && docs.length && (unreadable === docs.length || skippedForBudget)) {
+        meta.push({ key: p.key, label: p.label, ok: false, count: 0, error: skippedForBudget ? "token_budget" : "download_failed", documents: docs.length, tokens: passTokens });
+        continue;
+      }
+      const pm = { key: p.key, label: p.label, ok: true, count: items.length, dropped, documents: docs.length, retrieved, unreadable, unverified, model, tokens: passTokens };
       if (onPass) onPass(p.key, JSON.parse(JSON.stringify({ items, meta: pm, searches: passSearches })));
       evidence.push(...items);
       meta.push(pm);
@@ -281,7 +313,7 @@ async function conductDeepCompanyResearch({ report, profile, onProgress, donePas
     .filter((e) => { const k = normUrl(e.url) + "|" + e.claim.toLowerCase().slice(0, 80); if (seen.has(k)) return false; seen.add(k); return true; })
     .sort((a, b) => a.tier - b.tier || String(b.date).localeCompare(String(a.date)));
   uniq.forEach((e, i) => (e.id = i + 1));
-  return { evidence: uniq, passes: meta, searches, tokens, cutoff: m.date, mode: usedSearch ? "documents + search" : "documents", discovered: { filings: src.filings.length, news: src.news.length, filingsUnavailable } };
+  return { evidence: uniq, passes: meta, searches, tokens, reusedTokens, cutoff: m.date, mode: usedSearch ? "documents + search" : "documents", discovered: { filings: src.filings.length, news: src.news.length, filingsUnavailable } };
 }
 
 module.exports = { conductDeepCompanyResearch, parseDocEvidence, parseSearchEvidence, filingEvidence, newsEvidence, documentPlan, figuresVerified, _resetSearch: () => (searchOffUntil = 0) };

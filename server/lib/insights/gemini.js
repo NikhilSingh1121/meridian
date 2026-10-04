@@ -66,6 +66,12 @@ function toRequest({ messages, tools, schema, maxTokens, reasoning }) {
   return body;
 }
 
+/* Google usage → { total_tokens, input, tool (URL-context / search content), output, thinking } */
+function usageOf(um) {
+  const u = um || {};
+  return { total_tokens: u.totalTokenCount || 0, input: u.promptTokenCount || 0, tool: u.toolUsePromptTokenCount || 0, output: u.candidatesTokenCount || 0, thinking: u.thoughtsTokenCount || 0 };
+}
+
 function grounding(gm) {
   if (!gm) return { chunks: [], supports: [], queries: [] };
   return {
@@ -118,7 +124,7 @@ async function callOnce(model, req) {
     content: text,
     grounding: grounding(cand.groundingMetadata),
     urls: ((cand.urlContextMetadata && cand.urlContextMetadata.urlMetadata) || []).map((u) => ({ url: u.retrievedUrl || "", ok: u.urlRetrievalStatus === "URL_RETRIEVAL_STATUS_SUCCESS" })),
-    usage: { total_tokens: (data.usageMetadata && data.usageMetadata.totalTokenCount) || 0 },
+    usage: usageOf(data.usageMetadata),
     model: data.modelVersion || model,
     finishReason: cand.finishReason || "",
   };
@@ -181,7 +187,7 @@ function chat(req) {
     for (let i = 0; i < chain.length; i++) {
       try {
         const out = await tryModel(chain[i], r, i === chain.length - 1);
-        gov.record(r.feature, out.usage && out.usage.total_tokens, usesSearch(r.tools) ? Math.max(1, (out.grounding && out.grounding.queries || []).length ? 1 : 0) : 0);
+        gov.record(r.feature, out.usage, usesSearch(r.tools) ? Math.max(1, (out.grounding && out.grounding.queries || []).length ? 1 : 0) : 0, { model: out.model, tag: r.tag });
         return { ...out, fellBack: i > 0 };
       }
       catch (e) {

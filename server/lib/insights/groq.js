@@ -51,7 +51,8 @@ async function callOnce(model, { messages, json, maxTokens, search, timeoutMs })
   const msg = data && data.choices && data.choices[0] && data.choices[0].message;
   const text = String((msg && msg.content) || "").trim();
   if (!text) throw new GroqError("empty", "empty completion", true);
-  const out = { content: text, usage: { total_tokens: (data.usage && data.usage.total_tokens) || 0 }, model: data.model || model, urls: [] };
+  const U = data.usage || {}, reasoningTok = (U.completion_tokens_details && U.completion_tokens_details.reasoning_tokens) || 0;
+  const out = { content: text, usage: { total_tokens: U.total_tokens || 0, input: U.prompt_tokens || 0, output: Math.max(0, (U.completion_tokens || 0) - reasoningTok), thinking: reasoningTok }, model: data.model || model, urls: [] };
   // browser_search results come back on the message as executed_tools[].search_results
   for (const t of (msg.executed_tools || [])) {
     const r = t.search_results && (t.search_results.results || t.search_results);
@@ -76,7 +77,7 @@ async function chat(req) {
   const chain = MODELS().filter((m) => !r.search || /gpt-oss/.test(m));   // browser_search is a gpt-oss tool
   let last = null;
   for (const model of chain) {
-    try { const out = await callOnce(model, r); gov.record(r.feature || "assistant", out.usage && out.usage.total_tokens, r.search ? 1 : 0); return out; }
+    try { const out = await callOnce(model, r); gov.record(r.feature || "assistant", out.usage, r.search ? 1 : 0, { model: out.model, tag: r.tag }); return out; }
     catch (e) { if (!(e instanceof GroqError) || !e.fallbackable) throw e; last = e; }
   }
   throw last || new GroqError("no_model", "no Groq model available");

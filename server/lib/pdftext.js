@@ -223,7 +223,7 @@ async function pdfjs() { if (!_pdfjs) _pdfjs = import("unpdf").then((m) => m.get
 async function extractPdf(buffer, { maxPages = 120 } = {}) {
   try {
     const getDocumentProxy = await pdfjs();
-    const doc = await getDocumentProxy(new Uint8Array(Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer)));
+    const doc = await getDocumentProxy(new Uint8Array(Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer)), { verbosity: 0 });   // errors only: font warnings would flood the server log
     const pages = [], links = [];
     const n = Math.min(doc.numPages, maxPages);
     for (let p = 1; p <= n; p++) {

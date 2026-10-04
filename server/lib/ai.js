@@ -4,6 +4,7 @@
 
 const { ruleNarrative } = require("./analytics");
 
+const gov = require("./aiGovernor");
 const hasKey = () => !!process.env.ANTHROPIC_API_KEY;
 
 async function generateNarrative(pack, reportType) {
@@ -11,7 +12,7 @@ async function generateNarrative(pack, reportType) {
   // This guarantees the recommendation can't be overridden by the AI — the AI
   // only writes the prose around the numbers and committee call.
   const baseline = ruleNarrative(pack);
-  if (!hasKey()) return baseline;
+  if (!hasKey() || !gov.allow().ok) return baseline;
   try {
     const prompt = `You are a senior sell-side equity analyst. Using ONLY the computed data below (do not invent any figures — reference only numbers present in the data), write the qualitative sections of a ${reportType} for ${pack.name} (${pack.symbol}).
 
@@ -58,6 +59,8 @@ Respond with ONLY a JSON object (no markdown fences, no preamble) with exactly t
     });
     if (!res.ok) throw new Error(`Anthropic API ${res.status}`);
     const data = await res.json();
+    const U = data.usage || {};
+    gov.record("narrative", { total_tokens: (U.input_tokens || 0) + (U.output_tokens || 0), input: U.input_tokens || 0, output: U.output_tokens || 0 }, 0, { model: data.model || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6", tag: [pack.symbol, reportType].filter(Boolean).join(" ") });
     const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
     const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
     // Merge AI prose with the deterministic recommendation. The recommendation, composite score,
@@ -76,9 +79,9 @@ Respond with ONLY a JSON object (no markdown fences, no preamble) with exactly t
       ratingBasis: baseline.ratingBasis,
     };
   } catch (e) {
-    const fb = baseline;
-    fb.note = `AI narrative unavailable (${String(e.message || e).slice(0, 60)}) — deterministic commentary shown.`;
-    return fb;
+    // AI failures are invisible to readers: the deterministic commentary is the report
+    console.warn(`[narrative] ${pack.symbol}: ${String(e.message || e).slice(0, 80)} — deterministic commentary used`);
+    return baseline;
   }
 }
 

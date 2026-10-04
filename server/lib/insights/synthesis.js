@@ -11,6 +11,7 @@
  */
 
 const gemini = require("./gemini");
+const { estimate } = require("./budget");
 const { makeValidator } = require("./validate");
 
 const STR = { type: "string" };
@@ -139,7 +140,7 @@ ${F.valuation && F.valuation.basis === "market" ? "- valuation: 3–5 paragraphs
 /**
  * @returns { sections, sources, stats }
  */
-async function synthesizeResearch({ report, facts, research, profile, onProgress, deadline = Infinity }) {
+async function synthesizeResearch({ report, facts, research, profile, onProgress, deadline = Infinity, budget = null }) {
   const m = report.meta;
   const evidence = (research.evidence || []).filter((e) => e.verified);
   const ctx = {
@@ -165,26 +166,30 @@ async function synthesizeResearch({ report, facts, research, profile, onProgress
     if (deadline - Date.now() < 25_000) { failures.push({ group: g.key, error: "time_budget" }); continue; }
     const header = g.ask + (g.key === "summary" && pillarTitles.length ? `\n\nFor coherence, the thesis pillars already written are: ${pillarTitles.join("; ")}.` : "");
     const { user } = fit(system, header, g.facts, g.evidence);
+    // per-report token cap: a section that does not fit keeps its deterministic text
+    if (budget && !budget.fits(estimate(system.length + user.length, 6000))) { failures.push({ group: g.key, error: "token_budget" }); budget.skip(`write:${g.key}`); continue; }
     try {
       const r = await gemini.chat({
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
-        feature: "report", schema: { name: `report_${g.key}`, schema: g.schema }, reasoning: "low", maxTokens: 9000, timeoutMs: 150_000, deadline,   // thinking tokens count toward the output limit
+        feature: "report", tag: `${m.symbol} write:${g.key}`, schema: { name: `report_${g.key}`, schema: g.schema }, reasoning: "low", maxTokens: 9000, timeoutMs: 150_000, deadline,   // thinking tokens count toward the output limit
       });
       out[g.key] = r.json; models[g.key] = r.model;
       tokens += (r.usage && r.usage.total_tokens) || 0;
+      if (budget) budget.add((r.usage && r.usage.total_tokens) || 0);
       if (g.key === "valuation") pillarTitles = (r.json.thesis_pillars || []).map((p) => p.title).filter(Boolean).slice(0, 5);
       // an executive summary well short of the brief gets one expansion pass, time permitting
       const words = (x) => (Array.isArray(x) ? x.join(" ") : "").split(/\s+/).filter(Boolean).length;
       const n = g.key === "summary" ? words(r.json.executive_summary) : Infinity;
-      if (n < 450 && deadline - Date.now() > 45_000) {
+      if (n < 450 && deadline - Date.now() > 45_000 && (!budget || budget.fits(estimate(system.length + user.length + (r.content || "").length, 7000)))) {
         onProgress && onProgress("s:summary");
         try {
           const r2 = await gemini.chat({
             messages: [{ role: "system", content: system }, { role: "user", content: user }, { role: "assistant", content: r.content || JSON.stringify(r.json) },
               { role: "user", content: `The executive_summary is ${n} words; the brief requires about 650 (500–800). Return the complete JSON again with an executive_summary of 6–8 connected paragraphs totalling 600–700 words. Add analysis, not repetition: what drives the latest results, margin and cash-flow quality, balance sheet capacity, strategic developments, management outlook, what the valuation implies, upside and downside drivers, and what to watch over the next 2–4 quarters — every figure from FACTS or cited EVIDENCE. Keep the other fields.` }],
-            feature: "report", schema: { name: `report_${g.key}`, schema: g.schema }, reasoning: "low", maxTokens: 9000, timeoutMs: 150_000, deadline,
+            feature: "report", tag: `${m.symbol} write:summary (expand)`, schema: { name: `report_${g.key}`, schema: g.schema }, reasoning: "low", maxTokens: 9000, timeoutMs: 150_000, deadline,
           });
           tokens += (r2.usage && r2.usage.total_tokens) || 0;
+          if (budget) budget.add((r2.usage && r2.usage.total_tokens) || 0);
           if (words(r2.json.executive_summary) > n) { out[g.key] = r2.json; models[g.key] = r2.model; }
         } catch (e) { console.warn(`[synthesis] ${m.symbol} summary expansion: ${e.code || ""} ${e.message || e}`); }
       }

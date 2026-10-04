@@ -106,7 +106,7 @@ async function run(key, text, analysis) {
   const pack = evidencePack(text, analysis);
   const r = await gemini.chat({
     messages: [{ role: "system", content: SYSTEM }, { role: "user", content: `${pack}\n\nReturn the JSON: headline (<=40 words), thesis_impact + thesis_reason, environment (4-7 factors management discussed), segments (each business / geography discussed), costs (each input or cost line, with the pricing action taken), strategy (portfolio, M&A, capacity, channel moves, long-range targets), bull (3-5), bear (3-5), matrix (6-9 thesis items).` }],
-    feature: "earnings", schema: { name: "call_modules", schema: SCHEMA }, maxTokens: 3200, reasoning: "low", timeoutMs: 100_000,
+    feature: "earnings", tag: [analysis && analysis.meta && analysis.meta.ticker, "call modules"].filter(Boolean).join(" "), schema: { name: "call_modules", schema: SCHEMA }, maxTokens: 3200, reasoning: "low", timeoutMs: 100_000,
   });
   const result = { ...validate(r.json || {}, text, analysis.meta.pages), model: r.model, tokens: r.usage && r.usage.total_tokens, generatedAt: new Date().toISOString(), evidenceChars: pack.length };
   cachePut(key, result);

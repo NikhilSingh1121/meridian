@@ -71,13 +71,29 @@ function recentKeys(meta) {
   return out;
 }
 const aiUsable = () => gemini.hasKey() && gov.status().available;
+const { TokenBudget, capFromEnv } = require("./budget");
+/* tokens kept back for the write-up while research reads documents (≈ five section calls) */
+const SYNTH_RESERVE = () => capFromEnv("REPORT_SYNTH_RESERVE", 45_000);
+/* the terminal's own figures, so research asks the model only for what they do not already cover */
+function knownFacts(facts) {
+  try {
+    const out = [];
+    const yrs = facts.financials_by_year || [], last = yrs[yrs.length - 1];
+    if (facts.units) out.push(facts.units);
+    if (last) out.push("Latest completed year: " + JSON.stringify(last).slice(0, 700));
+    if (facts.latest_quarter) out.push("Latest quarter: " + JSON.stringify(facts.latest_quarter).slice(0, 600));
+    if (facts.growth) out.push("Growth: " + JSON.stringify(facts.growth).slice(0, 300));
+    return out.join("\n");
+  } catch { return ""; }
+}
 const fileOf = (key) => path.join(CACHE_DIR, crypto.createHash("sha1").update(key).digest("hex").slice(0, 24) + ".json");
 
+const stale = (r) => !!(r && r.meta && r.meta.retryAt && Date.now() > r.meta.retryAt);
 function cacheGet(key) {
-  if (mem.has(key)) return mem.get(key);
+  if (mem.has(key)) { const v = mem.get(key); if (!stale(v)) return v; mem.delete(key); return null; }
   try {
     const j = JSON.parse(fs.readFileSync(fileOf(key), "utf8"));
-    if (j && j.key === key && j.research) { mem.set(key, j.research); return j.research; }
+    if (j && j.key === key && j.research && !stale(j.research)) { mem.set(key, j.research); return j.research; }
   } catch { }
   return null;
 }
@@ -123,32 +139,38 @@ async function runPipeline(job, report) {
     const reading = [...jobs.values()].find((j) => j.key === job.key && j.kind === "docs" && j.status === "running" && j.promise);
     if (reading) { onProgress("discover"); await Promise.race([reading.promise, new Promise((r) => setTimeout(r, Math.round(budget * 0.45)))]); }
     const done = passesGet(recentPassKey(report.meta));
+    const tb = new TokenBudget();
     const research = await conductDeepCompanyResearch({
       report, profile, onProgress, donePasses: done, deadline: t0 + Math.round(budget * 0.45),
       onPass: (k, rec) => { done[k] = rec; passesPut(job.key, done); },
+      budget: tb, reserve: Math.min(SYNTH_RESERVE(), Math.round(tb.cap * 0.6)), known: knownFacts(facts),
     });
     const verified = research.evidence.filter((e) => e.verified).length;
     if (!research.passes.some((p) => p.ok)) throw Object.assign(new Error("all research passes failed"), { code: research.passes[0] && research.passes[0].error || "research_failed" });
-    const syn = await synthesizeResearch({ report, facts, research, profile, onProgress, deadline: t0 + budget - 3000 });
+    const syn = await synthesizeResearch({ report, facts, research, profile, onProgress, deadline: t0 + budget - 3000, budget: tb });
     if (!syn.stats.filledSections) throw Object.assign(new Error("synthesis produced no usable content"), { code: (syn.stats.failures[0] || {}).error || "synthesis_failed" });
     const result = {
       version: VERSION, generatedAt: new Date().toISOString(), cutoff: report.meta.date,
       sections: syn.sections, sources: syn.sources,
       meta: {
         sector: profile.key, evidence: research.evidence.length, verifiedEvidence: verified, searches: research.searches, mode: research.mode, discovered: research.discovered,
-        tokens: { research: research.tokens, synthesis: syn.stats.tokens },
+        tokens: { research: research.tokens, synthesis: syn.stats.tokens, reusedReading: research.reusedTokens || 0, cap: tb.cap, capped: tb.skipped },
         passes: research.passes, synthesisModels: syn.stats.models, failures: syn.stats.failures,
         budgetSeconds: Math.round(budget / 1000), sentences: syn.stats.sentences, removedSentences: syn.stats.dropped, removedBy: syn.stats.reasons, removed: syn.stats.removed,
         seconds: Math.round((Date.now() - t0) / 1000),
       },
     };
-    job.status = syn.stats.failures.length ? "partial" : "done";
-    // only a complete result is cached; a partial one is shown now and the next
-    // request completes it (document passes are reused, so only writing re-runs)
-    if (job.status === "done") cachePut(job.key, result);
+    const FINAL = /^(token_budget|time_budget)$/;
+    const transient = syn.stats.failures.filter((f) => !FINAL.test(f.error));
+    job.status = transient.length ? "partial" : "done";
+    // cached either way, so views do not re-spend tokens: a capped report is final; one with a transient
+    // failure (rate limit, provider error) is retried after REPORT_RETRY_H hours (default 6)
+    if (transient.length) result.meta.retryAt = Date.now() + capFromEnv("REPORT_RETRY_H", 6) * 3600e3;
+    cachePut(job.key, result);
     job.research = result;
     job.stage = "Complete";
-    console.log(`[research] ${report.meta.symbol}: ${job.status} in ${result.meta.seconds}s — ${research.evidence.length} evidence (${verified} verified), ${research.searches} searches, ${research.tokens + syn.stats.tokens} tokens, ${syn.sources.length} sources cited, ${syn.stats.dropped}/${syn.stats.sentences} sentences removed by validator`);
+    const reused = research.reusedTokens || 0;
+    console.log(`[research] ${report.meta.symbol}: ${job.status} in ${result.meta.seconds}s — ${research.evidence.length} evidence (${verified} verified), ${research.searches} searches, ${(research.tokens + syn.stats.tokens).toLocaleString("en-US")} tokens this run (reading ${research.tokens.toLocaleString("en-US")} + writing ${syn.stats.tokens.toLocaleString("en-US")}${reused ? `; + ${reused.toLocaleString("en-US")} from an earlier document reading` : ""}) of a ${tb.cap.toLocaleString("en-US")} cap${tb.skipped.length ? ` — capped: ${tb.skipped.join(", ")}` : ""}, ${syn.sources.length} sources cited, ${syn.stats.dropped}/${syn.stats.sentences} sentences removed by validator`);
   } catch (e) {
     job.status = "failed";
     job.reason = e && e.code ? `${e.code}: ${e.message}` : "research pipeline error";
@@ -228,8 +250,9 @@ function documentsFor(report, { start = true } = {}) {
     try {
       const profile = sectorProfile(report.meta.sector, report.meta.industry);
       const labels = { discover: "Collecting exchange filings", "r:results": "Reading the latest results filing", "r:management": "Reading the call transcript & presentation", "r:developments": "Reading transaction filings", "r:industry": "Checking industry sources" };
+      const tb = new TokenBudget(capFromEnv("DOCS_TOKEN_CAP", 60_000));
       const res = await conductDeepCompanyResearch({
-        report, profile, donePasses: done, deadline: Date.now() + DOCS_BUDGET_MS,
+        report, profile, donePasses: done, deadline: Date.now() + DOCS_BUDGET_MS, budget: tb, known: knownFacts(buildFacts(report)),
         onProgress: (k) => { if (labels[k]) job.stage = labels[k]; },
         onPass: (k, rec) => { done[k] = rec; passesPut(key, done); },
       });
@@ -239,7 +262,7 @@ function documentsFor(report, { start = true } = {}) {
       // complete only when every document pass succeeded; otherwise the next visit reads the rest
       if (!failed.length) { done.__complete = new Date().toISOString(); passesPut(key, done); }
       job.status = "done";
-      console.log(`[research] ${report.meta.symbol}: documents read for the workstation — ${DOC_KINDS.map((k) => `${k} ${(done[k] && done[k].items || []).length}`).join(", ")}`);
+      console.log(`[research] ${report.meta.symbol}: documents read for the workstation — ${DOC_KINDS.map((k) => `${k} ${(done[k] && done[k].items || []).length}`).join(", ")} · ${res.tokens.toLocaleString("en-US")} tokens of a ${tb.cap.toLocaleString("en-US")} cap${tb.skipped.length ? ` (capped: ${tb.skipped.join(", ")})` : ""}`);
     } catch (e) {
       job.status = "failed"; job.reason = e && e.code ? `${e.code}: ${e.message}` : "document reading failed";
       console.warn(`[research] ${report.meta.symbol}: document reading failed — ${job.reason}`);

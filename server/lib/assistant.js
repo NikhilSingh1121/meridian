@@ -500,10 +500,10 @@ const JSON_RULE = 'Reply with a JSON object only: {"answer": string, "basis": "p
 /* one answer call on the chosen provider → { json, tokens, model } */
 async function answerCall(provider, user) {
   if (provider === "groq") {
-    const r = await groq.chat({ messages: [{ role: "system", content: `${SYSTEM}\n${JSON_RULE}` }, { role: "user", content: user }], json: true, maxTokens: 1200, timeoutMs: 30_000 });
+    const r = await groq.chat({ messages: [{ role: "system", content: `${SYSTEM}\n${JSON_RULE}` }, { role: "user", content: user }], json: true, maxTokens: 1200, timeoutMs: 30_000, feature: "assistant", tag: "chat" });
     return { json: r.json, tokens: r.usage.total_tokens, model: r.model };
   }
-  const r = await gemini.chat({ messages: [{ role: "system", content: SYSTEM }, { role: "user", content: user }], schema: { name: "assistant_answer", schema: SCHEMA }, maxTokens: LIMITS.answerTokens, reasoning: "low", timeoutMs: 45_000, direct: true });
+  const r = await gemini.chat({ messages: [{ role: "system", content: SYSTEM }, { role: "user", content: user }], schema: { name: "assistant_answer", schema: SCHEMA }, maxTokens: LIMITS.answerTokens, reasoning: "low", timeoutMs: 45_000, direct: true, feature: "assistant", tag: "chat" });
   return { json: r.json, tokens: (r.usage && r.usage.total_tokens) || 0, model: r.model };
 }
 /* one web-research call → { text, urls, tokens, model } */
@@ -511,11 +511,11 @@ async function researchCall(provider, F, msg, query) {
   const sys = "Answer the investor's question from web search results in at most 120 words, plain English. State figures with their date and source. No buy/sell advice. No citation markers.";
   const ask = `Company: ${F ? `${F.name} (${F.symbol})` : "—"}.${F ? ` Platform figures: ${brief(F)}.` : ""} Question: ${msg}${query ? ` Search: ${query}` : ""}`;
   if (provider === "groq") {
-    const r = await groq.chat({ messages: [{ role: "system", content: sys }, { role: "user", content: ask }], search: true, maxTokens: 1500, timeoutMs: 45_000 });
+    const r = await groq.chat({ messages: [{ role: "system", content: sys }, { role: "user", content: ask }], search: true, maxTokens: 1500, timeoutMs: 45_000, feature: "assistant", tag: "web question" });
     const seen = new Set(), urls = r.urls.filter((u) => !seen.has(u.url) && seen.add(u.url)).slice(0, 4);
     return { text: tidy(r.content), urls, tokens: r.usage.total_tokens, model: r.model };
   }
-  const r = await gemini.chat({ messages: [{ role: "system", content: sys }, { role: "user", content: ask }], tools: [{ google_search: {} }], maxTokens: LIMITS.researchTokens, reasoning: "low", timeoutMs: 45_000, direct: true });
+  const r = await gemini.chat({ messages: [{ role: "system", content: sys }, { role: "user", content: ask }], tools: [{ google_search: {} }], maxTokens: LIMITS.researchTokens, reasoning: "low", timeoutMs: 45_000, direct: true, feature: "assistant", tag: "web question" });
   return { text: tidy(r.content), urls: ((r.grounding && r.grounding.chunks) || []).slice(0, 4).map((c) => ({ url: c.uri, title: c.title || c.uri })), tokens: (r.usage && r.usage.total_tokens) || 0, model: r.model };
 }
 /* the chosen provider first; the other one only if the first call fails */

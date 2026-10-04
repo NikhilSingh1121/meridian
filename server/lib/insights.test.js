@@ -164,6 +164,7 @@ function mock(handler, key = FAKE_KEY) {
   global.fetch = async (url, opts = {}) => {
     const u = String(url);
     if (u.startsWith("https://news.google.com/")) return { ok: true, status: 200, text: async () => RSS };
+    if (FILING_TEXT[u]) return { ok: true, status: 200, arrayBuffer: async () => Buffer.from(FILING_TEXT[u]) };
     if (!u.startsWith("https://generativelanguage.googleapis.com/")) throw new Error(`unexpected fetch ${u}`);
     const body = JSON.parse(opts.body);
     const call = { ...body, _url: u, _model: decodeURIComponent(u.match(/models\/([^:]+):/)[1]), _key: opts.headers["x-goog-api-key"] };
@@ -314,6 +315,10 @@ async function waitJob(id) {
 }
 const RESULTS_PDF = "https://nsearchives.nseindia.com/corporate/testco_results.pdf";
 const DEAL_PDF = "https://nsearchives.nseindia.com/corporate/testco_deal.pdf";
+const FILING_TEXT = {
+  [RESULTS_PDF]: "Outcome of Board Meeting. Financial results for the quarter Q1 FY27. Consolidated revenue from operations was Rs 3,957 crore, up 23% YoY. EBITDA margin 18.4%. Segment performance: India business grew 21%.",
+  [DEAL_PDF]: "Acquisition of shares. The Company has acquired a 60% stake in Example Foods Private Limited. The consideration was not disclosed. Rationale: expands the portfolio.",
+};
 function stubFilings(withDeal = false) {
   nse.corporateAnnouncements = async () => [
     ...(withDeal ? [{ date: "2026-09-01", category: "Acquisition", text: "The Company has acquired a 60% stake in Example Foods Private Limited.", url: DEAL_PDF }] : []),
@@ -332,7 +337,7 @@ function geminiOk(c) {
   const user = c.contents[0].parts[0].text;
   if (c.generationConfig.responseJsonSchema) return ok(JSON.stringify(SYN[GROUP.find(([k]) => user.includes(k))[1]]));
   if (isSearch(c)) return err(429, "RESOURCE_EXHAUSTED");                    // a free key: no search-grounding quota
-  if (user.includes(DEAL_PDF)) return ok("- doc: D1 | type: company_filing | claim: The consideration for the 60% stake was not disclosed", { urls: [DEAL_PDF] });
+  if (user.includes("Example Foods")) return ok("- doc: D1 | type: company_filing | claim: The consideration for the 60% stake was not disclosed", { urls: [DEAL_PDF] });
   return ok("- doc: D1 | type: company_filing | claim: Consolidated revenue from operations was ₹3,957 crore in Q1 FY27, up 23% YoY", { urls: [RESULTS_PDF] });
 }
 
@@ -395,13 +400,14 @@ test("pipeline · a job that fails part-way resumes on retry without re-reading 
   const calls = mock(geminiOk);
   const b = await waitJob(researchForReport(rep).job.id);
   assert.equal(b.status, "done");
-  const reads = calls.filter((c) => (c.tools || []).some((t) => t.url_context));
+  const reads = calls.filter((c) => !c.generationConfig.responseJsonSchema && !isSearch(c));
   assert.equal(reads.length, 1, "completed pass reused, not re-read");
-  assert.ok(reads[0].contents[0].parts[0].text.includes(DEAL_PDF));
+  assert.ok(reads[0].contents[0].parts[0].text.includes("Example Foods"), "only the transaction filing is read again");
+  assert.ok(!reads[0].contents[0].parts[0].text.includes(DEAL_PDF), "the excerpt is sent, not the URL");
   assert.equal(b.research.meta.passes.filter((p) => p.reused).length, 1);
 });
 
-test("pipeline · a failed writing group → partial report shown, not cached; progress steps reported", async () => {
+test("pipeline · a failed writing group → partial report shown and cached for a retry later (views never re-spend tokens)", async () => {
   process.env.GEMINI_SEARCH = "off";
   stubFilings();
   mock((c) => (c.generationConfig.responseJsonSchema && c.contents[0].parts[0].text.includes("VALUATION commentary") ? err(400, "INVALID_ARGUMENT") : geminiOk(c)));
@@ -415,9 +421,42 @@ test("pipeline · a failed writing group → partial report shown, not cached; p
   assert.ok(done.research.sections.executive_summary.length, "completed groups are delivered");
   assert.equal(done.research.sections.valuation.length, 0, "the failed group stays deterministic");
   assert.deepEqual(done.research.meta.failures, [{ group: "valuation", error: "bad_request" }]);
+  assert.ok(done.research.meta.retryAt > Date.now(), "a transient failure is retried after a delay");
   const again = researchForReport(rep);
-  assert.ok(again.job && !again.research, "a partial result is not cached — the next request completes it");
-  await waitJob(again.job.id);
+  assert.ok(again.research && again.status.cached, "the partial result is served from cache — no new job, no new tokens");
+});
+
+test("pipeline · per-report token cap: sections that do not fit keep their deterministic text; the capped report is final", async () => {
+  process.env.GEMINI_SEARCH = "off";
+  process.env.REPORT_TOKEN_CAP = "9000";
+  process.env.REPORT_SYNTH_RESERVE = "3000";
+  try {
+    stubFilings();
+    const calls = mock(geminiOk);
+    const done = await waitJob(researchForReport(report()).job.id);
+    assert.equal(done.status, "done", "a capped report is complete, not partial");
+    const capped = done.research.meta.failures.filter((f) => f.error === "token_budget");
+    assert.ok(capped.length >= 1, "at least one section skipped for the cap");
+    const spent = calls.length * 1000;   // the mock reports 1,000 tokens per call
+    assert.ok(spent <= 9000 + 1000, `spent ≈${spent} tokens against a 9,000 cap`);
+    assert.ok(logs.some((l) => /capped: /.test(l)), "the log names what the cap skipped");
+  } finally { delete process.env.REPORT_TOKEN_CAP; delete process.env.REPORT_SYNTH_RESERVE; }
+});
+
+test("docreader · relevant pages first, boilerplate last, within the character budget", () => {
+  const DR = require("./insights/docreader");
+  const doc = { pages: [
+    "Safe harbour. This presentation may contain forward-looking statements. Disclaimer. www.example.com",
+    "Q1 FY27 highlights: revenue Rs 3,957 crore, up 23% YoY; EBITDA Rs 728 crore; margin 18.4%; PAT Rs 512 crore.",
+    "Our people and culture. Community programmes.",
+    "Outlook: we expect double-digit volume growth and margin expansion going forward; capex plan of Rs 900 crore.",
+  ] };
+  const r = DR.relevant(doc, "results", 400);
+  assert.ok(r.pages.includes(2), "the figure-dense results page is selected");
+  assert.ok(!r.pages.includes(1), "the disclaimer page is not");
+  assert.ok(r.text.length <= 500);
+  const m = DR.relevant(doc, "management", 400);
+  assert.ok(m.pages.includes(4), "the outlook page is selected for management");
 });
 
 test("pipeline · time budget: research that cannot fit is skipped, the job still ends inside the budget", async () => {

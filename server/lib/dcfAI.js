@@ -97,7 +97,7 @@ function validate(json, dg) {
 async function run(key, dg) {
   const r = await gemini.chat({
     messages: [{ role: "system", content: SYSTEM }, { role: "user", content: `DATA (JSON):\n${JSON.stringify(dg)}\n\nWrite: overview (3-4 sentences on the shape of the forecast and what drives value), then 2-4 sentences each for growth, ebitdaMargin, reinvestment (capex and D&A), workingCapital, taxRate, wacc and terminal, and watch (3-5 short items: what would make you revise the assumptions). Then corroboration: for growth, ebitdaMargin, capexPctRev, wcPctRev, taxRate (each about its first forecast year value), wacc and terminalG give verdict, suggested (only if you would use a different value, in percent) and a one-sentence reason.` }],
-    feature: "dcf", schema: { name: "dcf_rationale", schema: SCHEMA }, maxTokens: 2600, reasoning: "low", timeoutMs: 60_000,
+    feature: "dcf", tag: [dg.symbol, "DCF check"].filter(Boolean).join(" "), schema: { name: "dcf_rationale", schema: SCHEMA }, maxTokens: 2600, reasoning: "low", timeoutMs: 60_000,
   });
   const result = { ...validate(r.json || {}, dg), model: r.model, tokens: r.usage && r.usage.total_tokens, generatedAt: new Date().toISOString() };
   cachePut(key, result);

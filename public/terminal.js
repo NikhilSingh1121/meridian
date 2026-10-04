@@ -145,6 +145,7 @@ function showTab(name) {
     try { TABS[name].syncContext(); } catch { }
   }
   location.hash = name;
+  if (typeof activityPing === "function") activityPing();
   // Sync mobile drawer active state
   $$(".m-drawer-tabs button[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   // Update tbar data attribute so CSS ::after shows current module name
@@ -695,8 +696,18 @@ window.MT_AI = window.MT_AI || { available: false };
 function refreshAiStatus() {
   fetch("/api/ai/status").then((r) => r.json()).then((j) => { window.MT_AI = { available: !!(j && j.available) }; }).catch(() => { window.MT_AI = { available: false }; });
 }
+/* activity heartbeat: the current tab, once a minute while the page is visible (server log only) */
+function activityPing() {
+  try {
+    if (document.hidden) return;
+    fetch("/api/activity", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tab: (location.hash || "#markets").slice(1) }), keepalive: true }).catch(() => {});
+  } catch { }
+}
+
 async function bootTerminal() {
   initRefreshSelector();
+  setInterval(activityPing, 60_000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) activityPing(); });
   refreshAiStatus();
   setInterval(refreshAiStatus, 10 * 60 * 1000);
   initCmd();

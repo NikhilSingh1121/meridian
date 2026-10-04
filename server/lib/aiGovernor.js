@@ -48,13 +48,54 @@ function allow({ search = false } = {}) {
   return { ok: true };
 }
 
-/* what a finished call cost */
-function record(feature, tokens = 0, searches = 0) {
-  const s = load(), f = (s.byFeature[feature || "other"] = s.byFeature[feature || "other"] || { calls: 0, tokens: 0, searches: 0 });
-  const t = Math.max(0, Math.round(+tokens || 0)), q = Math.max(0, Math.round(+searches || 0));
+/* ── price list (USD per million tokens) for the cost estimate in the logs ──
+   Matched by model-name prefix, longest first. Unknown models are logged without
+   a cost. Override or extend with AI_PRICES='{"gemini-3.5-flash":[0.5,3]}'. */
+const BASE_PRICES = { "gemini-3.5-flash-lite": [0.30, 2.50], "claude-sonnet": [3, 15] };
+function prices() {
+  let extra = {};
+  try { extra = JSON.parse(process.env.AI_PRICES || "{}"); } catch { extra = {}; }
+  return { ...BASE_PRICES, ...extra };
+}
+function costOf(model, inTok, outTok) {
+  const P = prices(), m = String(model || "").toLowerCase();
+  const k = Object.keys(P).filter((x) => m.startsWith(x.toLowerCase())).sort((a, b) => b.length - a.length)[0];
+  if (!k || !Array.isArray(P[k])) return null;
+  return (inTok * P[k][0] + outTok * P[k][1]) / 1e6;
+}
+const n0 = (v) => Math.max(0, Math.round(+v || 0));
+const fmt = (v) => n0(v).toLocaleString("en-US");
+
+/**
+ * What a finished call cost. `usage` is a number (total) or
+ * { total_tokens, input, tool, output, thinking }; info = { model, tag }.
+ * Every call is written to the server log (Render → Logs) as one line:
+ *   [ai] report · RELIANCE.NS write:summary · gemini-3.5-flash-lite · in 6,210 · out 2,050 · think 640 · total 8,900 · ≈$0.0076 · today 152,300 / 1,500,000
+ */
+function record(feature, usage = 0, searches = 0, info = {}) {
+  const u = typeof usage === "object" && usage ? usage : { total_tokens: usage };
+  const s = load(), key = feature || "other", f = (s.byFeature[key] = s.byFeature[key] || { calls: 0, tokens: 0, searches: 0 });
+  const t = n0(u.total_tokens), q = n0(searches);
   s.calls++; s.tokens += t; s.searches += q;
   f.calls++; f.tokens += t; f.searches += q;
+  const inTok = n0(u.input) + n0(u.tool), outTok = n0(u.output) + n0(u.thinking);
+  const cost = inTok || outTok ? costOf(info.model, inTok, outTok) : null;
+  if (cost != null) { s.costUsd = (s.costUsd || 0) + cost; f.costUsd = (f.costUsd || 0) + cost; }
   save();
+  if (process.env.AI_LOG !== "0") {
+    const parts = [`[ai] ${key}`];
+    if (info.tag) parts.push(String(info.tag).slice(0, 60));
+    if (info.model) parts.push(info.model);
+    if (inTok || outTok) {
+      parts.push(`in ${fmt(u.input)}${n0(u.tool) ? ` + docs ${fmt(u.tool)}` : ""}`, `out ${fmt(u.output)}`);
+      if (n0(u.thinking)) parts.push(`think ${fmt(u.thinking)}`);
+    }
+    parts.push(`total ${fmt(t)}`);
+    if (q) parts.push(`${q} search${q > 1 ? "es" : ""}`);
+    if (cost != null) parts.push(`≈$${cost.toFixed(4)}`);
+    parts.push(`today ${fmt(s.tokens)} / ${fmt(LIMITS().dailyTokens)}${s.costUsd ? ` (≈$${s.costUsd.toFixed(2)})` : ""}`);
+    console.log(parts.join(" · "));
+  }
 }
 
 /* for the UI: is AI usable right now? (never exposes keys) */

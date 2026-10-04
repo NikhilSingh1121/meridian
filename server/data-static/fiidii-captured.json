@@ -3,7 +3,7 @@
   "unit": "₹ Crore",
   "source": "NSE provisional daily flows, captured live by the deployed terminal",
   "pulledFrom": "https://mterminal.onrender.com/api/macro/fiidii",
-  "pulledAt": "2026-10-04T12:14:24.288Z",
+  "pulledAt": "2026-10-04T13:18:11.662Z",
   "after": "2026-07-24",
   "sessions": 38,
   "from": "2026-08-07",

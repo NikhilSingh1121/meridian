@@ -66,6 +66,10 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
+// visitor activity → server log (who is online, which tab); no cookies, IPs never logged
+const activity = require("./lib/activity");
+app.use(activity.pageViews);
+app.use("/api", activity.router);
 app.use("/api", require("./routes/auth"));
 app.use("/api", require("./routes/market"));
 app.use("/api", require("./routes/company"));
