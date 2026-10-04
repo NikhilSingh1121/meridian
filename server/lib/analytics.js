@@ -77,13 +77,19 @@ function computeRatios(bundle, st) {
 /* ── growth & quality block ── */
 function computeGrowth(st) {
   const i = st.income, c = st.cashflow;
+  // growth over the actual span in years — the provider sometimes skips years
+  // (NESTLEIND: 2021, 2022, 2025), and counting rows instead would overstate growth
+  const span = (a, b) => (a && b && a.year && b.year && b.year > a.year ? b.year - a.year : 1);
   const cagr = (arr, key) => {
-    const v = arr.map((r) => r[key]).filter((x) => x !== null && x > 0);
+    const v = arr.filter((r) => r[key] !== null && r[key] > 0);
     if (v.length < 2) return null;
-    return (Math.pow(v[v.length - 1] / v[0], 1 / (v.length - 1)) - 1) * 100;
+    const yrs = span(v[0], v[v.length - 1]) || v.length - 1;
+    return (Math.pow(v[v.length - 1][key] / v[0][key], 1 / yrs) - 1) * 100;
   };
   const yoy = (arr, key) => {
-    const a = arr.at(-2)?.[key], b = arr.at(-1)?.[key];
+    const ra = arr.at(-2), rb = arr.at(-1), a = ra?.[key], b = rb?.[key];
+    const g = span(ra, rb);
+    if (g > 1 && a > 0 && b > 0) return (Math.pow(b / a, 1 / g) - 1) * 100;   // annualised across a gap
     return pct(b, a);
   };
   const li = i.at(-1) || {}, lc = c.at(-1) || {};

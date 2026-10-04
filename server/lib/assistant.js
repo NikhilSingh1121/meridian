@@ -484,7 +484,7 @@ function unverifiedNumbers(text, F) {
 function budgetOf(chatId) { return chats.get(chatId) || { tokens: 0, turns: 0 }; }
 function status(chatId) {
   const b = budgetOf(chatId);
-  return { tokensUsed: b.tokens, tokensLeft: Math.max(0, LIMITS.chatTokens - b.tokens), turnsLeft: Math.max(0, LIMITS.chatTurns - b.turns), limits: { chatTokens: LIMITS.chatTokens, chatTurns: LIMITS.chatTurns }, available: !!PROVIDER(), provider: PROVIDER() };
+  return { tokensUsed: b.tokens, tokensLeft: Math.max(0, LIMITS.chatTokens - b.tokens), turnsLeft: Math.max(0, LIMITS.chatTurns - b.turns), limits: { chatTokens: LIMITS.chatTokens, chatTurns: LIMITS.chatTurns }, available: !!PROVIDER() && require("./aiGovernor").status().available, provider: PROVIDER() };
 }
 
 /* what the AI sees of the fact pack: no links, no empty fields, no working detail the
@@ -528,13 +528,13 @@ async function withFallback(fn) {
 async function chat({ chatId, ip, message, F, history = [], deep = false }) {
   const today = new Date().toISOString().slice(0, 10);
   if (day !== today) { day = today; dayTurns = 0; visitors.clear(); }
-  if (!PROVIDER()) return { text: "Custom questions need the AI service, which isn't configured. The questions above are answered without it.", basis: "off", ...status(chatId) };
+  if (!PROVIDER()) return { text: "I can't answer that one right now — try one of the questions below, they're instant.", basis: "off", ...status(chatId) };
   const msg = String(message || "").trim().slice(0, LIMITS.messageChars);
   if (!msg) return { text: "Type a question.", basis: "off", ...status(chatId) };
   const b = chats.get(chatId) || { tokens: 0, turns: 0, startedAt: Date.now() };
-  if (b.tokens >= LIMITS.chatTokens || b.turns >= LIMITS.chatTurns) return { text: "This chat has reached its AI limit. Start a new chat (↻) or use the ready-made questions — they don't use AI.", basis: "limit", ...status(chatId) };
+  if (b.tokens >= LIMITS.chatTokens || b.turns >= LIMITS.chatTurns) return { text: "That's the limit for custom questions in this chat — start a new chat (↻) or pick one of the questions below.", basis: "limit", ...status(chatId) };
   const vk = `${today}|${ip}`, vt = visitors.get(vk) || 0;
-  if (vt >= LIMITS.visitorDailyTurns || dayTurns >= LIMITS.dailyTurns) return { text: "Today's AI question allowance is used up. The ready-made questions still work.", basis: "limit", ...status(chatId) };
+  if (vt >= LIMITS.visitorDailyTurns || dayTurns >= LIMITS.dailyTurns) return { text: "Custom questions are paused for today — the questions below are instant.", basis: "limit", ...status(chatId) };
   visitors.set(vk, vt + 1); dayTurns++; b.turns++; chats.set(chatId, b);
 
   // ✦ questions need business context the platform doesn't hold → straight to one research call
@@ -553,7 +553,7 @@ async function chat({ chatId, ip, message, F, history = [], deep = false }) {
   const user = `PLATFORM DATA (company on screen, computed by M-Terminal; currency ${F ? F.currency + ", amounts in " + F.unit + " unless per share" : "n/a"}):\n${facts}\n\n${help}${hist ? `CONVERSATION SO FAR:\n${hist}\n\n` : ""}QUESTION: ${msg}`;
   let r;
   try { r = await withFallback((p) => answerCall(p, user)); }
-  catch (e) { chats.set(chatId, b); return { text: "The AI service is busy right now — please try again in a moment, or pick a ready-made question.", basis: "error", ...status(chatId) }; }
+  catch (e) { chats.set(chatId, b); return { text: "I can't answer that one right now — try one of the questions below, they're instant.", basis: "error", ...status(chatId) }; }
   b.tokens += r.tokens;
   const j = r.json || {};
   let text = tidy(j.answer) || "I couldn't form an answer to that — try rephrasing.";

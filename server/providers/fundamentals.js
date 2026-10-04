@@ -171,7 +171,7 @@ async function toTradingCurrency(summary) {
 }
 
 /** Annual statements via fundamentalsTimeSeries (current Yahoo API). */
-async function annualStatements(symbol, years = 5) {
+async function annualStatements(symbol, years = 6) {   // one spare year: a stub period may be dropped below
   const y = await yf();
   const period2 = new Date();
   const period1 = new Date(); period1.setFullYear(period2.getFullYear() - years - 1);
@@ -288,7 +288,22 @@ async function annualStatements(symbol, years = 5) {
       ? Math.abs(pick(r, "shortTermDebtPayments")) : null,
   })).filter((r) => r.year);
   cashflow.forEach((r) => { if (r.fcf === null && r.ocf !== null && r.capex !== null) r.fcf = r.ocf - r.capex; });
-  return { income: income.slice(-4), balance: balance.slice(-4), cashflow: cashflow.slice(-4) };
+  // Yahoo sometimes returns a period without its income statement (a stub, or a
+  // year it hasn't filled in yet — e.g. NESTLEIND FY26 with revenue null). Left in,
+  // it becomes the "latest year" and every model that starts from the latest
+  // revenue (DCF, plan, ratios) fails. Drop such years from all three statements
+  // together so they stay aligned by year; keep everything if no year qualifies.
+  const usable = new Set(income.filter((r) => r.revenue != null && r.revenue > 0).map((r) => r.year));
+  const keep = (arr) => (usable.size ? arr.filter((r) => usable.has(r.year)) : arr);
+  return { income: keep(income).slice(-4), balance: keep(balance).slice(-4), cashflow: keep(cashflow).slice(-4) };
+}
+
+/** Price fields for many symbols in one request (the 15-second quote refresh between chart calls). */
+async function quoteFields(symbols) {
+  const y = await yf();
+  const fields = ["symbol", "regularMarketPrice", "regularMarketDayHigh", "regularMarketDayLow", "regularMarketTime", "regularMarketPreviousClose", "marketState"];
+  const rows = await y.quote(symbols, { fields }, { validateResult: false });
+  return (Array.isArray(rows) ? rows : [rows]).filter(Boolean);
 }
 
 /** Light bundle for peer rows / screener — fewer modules, faster. */
@@ -519,4 +534,4 @@ async function pool(items, limit, fn) {
   return out;
 }
 
-module.exports = { batchQuotes, quoteSummary, miniSummary, chartCloses, peerSuggestions, newsFor, searchSymbols, sectorApi, screener, marketFairValue, earningsSummary, fillShareCount, UNIVERSE, pool };
+module.exports = { batchQuotes, quoteFields, quoteSummary, miniSummary, chartCloses, peerSuggestions, newsFor, searchSymbols, sectorApi, screener, marketFairValue, earningsSummary, fillShareCount, UNIVERSE, pool };

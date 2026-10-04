@@ -168,7 +168,7 @@ async function synthesizeResearch({ report, facts, research, profile, onProgress
     try {
       const r = await gemini.chat({
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
-        schema: { name: `report_${g.key}`, schema: g.schema }, reasoning: "medium", maxTokens: 16000, timeoutMs: 150_000, deadline,   // thinking tokens count toward the output limit
+        feature: "report", schema: { name: `report_${g.key}`, schema: g.schema }, reasoning: "low", maxTokens: 9000, timeoutMs: 150_000, deadline,   // thinking tokens count toward the output limit
       });
       out[g.key] = r.json; models[g.key] = r.model;
       tokens += (r.usage && r.usage.total_tokens) || 0;
@@ -182,7 +182,7 @@ async function synthesizeResearch({ report, facts, research, profile, onProgress
           const r2 = await gemini.chat({
             messages: [{ role: "system", content: system }, { role: "user", content: user }, { role: "assistant", content: r.content || JSON.stringify(r.json) },
               { role: "user", content: `The executive_summary is ${n} words; the brief requires about 650 (500–800). Return the complete JSON again with an executive_summary of 6–8 connected paragraphs totalling 600–700 words. Add analysis, not repetition: what drives the latest results, margin and cash-flow quality, balance sheet capacity, strategic developments, management outlook, what the valuation implies, upside and downside drivers, and what to watch over the next 2–4 quarters — every figure from FACTS or cited EVIDENCE. Keep the other fields.` }],
-            schema: { name: `report_${g.key}`, schema: g.schema }, reasoning: "medium", maxTokens: 16000, timeoutMs: 150_000, deadline,
+            feature: "report", schema: { name: `report_${g.key}`, schema: g.schema }, reasoning: "low", maxTokens: 9000, timeoutMs: 150_000, deadline,
           });
           tokens += (r2.usage && r2.usage.total_tokens) || 0;
           if (words(r2.json.executive_summary) > n) { out[g.key] = r2.json; models[g.key] = r2.model; }

@@ -17,6 +17,7 @@
  */
 
 const DEFAULT_BASE = "https://generativelanguage.googleapis.com/v1beta";
+const gov = require("../aiGovernor");
 // priority order — the user's choice; override with GEMINI_MODELS=a,b,c
 const DEFAULT_CHAIN = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-3.1-flash-lite"];
 const MODELS = () => {
@@ -167,7 +168,10 @@ async function tryModel(model, req, isLast) {
  */
 function chat(req) {
   if (!hasKey()) return Promise.reject(new GeminiError("no_key", "GEMINI_API_KEY not configured"));
-  const r = { maxTokens: 8000, reasoning: "medium", timeoutMs: Number(process.env.GEMINI_TIMEOUT_MS) || 150_000, ...req };
+  const r = { maxTokens: 8000, reasoning: "low", timeoutMs: Number(process.env.GEMINI_TIMEOUT_MS) || 150_000, ...req };
+  // the governor decides first (kill switch + daily token / search caps)
+  const g = gov.allow({ search: usesSearch(r.tools) });
+  if (!g.ok) return Promise.reject(new GeminiError(g.reason === "ai_off" ? "ai_off" : "budget", g.reason === "ai_off" ? "AI is switched off" : "daily AI budget reached"));
   // small interactive calls (the assistant chat) skip the serial queue so a user never waits
   // behind a multi-minute report job; they are tiny next to the per-minute token limits
   const run = r.direct ? (fn) => fn() : serial;
@@ -175,7 +179,11 @@ function chat(req) {
     const chain = MODELS();
     let last = null;
     for (let i = 0; i < chain.length; i++) {
-      try { return { ...(await tryModel(chain[i], r, i === chain.length - 1)), fellBack: i > 0 }; }
+      try {
+        const out = await tryModel(chain[i], r, i === chain.length - 1);
+        gov.record(r.feature, out.usage && out.usage.total_tokens, usesSearch(r.tools) ? Math.max(1, (out.grounding && out.grounding.queries || []).length ? 1 : 0) : 0);
+        return { ...out, fellBack: i > 0 };
+      }
       catch (e) {
         if (!(e instanceof GeminiError) || !e.fallbackable || e.code === "time_budget") throw e;
         last = e;

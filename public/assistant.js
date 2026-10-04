@@ -67,11 +67,17 @@
   };
   const budgetLine = () => {
     const b = S.budget; const el = $("mtaBudget");
-    if (!b) { el.textContent = "Ready-made questions use no AI"; return; }
-    if (!b.available) { el.textContent = "AI chat unavailable · ready-made questions work"; return; }
+    if (!b) { el.textContent = "Instant answers from M-Terminal's data"; return; }
+    if (!b.available) { el.textContent = "Instant answers from M-Terminal's data"; return; }
     el.textContent = `AI: ${b.turnsLeft} question${b.turnsLeft === 1 ? "" : "s"} · ${Math.round(b.tokensLeft / 1000)}k/${Math.round(b.limits.chatTokens / 1000)}k tokens left`;
   };
   const byOrder = (a, b) => (a.order || 99) - (b.order || 99);
+  // AI (✦ questions, "Ask anything", research follow-ups) only when the server says it's available;
+  // otherwise the widget is a pure instant-answer helper with no trace of AI
+  const aiOn = () => !!(S.budget && S.budget.available);
+  const vis = (list) => list.filter((q) => aiOn() || !q.ai);
+  const askAny = () => (aiOn() ? [{ label: "Ask anything", cls: "accent", run: () => $("mtaIn").focus() }] : []);
+  const syncInput = () => { const f = $("mtaForm"); if (f) f.style.display = aiOn() ? "" : "none"; };
 
   // ── views ──
   function pinned() {
@@ -85,14 +91,14 @@
   function menu() {
     pinned();
     label(S.symbol ? "Start here" : "Getting started");
-    chips(S.questions.filter((q) => q.top).sort(byOrder), [
+    chips(vis(S.questions.filter((q) => q.top)).sort(byOrder), [
       { label: "More questions", cls: "ghost", run: () => allQuestions() },
-      { label: "Ask anything", cls: "accent", run: () => $("mtaIn").focus() },
+      ...askAny(),
     ]);
   }
   /* every question, one category at a time behind a row of text tabs */
   function allQuestions() {
-    const cats = [...new Set(S.questions.map((q) => q.cat))];
+    const cats = [...new Set(vis(S.questions).map((q) => q.cat))];
     if (!cats.length) return;
     const box = document.createElement("div"); box.className = "mta-more";
     const tabs = document.createElement("div"); tabs.className = "mta-tabs"; tabs.setAttribute("role", "tablist");
@@ -101,7 +107,7 @@
       S.cat = c;
       for (const t of tabs.children) t.setAttribute("aria-selected", String(t.dataset.cat === c));
       list.innerHTML = "";
-      chips(S.questions.filter((q) => q.cat === c).sort((a, b) => (b.top - a.top) || byOrder(a, b)), [], list);
+      chips(vis(S.questions.filter((q) => q.cat === c)).sort((a, b) => (b.top - a.top) || byOrder(a, b)), [], list);
       body.scrollTop = Math.max(0, box.offsetTop - 8);   // keep the tab row in view
     };
     for (const c of cats) {
@@ -111,15 +117,15 @@
     box.append(tabs, list); body.appendChild(box);
     show(cats.includes(S.cat) ? S.cat : cats[0]);
     const foot = document.createElement("div"); foot.className = "mta-note";
-    foot.innerHTML = `Answered instantly from M-Terminal's data · <i class="mta-ai">✦</i> uses AI`;
+    foot.innerHTML = aiOn() ? `Answered instantly from M-Terminal's data · <i class="mta-ai">✦</i> uses AI` : `Answered instantly from M-Terminal's data`;
     body.appendChild(foot);
-    chips([], [{ label: "Ask anything", cls: "accent", run: () => $("mtaIn").focus() }]);
+    if (aiOn()) chips([], askAny());
     body.scrollTop = Math.max(0, box.offsetTop - 8);
   }
   function greet() {
     body.innerHTML = "";
     const who = S.name ? `<b>${esc(S.name)}</b> and how to use M-Terminal` : "how to use M-Terminal — open a company (Ctrl+K) for company questions";
-    bot(`I answer questions about ${who}. Picked questions are answered instantly from the platform's data; ask anything for a custom answer.`);
+    bot(`I answer questions about ${who}. Picked questions are answered instantly from the platform's data${aiOn() ? "; ask anything for a custom answer" : ""}.`);
     menu();
     body.scrollTop = 0;   // the downloads row sits at the top — start there
   }
@@ -136,9 +142,9 @@
       S.questions = d.questions || []; S.chatId = d.chatId; S.budget = d.budget; S.name = d.name || S.name;
       if (d.name) $("mtaSub").textContent = `${d.name} · ${d.symbol}`;
     } catch { S.questions = []; }
-    S.loading = false; w.remove(); budgetLine();
+    S.loading = false; w.remove(); budgetLine(); syncInput();
     if (!S.questions.length) {
-      bot("Couldn't load the questions just now — the server is busy. You can still ask anything below.");
+      bot("Couldn't load the questions just now — the server is busy.");
       chips([], [{ label: "Try again", cls: "ghost", run: () => load(true) }]);
       return;
     }
@@ -161,7 +167,7 @@
     const next = S.questions.filter((x) => x.top && !S.asked.has(x.id)).sort(byOrder).slice(0, 3);
     const extra = [];
     // the platform lacks this data → offer one AI research turn for it
-    if (a && a.research && a.research.prompt) extra.push({ label: a.research.label, cls: "accent", run: () => send(a.research.prompt, true) });
+    if (aiOn() && a && a.research && a.research.prompt) extra.push({ label: a.research.label, cls: "accent", run: () => send(a.research.prompt, true) });
     extra.push({ label: "All questions", cls: "ghost", run: () => allQuestions() });
     chips(next, extra);
   }
@@ -175,9 +181,9 @@
       const r = await fetch("/api/assistant/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chatId: S.chatId, symbol: S.symbol, dcf: mode(S.symbol), message: text, deep, history: S.history.slice(-4) }) }).then((x) => x.json());
       if (r.chatId) S.chatId = r.chatId;
       S.budget = { tokensLeft: r.tokensLeft, turnsLeft: r.turnsLeft, limits: r.limits || (S.budget && S.budget.limits), available: r.available !== false };
-      const tag = { platform: "AI · from platform data", research: "AI · web research", general: "AI · general knowledge", declined: "AI", limit: "limit", error: "unavailable", off: "unavailable" }[r.basis] || "AI";
+      const tag = { platform: "AI · from platform data", research: "AI · web research", general: "AI · general knowledge", declined: "AI", limit: "", error: "", off: "" }[r.basis] ?? "AI";
       const src = (r.urls || []).length ? `<div class="mta-src">${r.urls.map((u) => `<a href="${esc(u.url)}" target="_blank" rel="noopener noreferrer">↗ ${esc(u.title)}</a>`).join("")}</div>` : "";
-      w.querySelector(".mta-txt").innerHTML = `<span class="mta-tag ${/AI/.test(tag) ? "ai" : ""}">${esc(tag)}</span><div>${para(r.text || r.error || "No answer.")}</div>${src}`;
+      w.querySelector(".mta-txt").innerHTML = `${tag ? `<span class="mta-tag ai">${esc(tag)}</span>` : ""}<div>${para(r.text || r.error || "No answer.")}</div>${src}`;
       S.history.push({ role: "user", text }, { role: "assistant", text: r.text || "" });
     } catch { w.querySelector(".mta-txt").textContent = "The assistant is unavailable right now — the ready-made questions still work."; }
     budgetLine(); S.busy = false; $("mtaSend").disabled = false; scroll();

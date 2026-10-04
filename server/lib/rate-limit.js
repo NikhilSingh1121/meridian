@@ -56,7 +56,8 @@ function makeLimiter({ max, name }) {
   };
 }
 
-const standard = makeLimiter({ max: 240, name: "standard" });
+// the terminal can refresh every 1–60 s (top-bar selector); RATE_LIMIT_STANDARD overrides
+const standard = makeLimiter({ max: +process.env.RATE_LIMIT_STANDARD || 600, name: "standard" });
 const compute = makeLimiter({ max: 60, name: "compute" });
 const heavy = makeLimiter({ max: 10, name: "heavy" });
 

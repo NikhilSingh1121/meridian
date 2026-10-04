@@ -3,11 +3,11 @@
   "unit": "₹ Crore",
   "source": "NSE provisional daily flows, captured live by the deployed terminal",
   "pulledFrom": "https://mterminal.onrender.com/api/macro/fiidii",
-  "pulledAt": "2026-09-28T16:27:50.537Z",
+  "pulledAt": "2026-10-04T12:14:24.288Z",
   "after": "2026-07-24",
-  "sessions": 35,
+  "sessions": 38,
   "from": "2026-08-07",
-  "to": "2026-09-28"
+  "to": "2026-10-01"
  },
  "sessions": [
   {
@@ -184,6 +184,21 @@
    "date": "2026-09-28",
    "fii": -5353.22,
    "dii": 5189.02
+  },
+  {
+   "date": "2026-09-29",
+   "fii": -9980.22,
+   "dii": 6952.71
+  },
+  {
+   "date": "2026-09-30",
+   "fii": -10148.41,
+   "dii": 11271.73
+  },
+  {
+   "date": "2026-10-01",
+   "fii": -9484.22,
+   "dii": 10041.84
   }
  ]
 }

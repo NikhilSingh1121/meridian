@@ -15,12 +15,14 @@
   <link rel="stylesheet" href="/terminal.css" />
   <link rel="stylesheet" href="/sector-analysis.css" />
   <link rel="stylesheet" href="/price-action.css" />
+  <link rel="stylesheet" href="/live-chart.css" />
   <link rel="stylesheet" href="/quant-lab.css" />
   <link rel="stylesheet" href="/auth.css" />
   <link rel="stylesheet" href="/research-pack.css" />
   <link rel="stylesheet" href="/research-ws.css" />
   <link rel="stylesheet" href="/earnings-ws.css" />
   <link rel="stylesheet" href="/forensic-ws.css" />
+  <link rel="stylesheet" href="/live-scanner.css" />
   <link rel="stylesheet" href="/assistant.css" />
   <link rel="stylesheet" href="/mobile.css" />
 </head>
@@ -35,6 +37,7 @@
       <kbd class="tcmd-kbd" id="tcmdKbd" title="Command palette — jump to any module or ticker">Ctrl·K</kbd>
       <div class="cmd-results" id="tcmdResults" hidden></div>
     </div>
+    <label class="refresh-sel" title="Live refresh: how often prices and panels update across the whole terminal"><span>↻</span><select id="refreshSel" aria-label="Refresh interval"></select></label>
     <span class="live-dot" id="termLive"><i></i>LIVE</span>
     <button class="settings-btn" id="settingsBtn" aria-label="Settings" aria-expanded="false" aria-haspopup="true">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -63,6 +66,7 @@
   <!-- ── Module tabs ── -->
   <nav class="ttabs" id="ttabs">
     <button data-tab="markets" class="active">Market Intelligence</button>
+    <button data-tab="scanner">Live Scanner</button>
     <button data-tab="sector">Sector Analysis</button>
     <button data-tab="portfolio">Portfolio Analysis</button>
     <button data-tab="research">Company Analysis</button>
@@ -521,6 +525,11 @@
     <!-- ════ TAB · SECTOR ANALYSIS ════
          Institutional sector / industry breakdown (see sector-analysis.js).
          All rendering lives in #sectorRoot — TABS.sector.init() builds it. -->
+    <!-- ════ TAB · LIVE SCANNER ════ built by live-scanner.js inside #lscRoot; data over SSE from /api/scanner/stream -->
+    <section class="tab" id="tab-scanner" hidden>
+      <div id="lscRoot"></div>
+    </section>
+
     <section class="tab" id="tab-sector" hidden>
       <div id="sectorRoot"></div>
     </section>
@@ -581,6 +590,10 @@
   <script src="/calculators.js"></script>
   <script src="/learning.js"></script>
   <script src="/auth.js"></script>
+  <script src="/live-scanner.js"></script>
+  <script src="/live-top5.js"></script>
+  <script src="/live-rotation.js"></script>
+  <script src="/live-chart.js"></script>
   <script src="/assistant.js"></script>
 </body>
 </html>

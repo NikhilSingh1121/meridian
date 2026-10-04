@@ -4173,3 +4173,20 @@ body.rg-lock { overflow: hidden; }
 .apl-two { grid-template-columns: 1fr; gap: 4px; }
 .apl-kv td.apl-name { white-space: normal; min-width: 150px; }
 .apl-kv .apl-eff-c { white-space: normal; min-width: 110px; }
+
+/* ── ⓘ explainer popover (MT_INFO in terminal.js): scanner scans, Quant Lab strategies ── */
+.mt-info { position: fixed; z-index: 400; background: var(--ink-2); border: 1px solid var(--hairline); border-radius: var(--r); box-shadow: 0 24px 60px -24px rgba(0,0,0,.9); max-height: min(70vh, 520px); overflow-y: auto; }
+.mt-info[hidden] { display: none; }
+.mt-info-h { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--hairline); position: sticky; top: 0; background: var(--ink-2); }
+.mt-info-h b { font: 600 13px var(--sans); flex: 1; }
+.mt-info-h button { color: var(--muted); font-size: 13px; padding: 0 2px; }
+.mt-info-h button:hover { color: var(--fg); }
+.mt-info-b { padding: 10px 14px 12px; font-size: 12px; line-height: 1.6; color: var(--fg); }
+.mt-info-b p { margin: 0 0 8px; }
+.mt-info-b p:last-child { margin-bottom: 0; }
+.mt-info-b .ws-dim { font-size: 11px; }
+.mt-info-rule { font: 500 11px/1.6 var(--code); color: var(--fg); background: var(--ink); border: 1px solid var(--hairline); border-radius: var(--r-sm); padding: 7px 10px; margin: 0 0 8px; }
+.mt-info-rule span { display: block; font: 700 9px var(--mono); letter-spacing: .14em; color: var(--muted-ink); margin-bottom: 2px; }
+.mt-info-rule b { color: var(--amber-bright); font-weight: 600; }
+.mt-i { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--hairline); color: var(--muted); font: italic 700 10px/14px var(--serif); padding: 0; display: inline-grid; place-items: center; cursor: pointer; vertical-align: 1px; margin-left: 6px; flex: 0 0 auto; background: none; }
+.mt-i:hover, .mt-i:focus-visible { color: var(--amber-bright); border-color: var(--amber); outline: none; }

@@ -21,6 +21,38 @@ function goldFlash(el) {
   void el.offsetWidth; // restart the animation
   el.classList.add("gold-flash");
 }
+/* ── ⓘ explainer popover: one shared box for every "what does this mean" button
+   (Live Scanner scans, Quant Lab strategies). MT_INFO.open(anchorEl, title, html). ── */
+const MT_INFO = (() => {
+  let box = null, anchor = null;
+  const close = () => { if (box) box.hidden = true; anchor = null; };
+  function place() {
+    if (!box || !anchor || box.hidden) return;
+    const r = anchor.getBoundingClientRect(), w = Math.min(380, innerWidth - 24);
+    box.style.width = w + "px";
+    const left = Math.max(12, Math.min(innerWidth - w - 12, r.left + r.width / 2 - w / 2));
+    const h = box.offsetHeight, below = r.bottom + 8 + h < innerHeight || r.top < h + 16;
+    box.style.left = left + "px"; box.style.top = Math.max(8, below ? r.bottom + 8 : r.top - h - 8) + "px";
+  }
+  function open(el, title, html) {
+    if (!box) {
+      box = document.createElement("div"); box.className = "mt-info"; box.setAttribute("role", "dialog"); box.hidden = true; document.body.appendChild(box);
+      document.addEventListener("click", (e) => {
+        if (box.hidden) return;
+        if (e.target.closest(".mt-info [data-x]") || (!box.contains(e.target) && !(anchor && anchor.contains(e.target)))) close();
+      }, true);
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+      addEventListener("resize", place); addEventListener("scroll", place, true);
+    }
+    if (anchor === el && !box.hidden) return close();
+    anchor = el;
+    box.innerHTML = `<div class="mt-info-h"><b>${esc(title)}</b><button data-x type="button" aria-label="Close">✕</button></div><div class="mt-info-b">${html}</div>`;
+    box.hidden = false; place();
+  }
+  return { open, close };
+})();
+window.MT_INFO = MT_INFO;
+
 const api = async (path, opts) => {
   const r = await fetch(path, opts);
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
@@ -96,7 +128,7 @@ const TABS = {};
 const TAB_LABELS = {
   markets:"Market Intelligence", sector:"Sector Analysis", portfolio:"Portfolio Analysis",
   research:"Company Analysis", earnings:"Earnings Call", forensic:"Forensic Analysis", models:"Modeling Lab",
-  risk:"Risk Center", reports:"Report Generation", quant:"Quant Lab",
+  risk:"Risk Center", reports:"Report Generation", quant:"Quant Lab", scanner:"Live Scanner",
   calc:"Calculators", learn:"Learning Center", library:"Library",
 };
 
@@ -189,7 +221,7 @@ function initMobileNav() {
   const tabBtns = $$(".ttabs button[data-tab]");
   // Three sections (mobile drawer only — the desktop bar is one flat row in the same order)
   const groups = [
-    { label: "Macro Economics", tabs: ["markets","sector","portfolio"] },
+    { label: "Macro Economics", tabs: ["markets","scanner","sector","portfolio"] },
     { label: "Equity Research", tabs: ["research","earnings","forensic","models","risk","reports","quant"] },
     { label: "Other Utilities", tabs: ["calc","learn","library"] },
   ];
@@ -534,12 +566,29 @@ TABS.markets = {
 };
 
 /* ── LIVE PRICE AUTO-REFRESH ENGINE ──────────────────────────────────────────
-   Polls every 15s during market hours (NSE 9:15–15:30 IST, US 9:30–16:00 ET),
-   every 60s outside hours. Refreshes: tape, sector heatmap, portfolio, and the
-   open-company price in the Research workstation header. Shows a live ● pulse
-   indicator so users know prices are updating without a manual refresh. */
+   One loop for the whole terminal, ticking at the interval chosen in the top bar
+   (↻ selector: 1–60 s, default 5 s). Prices stream in server-side (Yahoo stream)
+   and are overlaid on every quote the API serves, so a short tick shows live
+   prices without extra upstream calls. Heavier panels keep a floor whatever the
+   tick: breadth ≥ 5 s, charts ≥ 5 s, macro board ≥ 10 s, heatmap / sector
+   performance / portfolio technicals ≥ 60 s. */
+const REFRESH = (() => {
+  const KEY = "meridian_refreshSec", OPTS = [1, 2, 3, 5, 10, 15, 30, 60];
+  let sec = 5;
+  try { const v = +localStorage.getItem(KEY); if (OPTS.includes(v)) sec = v; } catch { }
+  const cbs = [];
+  return {
+    OPTS, get sec() { return sec; },
+    set(v) { v = +v; if (!OPTS.includes(v) || v === sec) return; sec = v; try { localStorage.setItem(KEY, String(v)); } catch { } cbs.forEach((f) => { try { f(v); } catch { } }); if (_liveTimer) startLiveRefresh(); },
+    on(f) { cbs.push(f); },
+  };
+})();
+window.REFRESH = REFRESH;
 let _liveTimer = null;
 let _liveCount = 0;
+const _lastRun = {};
+/** true when `name` last ran ≥ ms ago (and marks it as run) */
+function due(name, ms) { const now = Date.now(); if (now - (_lastRun[name] || 0) < ms) return false; _lastRun[name] = now; return true; }
 
 function isMarketHours() {
   const now = new Date();
@@ -559,102 +608,97 @@ function updateLivePulse(inHours) {
   const dot = $("#termLive");
   if (!dot) return;
   dot.className = inHours ? "live-dot on" : "live-dot";
-  dot.title = inHours ? "Market hours — refreshing every 15s" : "Outside market hours — refreshing every 60s";
-  dot.innerHTML = `<i></i>${inHours ? "LIVE ↻" : "LIVE"}`;
+  dot.title = `${inHours ? "Market hours" : "Outside market hours"}: refreshing every ${REFRESH.sec}s (change it with the ↻ selector)`;
+  dot.innerHTML = `<i></i>LIVE`;
 }
 
 async function liveRefreshTick() {
   const inHours = isMarketHours();
   updateLivePulse(inHours);
   _liveCount++;
+  // outside market hours nothing moves: tick no faster than every 30 s
+  const R = (inHours ? REFRESH.sec : Math.max(REFRESH.sec, 30)) * 1000;
+  const activeTab = document.querySelector(".tab:not([hidden])");
+  const onTab = (id) => activeTab && activeTab.id === id;
 
-  // 1. Tape — always refresh
+  // 1. Tape — every tick (quotes carry the streamed price)
   if (TABS.markets && TABS.markets.loadTape) TABS.markets.loadTape().catch(() => {});
 
-  // 1b. Market breadth — live A/D across the NIFTY universe, every tick
-  if (TABS.markets && TABS.markets.loadBreadth) TABS.markets.loadBreadth().catch(() => {});
+  // 1b. Market breadth — live A/D across the NIFTY universe
+  if (TABS.markets && TABS.markets.loadBreadth && due("breadth", Math.max(R, 5000))) TABS.markets.loadBreadth().catch(() => {});
 
-  // 2. Sector heatmap — every 4 ticks (60s fast / 240s slow)
-  if (_liveCount % 4 === 0 && TABS.markets && TABS.markets.loadHeatmap) TABS.markets.loadHeatmap().catch(() => {});
-  if (_liveCount % 4 === 0 && TABS.markets && TABS.markets.loaded && TABS.markets.loadSectorPerf) TABS.markets.loadSectorPerf().catch(() => {});
-
-  // 3. Portfolio technicals — only when the portfolio tab is active and a
-  //    portfolio with companies is loaded. Indicators are computed off daily
-  //    candles, so we throttle to once per 4 ticks (~60s in-hours, 4m out)
-  //    rather than every tick — fast enough to catch signal flips, slow
-  //    enough to avoid re-fetching 1-year history on every poll.
-  if (_liveCount % 4 === 0 && TABS.portfolio && TABS.portfolio.loaded) {
-    const pf = TABS.portfolio._active && TABS.portfolio._active();
-    const activeTab = document.querySelector(".tab:not([hidden])");
-    const isVisible = activeTab && activeTab.id === "tab-portfolio";
-    if (isVisible && pf && pf.symbols && pf.symbols.length) {
-      TABS.portfolio.refresh({ silent: true }).catch(() => {});
-    }
+  // 2. Sector heatmap + sector performance — screener data, at most once a minute
+  if (TABS.markets && due("heat", Math.max(R, 60000))) {
+    if (TABS.markets.loadHeatmap) TABS.markets.loadHeatmap().catch(() => {});
+    if (TABS.markets.loaded && TABS.markets.loadSectorPerf) TABS.markets.loadSectorPerf().catch(() => {});
   }
 
-  // 4. Open company price in Research header — update just the price/change cells
+  // 3. Portfolio technicals — daily-candle maths, at most once a minute, only when visible
+  if (TABS.portfolio && TABS.portfolio.loaded && onTab("tab-portfolio") && due("pftech", Math.max(R, 60000))) {
+    const pf = TABS.portfolio._active && TABS.portfolio._active();
+    if (pf && pf.symbols && pf.symbols.length) TABS.portfolio.refresh({ silent: true }).catch(() => {});
+  }
+
+  // 4. Open company price in the Research header — every tick
   if (CURRENT && CURRENT.symbol) {
     try {
       const q = await api("/api/quote/" + encodeURIComponent(CURRENT.symbol));
       if (q && q.price != null) {
-        // update price display in workstation header
         const priceEl = $("#wsPriceLive");
         const changeEl = $("#wsChangeLive");
-        if (priceEl) priceEl.textContent = F.px(q.price, q.currency);
+        if (priceEl && priceEl.textContent !== F.px(q.price, q.currency)) { priceEl.textContent = F.px(q.price, q.currency); goldFlash(priceEl); }
         if (changeEl) { changeEl.textContent = (q.changePct >= 0 ? "+" : "") + F.pct(q.changePct, 2); changeEl.className = "ws-change " + F.cls(q.changePct); }
         CURRENT.price = q.price; // keep CURRENT in sync for any downstream computation
       }
     } catch { }
   }
 
-  // 5. Interactive price charts — refresh live last price (intraday ranges fully re-fetched)
-  if (typeof refreshAllPriceCharts === "function") {
+  // 5. Interactive price charts — live last price, at most every 5 s
+  if (typeof refreshAllPriceCharts === "function" && due("charts", Math.max(R, 5000))) {
     try { refreshAllPriceCharts(); } catch { }
   }
 
-  // 6. Portfolio quotes — EVERY tick (15s in-hours) when the tab is visible.
-  //    Lightweight: one batch /api/quotes call, diffed cell-level DOM patches
-  //    with a gold flash on changed values. The full technical re-scan stays
-  //    on the 4-tick cadence above (indicators are daily-candle math).
-  if (TABS.portfolio && TABS.portfolio.loaded && typeof TABS.portfolio.refreshQuotes === "function") {
-    const activeTab = document.querySelector(".tab:not([hidden])");
-    if (activeTab && activeTab.id === "tab-portfolio") {
-      TABS.portfolio.refreshQuotes().catch(() => {});
-      // Transactions & Performance — full server-side recompute (throttled
-      // internally to ~60s; quotes/XIRR/benchmark refresh with gold flash).
-      if (typeof TXN !== "undefined") { try { TXN.liveTick(); } catch { } }
-    }
+  // 6. Portfolio quotes — every tick when the tab is visible (diffed cell patches + gold flash)
+  if (TABS.portfolio && TABS.portfolio.loaded && typeof TABS.portfolio.refreshQuotes === "function" && onTab("tab-portfolio")) {
+    TABS.portfolio.refreshQuotes().catch(() => {});
+    if (typeof TXN !== "undefined") { try { TXN.liveTick(); } catch { } }
   }
 
-  // 7. Price-Action workspace — live candle extension. Re-fetches the active
-  //    symbol's series, extends/updates the final candle in place, re-runs
-  //    pattern detection + confluence, and preserves the user's zoom/pan.
-  if (typeof PA !== "undefined" && PA._mounted) {
+  // 7. Price-Action workspace — live candle extension, at most every 5 s
+  if (typeof PA !== "undefined" && PA._mounted && due("pa", Math.max(R, 5000))) {
     try { PA.liveTick(); } catch { }
   }
 
-  // 8. Market Intelligence live layers — watchlist quotes + the full Macro
-  //    Command board (heatmap/regime/curve every tick; charts every 4th tick
-  //    with zoom preserved).
-  {
-    const activeTab = document.querySelector(".tab:not([hidden])");
-    if (activeTab && activeTab.id === "tab-markets") {
-      if (typeof WATCH !== "undefined" && WATCH.refresh) WATCH.refresh().catch(() => {});
-      if (typeof MACRO !== "undefined") { try { MACRO.liveTick(); } catch { } }
-    }
+  // 8. Market Intelligence live layers — watchlist every tick, macro board every ≥ 10 s
+  if (onTab("tab-markets")) {
+    if (typeof WATCH !== "undefined" && WATCH.refresh) WATCH.refresh().catch(() => {});
+    if (typeof MACRO !== "undefined" && due("macro", Math.max(R, 10000))) { try { MACRO.liveTick(); } catch { } }
   }
 
-  // reschedule at the right interval
-  const nextMs = inHours ? 15000 : 60000;
-  _liveTimer = setTimeout(liveRefreshTick, nextMs);
+  _liveTimer = setTimeout(liveRefreshTick, R);
 }
 
 function startLiveRefresh() {
   if (_liveTimer) clearTimeout(_liveTimer);
-  _liveTimer = setTimeout(liveRefreshTick, 15000); // first tick 15s after init
+  _liveTimer = setTimeout(liveRefreshTick, REFRESH.sec * 1000);
 }
 
+function initRefreshSelector() {
+  const sel = $("#refreshSel"); if (!sel) return;
+  sel.innerHTML = REFRESH.OPTS.map((v) => `<option value="${v}"${v === REFRESH.sec ? " selected" : ""}>${v}s</option>`).join("");
+  sel.addEventListener("change", (e) => REFRESH.set(e.target.value));
+}
+
+/* is AI usable right now (keys configured, not switched off, within the daily budget)?
+   Every AI element in the UI reads this flag; when false the terminal looks AI-free. */
+window.MT_AI = window.MT_AI || { available: false };
+function refreshAiStatus() {
+  fetch("/api/ai/status").then((r) => r.json()).then((j) => { window.MT_AI = { available: !!(j && j.available) }; }).catch(() => { window.MT_AI = { available: false }; });
+}
 async function bootTerminal() {
+  initRefreshSelector();
+  refreshAiStatus();
+  setInterval(refreshAiStatus, 10 * 60 * 1000);
   initCmd();
   initMobileNav();
   initMobileChartResize();
@@ -664,6 +708,7 @@ async function bootTerminal() {
   try { if (window.MSTORE && window.MSTORE.ready) await window.MSTORE.ready; } catch { }
   const start = (location.hash || "#markets").slice(1);
   showTab(Object.keys(TAB_LABELS).includes(start) ? start : "markets");
+  if (!_liveTimer) startLiveRefresh();          // whichever tab opened first, the live loop runs
 }
 
 /* Industry & competitive analysis renderer (Market Intelligence). */

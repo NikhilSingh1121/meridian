@@ -346,6 +346,7 @@ test("pipeline · no key → no job, research reported as not configured", () =>
 
 test("pipeline · filings + headlines + document reading → validated sections; search quota missing is handled; deterministic report untouched", async () => {
   stubFilings();
+  process.env.GEMINI_SEARCH = "auto";   // search is off by default (it is billed per request); this test covers it switched on
   const calls = mock(geminiOk);
   const rep = report();
   const before = JSON.stringify(rep);

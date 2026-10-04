@@ -786,12 +786,11 @@ ${v} ${UNIT}`)}"></i></span></td></tr>`;
   }
 
   /* ═══════════════════════════ document reader (Layer 2) ═══════════════════════════ */
-  const AUTO_MS = 12_000;
   const liveTok = (tok) => S.tok === tok && typeof CURRENT !== "undefined" && CURRENT && S.co && CURRENT.symbol === S.co.symbol;
   function deepHtml(v, countdown) {
     const head = (sub) => `<div class="panel-h"><h3>${ic("doc")}MANAGEMENT COMMENTARY, GUIDANCE &amp; DEALS</h3><div class="ws-tools"><span class="panel-sub mono">${sub}</span></div></div>`;
     if (!v || v.status === "off") return "";
-    if (v.status === "idle" || v.status === "failed") return `${head("read from the company's own filings")}<div class="ws-body"><div class="ws-cta"><p>${v.status === "failed" ? "Reading the documents did not complete this time." : "The latest results filing, call transcript and transaction filings are read automatically."}${countdown != null ? ` Starting in <b id="wsDeepCount">${countdown}</b>s.` : ""}</p><button class="mini-btn" type="button" id="wsDeepGo">${v.status === "failed" ? "Try again" : "Read now"}</button></div></div>`;
+    if (v.status === "idle" || v.status === "failed") return `${head("read from the company's own filings")}<div class="ws-body"><div class="ws-cta"><p>Read the latest results filing, call transcript and transaction filings for management commentary, guidance and deals.</p><button class="mini-btn" type="button" id="wsDeepGo">Read filings</button></div></div>`;
     if (v.status === "running") return `${head("reading company documents…")}<div class="ws-body"><div class="rp-deep-run"><span class="rg-spin"></span><span>${esc(v.stage || "Reading documents")}</span><span class="ws-dim">${v.elapsed != null ? v.elapsed + "s" : ""}</span></div><div class="rp-skel"><i></i><i></i><i></i></div></div>`;
     const col = (title, list, empty) => `<div><div class="rp-sub">${title}</div>${list.length ? `<ul class="rp-claims">${list.map((e) => `<li><span>${esc(String(e.claim || "").replace(/\s*\[(?:[DE]\s?)?\d+(?:\.\d+)*\]/g, ""))}</span><span class="ws-dim"> — ${link(e.url, esc(String(e.source || "").replace(/^.* — /, "")))}, ${fd(e.date)}</span></li>`).join("")}</ul>` : `<div class="rp-note">${empty}</div>`}</div>`;
     const it = v.items || {};
@@ -812,19 +811,8 @@ ${v} ${UNIT}`)}"></i></span></td></tr>`;
     const start = async () => { if (!liveTok(tok)) return; paint({ status: "running", stage: "Starting" }); try { v = await api(url, { method: "POST" }); } catch { v = { status: "failed" }; } if (!liveTok(tok)) return; paint(v); if (v.status === "running") poll(); };
     S.deepStart = start;
     if (v.status === "running") { paint(v); poll(); return; }
-    if (v.status !== "idle") { paint(v); return; }
-    // auto-read only where exchange filings exist (NSE/BSE); elsewhere it would be
-    // web search alone, so it waits for an explicit click to spend model quota
-    if (!/\.(NS|BO)$/i.test(co.symbol)) { paint(v); return; }
-    let left = Math.round(AUTO_MS / 1000);
-    paint(v, left);
-    const tick = setInterval(() => {
-      if (!liveTok(tok)) { clearInterval(tick); return; }
-      if (document.visibilityState === "hidden") return;
-      left -= 1; S.deepCount = left;
-      const c = document.getElementById("wsDeepCount"); if (c) c.textContent = left;
-      if (left <= 0) { clearInterval(tick); if (v.status === "idle") start(); }
-    }, 1000);
+    // reading spends model quota, so it never starts on its own — only on a click
+    paint(v);
   }
 
   /* ═══════════════════════════ build · tabs · refresh ═══════════════════════════ */

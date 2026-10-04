@@ -183,7 +183,8 @@ async function resolveRedirect(uri) {
 
 /* search grounding is used only while the key has quota for it */
 let searchOffUntil = 0;
-const SEARCH_MODE = () => (process.env.GEMINI_SEARCH || "auto").toLowerCase();
+// web-search grounding is billed per request on top of tokens — off unless GEMINI_SEARCH=auto
+const SEARCH_MODE = () => (process.env.GEMINI_SEARCH || "off").toLowerCase();
 const searchWanted = () => SEARCH_MODE() !== "off" && Date.now() >= searchOffUntil;
 
 /**
@@ -226,15 +227,24 @@ async function conductDeepCompanyResearch({ report, profile, onProgress, donePas
     // document reading and web search are separate calls: given both tools at
     // once the model tends to search instead of reading the filings it was given
     const sys = (how) => `You are a senior equity research associate gathering evidence for a report on ${m.name} dated ${m.date}. ${how} Report only what the sources state; copy figures exactly with their units and periods.`;
-    const call = (how, user, t) => gemini.chat({ messages: [{ role: "system", content: sys(how) }, { role: "user", content: user }], tools: t, reasoning: "low", maxTokens: 12000, timeoutMs: 120_000, deadline });
+    const call = (how, user, t) => gemini.chat({ feature: "research", messages: [{ role: "system", content: sys(how) }, { role: "user", content: user }], tools: t, reasoning: "low", maxTokens: 12000, timeoutMs: 120_000, deadline });
     try {
       const items = []; let dropped = 0, passSearches = 0, passTokens = 0, retrieved = 0, model = null;
       if (docs.length) {
-        const docList = docs.map((x, k) => `[D${k + 1}] ${x.date} · ${x.category} · ${x.url}`).join("\n");
-        const r = await call("Read every listed document with the URL context tool.", `${p.brief}\n\nDOCUMENTS:\n${docList}\n${FORMAT(m.date, false)}`, [{ url_context: {} }]);
-        const ev = parseDocEvidence(r.content, docs, r.urls, { cutoff: m.date, pass: p.key });
-        items.push(...ev.items); dropped += ev.dropped; retrieved = (r.urls || []).filter((u) => u.ok).length;
-        passTokens += (r.usage && r.usage.total_tokens) || 0; model = r.model;
+        const read = async (list) => {
+          const docList = list.map((x, k) => `[D${k + 1}] ${x.date} · ${x.category} · ${x.url}`).join("\n");
+          const r = await call("Read every listed document with the URL context tool.", `${p.brief}\n\nDOCUMENTS:\n${docList}\n${FORMAT(m.date, false)}`, [{ url_context: {} }]);
+          const ev = parseDocEvidence(r.content, list, r.urls, { cutoff: m.date, pass: p.key });
+          items.push(...ev.items); dropped += ev.dropped; retrieved += (r.urls || []).filter((u) => u.ok).length;
+          passTokens += (r.usage && r.usage.total_tokens) || 0; model = model || r.model;
+        };
+        try { await read(docs); }
+        catch (e) {
+          // Google rejected the batch (e.g. one document too large or unreadable):
+          // read the documents one at a time and skip only the one it won't take
+          if (e.code !== "bad_request" || docs.length < 2) throw e;
+          for (const d of docs) { try { await read([d]); } catch (e2) { if (e2.code !== "bad_request") throw e2; } }
+        }
       }
       if (withSearch && deadline - Date.now() > 25_000) {
         try {

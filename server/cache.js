@@ -1,10 +1,19 @@
 /** Tiny in-memory TTL cache. Keeps upstream API calls low and pages fast. */
 const store = new Map();
 
+/* Freshness policy: an expired entry may still be valid when something else keeps it current —
+   e.g. a quote whose price the live stream updates every second only needs its REST refresh for the
+   5-minute sparkline, and an NSE quote cannot change while the market is closed. The hook decides;
+   refresh rates on screen are unchanged (the overlay below still applies the streamed price). */
+let freshPolicy = null;
+function setFreshPolicy(fn) { freshPolicy = fn; }
+const cacheStats = { extended: 0 };
+
 function get(key) {
   const hit = store.get(key);
   if (!hit) return null;
   if (Date.now() > hit.expires) {
+    if (freshPolicy && freshPolicy(key, hit)) { cacheStats.extended++; return hit.value; }
     store.delete(key);
     return null;
   }
@@ -12,7 +21,7 @@ function get(key) {
 }
 
 function set(key, value, ttlMs) {
-  store.set(key, { value, expires: Date.now() + ttlMs });
+  store.set(key, { value, expires: Date.now() + ttlMs, born: Date.now() });
   return value;
 }
 
@@ -26,11 +35,18 @@ function once(key, fn) {
   return p;
 }
 
+/* Live-quote overlay: quote values (keys "q:<symbol>") pass through an optional hook
+   that swaps in a fresher streamed price (server/scanner/livequotes.js). The cached
+   object itself is never mutated — the hook returns a patched copy. */
+let quoteOverlay = null;
+function setQuoteOverlay(fn) { quoteOverlay = fn; }
+const overlay = (key, v) => (quoteOverlay && typeof key === "string" && key.startsWith("q:") && v && typeof v === "object" ? quoteOverlay(key.slice(2), v) : v);
+
 /** Wrap an async producer with caching. */
 async function cached(key, ttlMs, producer) {
   const hit = get(key);
-  if (hit !== null) return hit;
-  return once(key, async () => set(key, await producer(), ttlMs));
+  if (hit !== null) return overlay(key, hit);
+  return overlay(key, await once(key, async () => set(key, await producer(), ttlMs)));
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -67,6 +83,9 @@ function snapRead(key) {
 }
 
 async function cachedDurable(key, ttlMs, producer) {
+  return overlay(key, await cachedDurableRaw(key, ttlMs, producer));
+}
+async function cachedDurableRaw(key, ttlMs, producer) {
   const hit = get(key);
   if (hit !== null) return hit;
   try {
@@ -90,6 +109,17 @@ async function cachedDurable(key, ttlMs, producer) {
   }
 }
 
+/* Disk-first cache for values that cannot change within their validity window (a past session's
+   close, a finished day's candles): a server restart reads them from disk instead of re-asking the
+   provider. */
+async function cachedPersistent(key, ttlMs, producer) {
+  const hit = get(key);
+  if (hit !== null) return hit;
+  const snap = snapRead(key);
+  if (snap && Date.now() - snap.ts < ttlMs) return set(key, snap.value, ttlMs - (Date.now() - snap.ts));
+  return once(key, async () => { const value = await producer(); snapWrite(key, value); return set(key, value, ttlMs); });
+}
+
 /* ── housekeeping ─────────────────────────────────────────────────────────
    Memory: expired entries are otherwise only dropped when re-read, so keys
    nobody asks for again (one-off tickers, old sessions) would live forever.
@@ -99,7 +129,7 @@ async function cachedDurable(key, ttlMs, producer) {
 const DAY = 24 * 60 * 60 * 1000;
 function sweepMemory() {
   const now = Date.now();
-  for (const [k, v] of store) if (now > v.expires) store.delete(k);
+  for (const [k, v] of store) if (now > v.expires && !(freshPolicy && now - (v.born || 0) < 60 * 60e3 && freshPolicy(k, v))) store.delete(k);
 }
 function sweepSnapshots() {
   let files = [];
@@ -114,4 +144,4 @@ setInterval(sweepMemory, 60 * 60 * 1000).unref();
 setInterval(sweepSnapshots, DAY).unref();
 sweepSnapshots(); // boot: drop anything left over from long-idle periods
 
-module.exports = { get, set, cached, cachedDurable, sweepMemory, sweepSnapshots };
+module.exports = { snap: { read: (k) => snapRead(k), write: (k, v) => snapWrite(k, v) }, get, set, cached, cachedDurable, cachedPersistent, sweepMemory, sweepSnapshots, setQuoteOverlay, setFreshPolicy, cacheStats };

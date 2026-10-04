@@ -371,6 +371,65 @@ const qlLoading = (msg) => `<div class="loading mono" style="padding:44px">${esc
 const qlVerdict = (tone, head, body) =>
   `<div class="ql-verdict ${tone}"><div class="ql-verdict-h">${head}</div><div class="ql-verdict-b">${body}</div></div>`;
 
+/* ── ⓘ explanations: what each strategy means and when it is the right tool ── */
+const QL_STRAT_INFO = {
+  sma_cross: ["Holds the stock while its short-term average price (fast SMA) is above its long-term average (slow SMA), and sits in cash otherwise.", "Trending markets and stocks with long, persistent moves. Use it when you want a simple rule that keeps you invested through uptrends and out of long downtrends.", "Fast SMA: days in the short average (reacts quickly). Slow SMA: days in the long average (defines the trend). Common pairs are 20/100 and 50/200.", "Sideways markets produce many small losing trades (whipsaws), and it always reacts after a turn, never before."],
+  ema_cross_adx: ["The same trend idea with exponential averages (more weight on recent prices), but it only buys when ADX, a gauge of trend strength, is above a floor.", "Stocks that alternate between strong trends and choppy ranges: the ADX filter is what keeps you out of the chop.", "Fast / Slow EMA: the two averages. ADX floor: minimum trend strength before a trade is allowed (20–25 is usual).", "Trades less and enters later, because it waits for the trend to be confirmed."],
+  donchian_breakout: ["Buys when the price closes above its highest high of the last N days (a breakout) and exits when it closes below its lowest low of the last M days.", "Stocks prone to breakouts and long runs. This is the classic Turtle Traders system.", "Entry window: breakout look-back (20 or 55 days). Exit window: stop look-back (10 or 20 days), always shorter than the entry window.", "A low win rate (30–40%) is normal: a few large trends pay for many small losses, so long losing streaks happen."],
+  atr_chandelier: ["Buys when the price is above a trend EMA, then trails a stop k × ATR below the highest close since entry. ATR is the stock's typical daily movement.", "Volatile stocks where a fixed percentage stop is either too tight or too loose: the stop adapts to the stock's own volatility.", "Trend EMA: the entry filter. ATR multiple: how far the stop trails, in units of daily range (2.5–3.5 is usual).", "A tight multiple gets stopped out by noise; a wide one gives back a large part of each gain."],
+  rsi_reversion: ["Buys when RSI (a 0–100 gauge of recent gains against losses) drops below the oversold level, and sells when it recovers to the exit level.", "Range-bound, liquid large caps that tend to bounce after sharp dips. The 200-day filter only allows buying while the long-term trend is up.", "RSI period (14 is standard), entry level (about 30), exit level (about 50–60), and the 200-day filter (1 = on).", "In a real downtrend, oversold keeps getting more oversold. Keep the filter on unless you have a reason not to."],
+  bollinger_reversion: ["Buys when the price closes below the lower Bollinger Band (moving average minus k standard deviations) and sells at the middle band.", "Stocks that oscillate around a stable average without a strong trend.", "Band period (20 is standard) and σ multiple (2 is standard; wider bands trade less).", "The start of a genuine breakdown looks exactly like a buy signal."],
+  macd_trend: ["Holds the stock while the MACD line (the gap between a fast and a slow EMA) is above its 9-day signal line: a momentum-turn indicator.", "Stocks with medium-term swings, when you want to react earlier than a moving-average cross.", "Fast / Slow EMA (12 / 26 is the standard), signal line 9.", "Noisy: many signals, so trading costs matter more than for slower rules."],
+  momentum_12_1: ["Holds the stock while its return over the past year, excluding the most recent month, is positive; re-checked at a fixed interval.", "Long-horizon investors who want an evidence-based trend filter; it comes from decades of momentum research.", "Lookback (252 days = 12 months), skip recent (21 days = 1 month, avoids short-term reversals), rebalance every N days.", "Slow to exit when a crash follows a strong year (a momentum crash)."],
+  volatility_regime: ["Holds the stock only while it is above its trend SMA and its recent volatility is below a chosen percentile of the past year.", "Investors who want to sit out turbulent periods: a drawdown brake.", "Trend SMA, and the volatility percentile cap (60–80 is usual).", "It steps aside only after volatility has risen, and can miss the rebound."],
+  dual_momentum_ma: ["The golden-cross regime: long when the 50-day average is above the 200-day and the price is above the 200-day.", "A slow benchmark for whether faster rules earn their extra trading; long-term investors.", "Fast SMA (50) and Slow SMA (200).", "Very late at turning points, and the few trades make the sample small."],
+};
+function qlStratInfoHtml(s) {
+  const [what, when, params, watch] = QL_STRAT_INFO[s.id] || [s.thesis, "", "", ""];
+  return `<p>${esc(what)}</p>${when ? `<p><b>When it is the right tool.</b> ${esc(when)}</p>` : ""}${params ? `<p><b>Settings.</b> ${esc(params)}</p>` : ""}${watch ? `<p><b>Weak spot.</b> ${esc(watch)}</p>` : ""}
+    <div class="mt-info-rule"><span>EXACT RULE</span>${esc(s.rule || "")}</div><p class="ws-dim">Family: ${esc(s.family || "")}. A backtest describes the past; it is not a recommendation.</p>`;
+}
+const QL_DESK_INFO = {
+  backtest: ["Strategy Backtester", "Tests a trading rule on the stock's daily history: every signal trades on the next day's close and pays costs on both sides. It then checks whether the result survives other settings (parameter surface), unseen periods (walk-forward) and luck (bootstrap). Use it before trusting any chart pattern or indicator."],
+  factors: ["Factor Attribution", "Explains a stock's returns with market-wide drivers: the market itself, size, sectors, the rupee and crude. What the drivers cannot explain is alpha. Use it to see what you are really exposed to and what a hedge would need to cover."],
+  pairs: ["Pairs & Cointegration", "Tests whether two related stocks move together closely enough that the gap between them keeps returning to normal (cointegration), then backtests trading that gap. Use it for market-neutral ideas between peers."],
+  profile: ["Return Profile", "Describes how a stock's returns behave: how bad the bad days are, how long the drawdowns lasted, seasonality and volatility regimes. Use it to size a position and set expectations."],
+};
+
+/* ── analysis summary: conclusion · reasonableness of the inputs · suggested settings ── */
+function qlSummary(as, desk) {
+  if (!as || !as.conclusion) return "";
+  const c = as.conclusion;
+  const icon = { ok: "✓", warn: "!", bad: "✕" };
+  const rows = (as.assumptions || []).map((a) => `<tr class="${a.status}"><td><i class="ql-dot ${a.status}" aria-label="${a.status}">${icon[a.status] || ""}</i></td><td><b>${esc(a.name)}</b><span class="mono">${esc(a.value)}</span></td><td>${esc(a.why)}</td><td>${a.suggest && a.status !== "ok" ? `<span class="ql-sug">${esc(a.suggest)}</span>` : `<span class="ws-dim">—</span>`}</td></tr>`).join("");
+  const sug = as.suggested;
+  const sugTxt = sug ? [
+    sug.params && Object.keys(sug.params).length ? Object.entries(sug.params).map(([k, v]) => `${esc((sug.labels || {})[k] || k)} ${v}`).join(", ") : "",
+    sug.costBps != null ? `cost ${sug.costBps} bp/side` : "",
+    sug.range ? `history ${esc(String(sug.range).toUpperCase())}` : "",
+    [["window", "z-window", " days"], ["entryZ", "entry |z|", ""], ["exitZ", "exit |z|", ""], ["stopZ", "stop |z|", ""]].filter(([k]) => sug[k] != null).map(([k, l, u]) => `${l} ${sug[k]}${u}`).join(", "),
+    sug.rf != null ? `risk-free ${sug.rf}%` : "",
+  ].filter(Boolean).join(" · ") : "";
+  const rs = as.reasonableness || "reasonable";
+  return `<section class="ql-sum ${c.tone}">
+    <div class="ql-sum-top">
+      <div class="ql-sum-c">
+        <div class="ql-sum-tag mono">CONCLUSION</div>
+        <h3>${esc(c.headline)}</h3>
+        <ul>${(c.points || []).map((p) => `<li>${esc(p)}</li>`).join("")}</ul>
+        ${c.next ? `<p class="ql-sum-next">${esc(c.next)}</p>` : ""}
+      </div>
+      <div class="ql-sum-r">
+        <div class="ql-sum-tag mono">YOUR ASSUMPTIONS</div>
+        <div class="ql-rs ${rs.replace(/\s+/g, "-")}">${esc(rs.charAt(0).toUpperCase() + rs.slice(1))}</div>
+        <p>${esc(as.reasonablenessText || "")}</p>
+        ${sug ? `<div class="ql-sum-sug"><span class="mono">SUGGESTED</span>${sugTxt}</div><button class="btn btn-amber ql-apply" type="button" data-ql-apply="${desk}">Apply suggested settings &amp; re-run</button>` : `<div class="ql-sum-sug ok">No changes suggested.</div>`}
+      </div>
+    </div>
+    ${rows ? `<details class="ql-asm-d"${(as.assumptions || []).some((a) => a.status !== "ok") ? " open" : ""}><summary class="mono">ASSUMPTION CHECK · ${(as.assumptions || []).length} inputs</summary><div class="ql-scroll"><table class="ql-asm"><thead><tr><th></th><th>Input</th><th>Assessment</th><th>Reasonable value</th></tr></thead><tbody>${rows}</tbody></table></div></details>` : ""}
+  </section>`;
+}
+
 /* ── ticker autocomplete bound to any input + dropdown pair ── */
 function qlSearch(input, drop, onPick) {
   let timer, items = [], active = -1;
@@ -453,18 +512,26 @@ const QUANT = {
         <div class="ql-head-l">
           <div class="ql-eyebrow mono">QUANT LAB</div>
           <h2>Test the idea before you trade it.</h2>
-          <p>Four desks that answer the questions a price chart cannot: does this rule survive out of sample, what am I actually exposed to, is this spread really cointegrated, and how fat is the left tail? Every number is computed on the server from daily candles — deterministic, auditable, no vendor analytics.</p>
+          <p>Four desks that answer what a price chart cannot. Every result opens with a plain-language conclusion and a check of the assumptions you chose, with realistic settings you can apply in one click. Everything is computed on the server from daily prices: deterministic and auditable.</p>
         </div>
       </div>
       <nav class="ql-nav" id="qlNav">
         ${this.DESKS.map((d) => `<button data-desk="${d.id}" class="${d.id === this.desk ? "active" : ""}"><span class="ql-nav-t">${d.label}</span><span class="ql-nav-s mono">${d.sub}</span></button>`).join("")}
       </nav>
+      <div class="ql-intro" id="qlIntro"></div>
       <div class="ql-desk" id="qlDeskBacktest"></div>
       <div class="ql-desk" id="qlDeskFactors" hidden></div>
       <div class="ql-desk" id="qlDeskPairs" hidden></div>
       <div class="ql-desk" id="qlDeskProfile" hidden></div>`;
 
     $$("#qlNav button").forEach((b) => b.addEventListener("click", () => this.show(b.dataset.desk)));
+    this.renderIntro();
+    $("#qlIntro").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-desk-info]"); if (!b) return;
+      const [t, txt] = QL_DESK_INFO[this.desk] || []; if (t && window.MT_INFO) MT_INFO.open(b, t, `<p>${esc(txt)}</p>`);
+    });
+    // "Apply suggested settings" on any desk
+    root.addEventListener("click", (e) => { const b = e.target.closest("[data-ql-apply]"); if (b) this.applySuggested(b.dataset.qlApply); });
 
     try {
       const { strategies } = await api("/api/quant/strategies");
@@ -483,8 +550,30 @@ const QUANT = {
 
   DESK_HOSTS: { backtest: "qlDeskBacktest", factors: "qlDeskFactors", pairs: "qlDeskPairs", profile: "qlDeskProfile" },
 
+  renderIntro() {
+    const el = $("#qlIntro"), info = QL_DESK_INFO[this.desk]; if (!el || !info) return;
+    el.innerHTML = `<span>${esc(info[1].split(". ")[0])}.</span><button class="mt-i" type="button" data-desk-info title="What this desk does" aria-label="What ${esc(info[0])} does">i</button>`;
+  },
+
+  /** apply the assessment's suggested settings to a desk's inputs, then re-run it */
+  applySuggested(desk) {
+    const as = (this._assess || {})[desk], s = as && as.suggested; if (!s) return;
+    const setv = (id, v) => { const el = $("#" + id); if (!el || v == null) return; if (el.tagName === "SELECT" && ![...el.options].some((o) => o.value === String(v))) return; el.value = String(v); };
+    if (desk === "bt") {
+      Object.entries(s.params || {}).forEach(([k, v]) => { const el = $("#btP_" + k), out = $("#btPv_" + k); if (el) { el.value = v; if (out) out.textContent = el.value; el.dispatchEvent(new Event("input")); } });
+      setv("btCost", s.costBps); setv("btRange", s.range);
+      this.runBacktest();
+    } else if (desk === "pr") {
+      setv("prWin", s.window); setv("prEntry", s.entryZ); setv("prExit", s.exitZ); setv("prStop", s.stopZ); setv("prCost", s.costBps); setv("prRange", s.range);
+      this.runPairs();
+    } else if (desk === "fc") { setv("fcRange", s.range); setv("fcRf", s.rf); this.runFactors(); }
+    else if (desk === "rp") { setv("rpRange", s.range); this.runProfile(); }
+  },
+  remember(desk, as) { (this._assess = this._assess || {})[desk] = as || null; },
+
   show(desk) {
     this.desk = desk;
+    this.renderIntro();
     $$("#qlNav button").forEach((b) => b.classList.toggle("active", b.dataset.desk === desk));
     Object.entries(this.DESK_HOSTS).forEach(([k, id]) => { const el = $("#" + id); if (el) el.hidden = k !== desk; });
     // Only the desk that just became visible is redrawn — a canvas in a hidden
@@ -517,38 +606,74 @@ const QUANT = {
 
   buildBacktest() {
     const host = $("#qlDeskBacktest");
-    // Group by family rather than suffixing every label with "· Family" —
-    // the optgroup carries that information and the option text stays short
-    // enough to render inside the field.
     const byFamily = {};
     (this.catalogue || []).forEach((s) => { (byFamily[s.family] ||= []).push(s); });
-    const opts = Object.entries(byFamily).map(([fam, list]) =>
-      `<optgroup label="${esc(fam)}">${list.map((s) => `<option value="${esc(s.id)}">${esc(s.label)}</option>`).join("")}</optgroup>`
-    ).join("");
+    const first = (this.catalogue || [])[0];
+    const lib = Object.entries(byFamily).map(([fam, list]) => `<div class="ql-lib-g mono">${esc(fam.toUpperCase())}</div>` +
+      list.map((s) => `<div class="ql-lib-i${first && s.id === first.id ? " on" : ""}" data-strat="${esc(s.id)}" role="button" tabindex="0"><span>${esc(s.label)}</span><button class="mt-i" type="button" data-sinfo="${esc(s.id)}" title="What this strategy means" aria-label="What ${esc(s.label)} means">i</button></div>`).join("")).join("");
     host.innerHTML = `
-      <div class="ql-ctl">
-        <div class="ql-ctl-row">
-          <label class="ql-f ql-f-sym">
-            <span>Ticker</span>
-            <div class="ql-search"><input id="btSym" placeholder="RELIANCE.NS · TCS.NS · AAPL" autocomplete="off" spellcheck="false" /><div class="cmd-results ql-drop" id="btDrop" hidden></div></div>
-          </label>
-          <label class="ql-f ql-f-wide"><span>Strategy</span><select id="btStrat">${opts}</select></label>
-          <label class="ql-f ql-f-sm"><span>History</span><select id="btRange"><option value="2y">2Y</option><option value="5y" selected>5Y</option><option value="10y">10Y</option><option value="max">Max</option></select></label>
-          <label class="ql-f ql-f-sm"><span>Cost (bp/side)</span><input id="btCost" type="number" min="0" max="200" step="1" value="10" /></label>
-          <button class="btn btn-amber ql-run" id="btRun">Run backtest</button>
+      <div class="ql-bt">
+        <aside class="ql-side">
+          <div class="ql-box">
+            <div class="ql-box-h mono"><b>1</b> STOCK &amp; COSTS</div>
+            <label class="ql-f"><span>Ticker</span>
+              <div class="ql-search"><input id="btSym" placeholder="RELIANCE.NS · TCS.NS · AAPL" autocomplete="off" spellcheck="false" /><div class="cmd-results ql-drop" id="btDrop" hidden></div></div>
+            </label>
+            <div class="ql-f-row">
+              <label class="ql-f"><span>History</span><select id="btRange"><option value="2y">2Y</option><option value="5y" selected>5Y</option><option value="10y">10Y</option><option value="max">Max</option></select></label>
+              <label class="ql-f"><span>Cost (bp / side)</span><input id="btCost" type="number" min="0" max="200" step="1" value="15" /></label>
+            </div>
+            <div class="ql-hint">Realistic: about 15 bp per side for Indian delivery trades (STT, stamp duty, fees, slippage), about 5 bp for US stocks.</div>
+          </div>
+          <div class="ql-box">
+            <div class="ql-box-h mono"><b>2</b> STRATEGY <span>${(this.catalogue || []).length} rules · ⓘ explains each</span></div>
+            <div class="ql-lib" id="btLib">${lib}</div>
+            <input type="hidden" id="btStrat" value="${first ? esc(first.id) : "sma_cross"}" />
+          </div>
+          <div class="ql-box">
+            <div class="ql-box-h mono"><b>3</b> SETTINGS</div>
+            <div class="ql-params" id="btParams"></div>
+            <div class="ql-rule" id="btRule"></div>
+          </div>
+          <div class="ql-side-act">
+            <button class="btn btn-amber ql-run" id="btRun" type="button">Run backtest</button>
+            <button class="mini-btn" id="btCmp" type="button" title="Run every strategy at its default settings on this stock and rank them">Compare all strategies</button>
+          </div>
+        </aside>
+        <div class="ql-main">
+          <div id="btStatus" class="ql-status mono"></div>
+          <div id="btCompare"></div>
+          <div id="btOut">${qlEmpty("Pick a ticker and a strategy, then run. Signals trade on the NEXT day's close, costs are charged on both sides of every trade, and the result is graded out of sample before anything is reported. The report opens with a conclusion and a check of your assumptions.")}</div>
         </div>
-        <div class="ql-params" id="btParams"></div>
-        <div class="ql-rule" id="btRule"></div>
-      </div>
-      <div id="btStatus" class="ql-status mono"></div>
-      <div id="btOut">${qlEmpty("Pick a ticker and a rule, then run. The backtester executes every signal on the NEXT bar, charges costs on both legs of every trade, and grades the result out of sample before it reports anything.")}</div>`;
+      </div>`;
 
     qlSearch($("#btSym"), $("#btDrop"), (s) => { this.sym.backtest = s; this.runBacktest(); });
-    $("#btStrat").addEventListener("change", () => { this.renderParams(); this.runBacktest(); });
+    const lib$ = $("#btLib");
+    lib$.addEventListener("click", (e) => {
+      const info = e.target.closest("[data-sinfo]");
+      if (info) { const s = (this.catalogue || []).find((x) => x.id === info.dataset.sinfo); if (s && window.MT_INFO) MT_INFO.open(info, s.label, qlStratInfoHtml(s)); return; }
+      const row = e.target.closest("[data-strat]"); if (row) this.selectStrategy(row.dataset.strat, true);
+    });
+    lib$.addEventListener("keydown", (e) => { const row = e.target.closest("[data-strat]"); if (row && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); this.selectStrategy(row.dataset.strat, true); } });
     $("#btRun").addEventListener("click", () => this.runBacktest());
+    $("#btCmp").addEventListener("click", () => this.runCompare());
     $("#btRange").addEventListener("change", () => this.runBacktest());
     $("#btCost").addEventListener("change", () => this.runBacktest());
+    $("#btCompare").addEventListener("click", (e) => {
+      const info = e.target.closest("[data-sinfo]");
+      if (info) { const s = (this.catalogue || []).find((x) => x.id === info.dataset.sinfo); if (s && window.MT_INFO) MT_INFO.open(info, s.label, qlStratInfoHtml(s)); return; }
+      if (e.target.closest("[data-cmp-close]")) { $("#btCompare").innerHTML = ""; return; }
+      const row = e.target.closest("[data-cmp]"); if (row) this.selectStrategy(row.dataset.cmp, true);
+    });
     this.renderParams();
+  },
+
+  selectStrategy(id, run) {
+    const el = $("#btStrat"); if (!el || !(this.catalogue || []).some((s) => s.id === id)) return;
+    el.value = id;
+    $$("#btLib [data-strat]").forEach((r) => r.classList.toggle("on", r.dataset.strat === id));
+    this.renderParams();
+    if (run) this.runBacktest();
   },
 
   currentStrategy() {
@@ -560,17 +685,59 @@ const QUANT = {
     const spec = this.currentStrategy();
     const host = $("#btParams"), rule = $("#btRule");
     if (!spec) { host.innerHTML = ""; return; }
+    const typ = spec.typical || {};
+    const hint = (p, v) => { const r = typ[p.key]; if (!r) return ""; const out = v < r[0] || v > r[1]; return `<small class="${out ? "out" : ""}">usual ${r[0] === r[1] ? r[0] : r[0] + "–" + r[1]}${out ? " · outside" : ""}</small>`; };
     host.innerHTML = spec.params.map((p) => `
       <div class="ql-param">
         <label>${esc(p.label)}<b id="btPv_${p.key}">${p.def}</b></label>
         <input type="range" id="btP_${p.key}" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.def}" />
+        <div class="ql-param-h" id="btPh_${p.key}">${hint(p, p.def)}</div>
       </div>`).join("");
     spec.params.forEach((p) => {
-      const el = $("#btP_" + p.key), out = $("#btPv_" + p.key);
-      el.addEventListener("input", () => { out.textContent = el.value; });
+      const el = $("#btP_" + p.key), out = $("#btPv_" + p.key), h = $("#btPh_" + p.key);
+      el.addEventListener("input", () => { out.textContent = el.value; if (h) h.innerHTML = hint(p, +el.value); });
       el.addEventListener("change", () => this.runBacktest());
     });
-    rule.innerHTML = `<div class="ql-rule-r"><b>Rule</b> ${esc(spec.rule)}</div><div class="ql-rule-t">${esc(spec.thesis)}</div>`;
+    rule.innerHTML = `<div class="ql-rule-r"><b>RULE</b> ${esc(spec.rule)}</div><div class="ql-rule-t">${esc(spec.thesis)}</div>`;
+  },
+
+  /* every strategy at its defaults on the chosen stock → leaderboard */
+  async runCompare() {
+    const sym = ($("#btSym").value || "").trim().toUpperCase();
+    if (!sym) { $("#btStatus").textContent = "enter a ticker"; return; }
+    const range = $("#btRange").value, cost = $("#btCost").value || "15";
+    const box = $("#btCompare");
+    const token = (this._cmpToken = Symbol("cmp"));
+    box.innerHTML = qlLoading(`Running all ${(this.catalogue || []).length} strategies on ${sym} at their default settings…`);
+    try {
+      const d = await api(`/api/quant/compare/${encodeURIComponent(sym)}?range=${encodeURIComponent(range)}&costBps=${encodeURIComponent(cost)}`);
+      if (token !== this._cmpToken) return;
+      const b = d.benchmark || {};
+      const dots = (sub) => (sub || []).map((v) => `<i class="ql-cdot ${v == null ? "" : v > 0 ? "up" : "down"}" title="Sharpe ${QF.num(v)}"></i>`).join("");
+      const top = d.rows[0];
+      const rows = d.rows.map((r, i) => `<tr data-cmp="${esc(r.id)}" class="${r.id === ($("#btStrat") || {}).value ? "cur" : ""}">
+        <td class="r mono">${i + 1}</td>
+        <td><b>${esc(r.label)}</b> <button class="mt-i" type="button" data-sinfo="${esc(r.id)}" title="What this strategy means">i</button><div class="ws-dim ec-small">${esc(r.family)}</div></td>
+        <td class="r ${QF.cls(r.cagr)}">${QF.pct(r.cagr, 1)}</td>
+        <td class="r">${QF.num(r.sharpe)}</td>
+        <td class="r down">${QF.pctAbs(r.maxDD, 1)}</td>
+        <td class="r">${QF.int(r.trades)}</td>
+        <td class="r">${QF.pctAbs(r.exposure, 0)}</td>
+        <td class="r"><span class="ql-cdots">${dots(r.subSharpe)}</span></td>
+        <td class="r">${r.beatsHold == null ? "—" : r.beatsHold ? '<span class="up">✓</span>' : '<span class="ws-dim">✕</span>'}</td></tr>`);
+      const winners = d.rows.filter((r) => r.beatsHold && r.consistent === 3);
+      const summary = winners.length
+        ? `${winners.length} of ${d.rows.length} strategies beat buy-and-hold on a risk-adjusted basis <b>and</b> made money in all three sub-periods: ${winners.slice(0, 3).map((r) => esc(r.label)).join(", ")}. Open one to see whether it survives the robustness checks.`
+        : `No strategy beat buy-and-hold on a risk-adjusted basis and stayed positive in all three sub-periods. For ${esc(sym)}, simply holding (Sharpe ${QF.num(b.sharpe)}) has been as good as any timing rule here.`;
+      box.innerHTML = qlSec("Strategy leaderboard", `${esc(sym)} · ${d.from} → ${d.to} · ${d.costBps} bp/side · default settings <button class="mini-btn" data-cmp-close type="button">Close</button>`,
+        `<p class="ql-prose">${summary}</p>` + qlTable([{ t: "#", r: 1 }, { t: "Strategy" }, { t: "CAGR", r: 1 }, { t: "Sharpe", r: 1 }, { t: "Max DD", r: 1 }, { t: "Trades", r: 1 }, { t: "In market", r: 1 }, { t: "3 periods", r: 1 }, { t: "Beats hold", r: 1 }], rows, "ql-cmp") +
+        `<p class="ql-prose ws-dim">Buy-and-hold: CAGR ${QF.pct(b.cagr, 1)} · Sharpe ${QF.num(b.sharpe)} · worst fall ${QF.pctAbs(b.maxDD, 1)} · 3 periods <span class="ql-cdots">${dots(b.subSharpe)}</span>. Click a row to open that strategy's full backtest.</p>`,
+        "Defaults only, nothing optimised, so nothing here is curve-fitted. “3 periods” splits the history into equal thirds: green = positive Sharpe in that third. A rule that only worked in one third was a bet on that market phase.");
+      if (top && !$("#btOut .ql-sum")) this.selectStrategy(top.id, false);
+    } catch (e) {
+      if (token !== this._cmpToken) return;
+      box.innerHTML = qlEmpty(e.message || "Strategy comparison unavailable.");
+    }
   },
 
   async runBacktest() {
@@ -595,6 +762,7 @@ const QUANT = {
       const d = await api(`/api/quant/backtest/${encodeURIComponent(sym)}?${qs}`);
       if (token !== this._btToken) return;
       $("#btStatus").textContent = `${d.meta.bars.toLocaleString()} bars · ${d.meta.from} → ${d.meta.to}${d.meta.stale ? " · snapshot data" : ""}`;
+      this.remember("bt", d.assessment);
       $("#btOut").innerHTML = this.renderBacktest(d);
       this.drawBacktest(d);
     } catch (e) {
@@ -772,7 +940,7 @@ const QUANT = {
 
     const foot = `<div class="ql-disc">Signals are evaluated at each close and executed at the next bar's close — no signal can trade on the bar that produced it. Costs of ${m.costBps} bp are charged on the full notional at both entry and exit. Returns are unlevered, dividends are excluded, and the simulation assumes fills at the closing print with no market impact. Past behaviour of a rule on one price history is evidence about that history, not a forecast.</div>`;
 
-    return verdict + cards + chart + alpha + surface + wf + mc + tstats + dds + ledger + foot;
+    return qlSummary(d.assessment, "bt") + verdict + cards + chart + alpha + surface + wf + mc + tstats + dds + ledger + foot;
   },
 
   drawBacktest(d) {
@@ -842,6 +1010,7 @@ const QUANT = {
       const d = await api(`/api/quant/factors/${encodeURIComponent(sym)}?${qs}`);
       if (token !== this._fcToken) return;
       $("#fcStatus").textContent = `${QF.int(d.meta.observations)} common trading days · ${d.meta.from} → ${d.meta.to}${d.meta.dropped.length ? ` · dropped: ${d.meta.dropped.join(", ")}` : ""}`;
+      this.remember("fc", d.assessment);
       $("#fcOut").innerHTML = this.renderFactors(d);
       this.drawFactors(d);
     } catch (e) {
@@ -937,7 +1106,7 @@ const QUANT = {
 
     const foot = `<div class="ql-disc">${esc(m.note)} Factors are long-short spreads between live, continuously-quoted instruments — they are proxies for the academic factors, not the Fama-French series themselves, and a loading should be read as exposure to that specific tradable spread. Alpha is measured against this model only: a return this factor set cannot price may still be compensation for a risk it does not contain.</div>`;
 
-    return verdict + cards + loadings + risk + rolling + corr + diag + foot;
+    return qlSummary(d.assessment, "fc") + verdict + cards + loadings + risk + rolling + corr + diag + foot;
   },
 
   drawFactors(d) {
@@ -981,7 +1150,7 @@ const QUANT = {
           <label class="ql-f ql-f-sm"><span>Entry |z|</span><input id="prEntry" type="number" min="0.5" max="4" step="0.25" value="2" /></label>
           <label class="ql-f ql-f-sm"><span>Exit |z|</span><input id="prExit" type="number" min="0" max="2" step="0.25" value="0.5" /></label>
           <label class="ql-f ql-f-sm"><span>Stop |z|</span><input id="prStop" type="number" min="2" max="6" step="0.25" value="3.5" /></label>
-          <label class="ql-f ql-f-sm"><span>Cost (bp)</span><input id="prCost" type="number" min="0" max="200" step="1" value="10" /></label>
+          <label class="ql-f ql-f-sm"><span>Cost (bp)</span><input id="prCost" type="number" min="0" max="200" step="1" value="15" /></label>
           <div class="ql-presets">${this.PRESETS.map(([a, b]) => `<button class="ql-preset mono" data-a="${a}" data-b="${b}">${a.replace(/\.NS$/, "")} / ${b.replace(/\.NS$/, "")}</button>`).join("")}</div>
         </div>
       </div>
@@ -1015,6 +1184,7 @@ const QUANT = {
       const d = await api(`/api/quant/pairs?${qs}`);
       if (token !== this._prToken) return;
       $("#prStatus").textContent = `${QF.int(d.meta.bars)} overlapping days · ${d.meta.from} → ${d.meta.to}${d.meta.crossCurrency ? " · ⚠ cross-currency pair" : ""}`;
+      this.remember("pr", d.assessment);
       $("#prOut").innerHTML = this.renderPairs(d);
       this.drawPairs(d);
     } catch (e) {
@@ -1120,7 +1290,7 @@ const QUANT = {
     const warn = m.crossCurrency
       ? `<div class="ql-warn">These legs settle in different currencies (${esc(m.currencyA)} vs ${esc(m.currencyB)}). The spread shown therefore embeds an unhedged FX exposure — treat the statistics as indicative until the currency leg is modelled.</div>` : "";
 
-    return verdict + signal + cards + warn + spreadChart + cointest + mrSec + rollCorr + perf + ledger +
+    return qlSummary(d.assessment, "pr") + verdict + signal + cards + warn + spreadChart + cointest + mrSec + rollCorr + perf + ledger +
       `<div class="ql-disc">${esc(d.caveat)}</div>`;
   },
 
@@ -1206,6 +1376,7 @@ const QUANT = {
       const d = await api(`/api/quant/profile/${encodeURIComponent(sym)}?range=${$("#rpRange").value}`);
       if (token !== this._rpToken) return;
       $("#rpStatus").textContent = `${QF.int(d.meta.bars)} bars · ${d.meta.from} → ${d.meta.to}${d.meta.stale ? " · snapshot data" : ""}`;
+      this.remember("rp", d.assessment);
       $("#rpOut").innerHTML = this.renderProfile(d);
       this.drawProfile(d);
     } catch (e) {
@@ -1357,7 +1528,7 @@ const QUANT = {
 
     const foot = `<div class="ql-disc">Computed from ${QF.int(d.meta.bars)} daily closes (${d.meta.from} → ${d.meta.to}), price-only: dividends, splits beyond Yahoo's adjustment, and financing costs are excluded. Every test reported is a statement about this sample. Seasonality and calendar effects in particular are fragile — they are shown so that they can be discounted honestly, not so that they can be traded.</div>`;
 
-    return verdict + cards + tail + dds + seas + cal + micro + roll + eff + foot;
+    return qlSummary(d.assessment, "rp") + verdict + cards + tail + dds + seas + cal + micro + roll + eff + foot;
   },
 
   drawProfile(d) {

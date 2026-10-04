@@ -843,6 +843,40 @@ function backtest(points, opts = {}) {
   };
 }
 
+/**
+ * Strategy leaderboard: every rule in the catalogue at its published defaults
+ * (nothing is optimised, so nothing is fitted), on the same candles and costs.
+ * Each run is also split into three equal sub-periods: a rule that only worked
+ * in one of them is a regime bet, not an edge.
+ */
+function compareStrategies(points, { costBps = 10 } = {}) {
+  const ctx = buildCtx(points);
+  if (ctx.closes.length < 250) return { error: "Need at least a year of daily history to compare strategies." };
+  const bhRets = S.simpleReturns(ctx.closes);
+  const bh = S.performance(bhRets, { years: ctx.years });
+  const thirds = (r) => { const k = Math.floor(r.length / 3); return [r.slice(0, k), r.slice(k, 2 * k), r.slice(2 * k)].map((x) => { const p = S.performance(x, { years: x.length / TRADING_DAYS }); return p && p.sharpe != null ? +p.sharpe.toFixed(2) : null; }); };
+  const rows = Object.entries(STRATEGIES).map(([id, spec]) => {
+    const params = resolveParams(id, {});
+    const sim = simulate(ctx, spec.signal(ctx, params), { costBps });
+    const perf = S.performance(sim.returns, { years: ctx.years });
+    const ts = tradeStats(sim.trades);
+    const sub = thirds(sim.returns);
+    return {
+      id, label: spec.label, family: spec.family, params,
+      cagr: perf ? perf.cagr : null, sharpe: perf ? perf.sharpe : null, maxDD: perf ? perf.maxDD : null,
+      exposure: sim.exposure, trades: ts.n, winRate: ts.winRate, costDrag: sim.costsPaid,
+      subSharpe: sub, consistent: sub.filter((v) => v != null && v > 0).length,
+      beatsHold: perf && bh && perf.sharpe != null && bh.sharpe != null ? perf.sharpe > bh.sharpe : null,
+    };
+  });
+  rows.sort((a, b) => (b.sharpe ?? -9) - (a.sharpe ?? -9));
+  return {
+    from: ctx.dates[0], to: ctx.dates[ctx.dates.length - 1], years: +ctx.years.toFixed(2), costBps,
+    benchmark: bh ? { cagr: bh.cagr, sharpe: bh.sharpe, maxDD: bh.maxDD, subSharpe: thirds(bhRets) } : null,
+    rows,
+  };
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    2 · FACTOR ATTRIBUTION
    ══════════════════════════════════════════════════════════════════════════ */
@@ -1350,7 +1384,7 @@ function returnProfile(points, opts = {}) {
 
 module.exports = {
   // engines
-  backtest, factorAttribution, pairsAnalysis, returnProfile,
+  backtest, compareStrategies, factorAttribution, pairsAnalysis, returnProfile,
   // catalogue + helpers reused by the routes
   STRATEGIES, strategyCatalogue, resolveParams, buildCtx, simulate, tradeStats,
   parameterSurface, walkForward, bootstrap,

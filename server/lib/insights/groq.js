@@ -9,6 +9,7 @@
  *     log line, error or response
  */
 const BASE = "https://api.groq.com/openai/v1";
+const gov = require("../aiGovernor");
 const DEFAULT_CHAIN = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
 const MODELS = () => {
   const env = String(process.env.GROQ_MODELS || "").split(",").map((m) => m.trim()).filter(Boolean);
@@ -70,10 +71,12 @@ async function callOnce(model, { messages, json, maxTokens, search, timeoutMs })
 async function chat(req) {
   if (!hasKey()) throw new GroqError("no_key", "GROQ_API_KEY not configured");
   const r = { maxTokens: 1200, timeoutMs: 30_000, ...req };
+  const g = gov.allow({ search: !!r.search });
+  if (!g.ok) throw new GroqError(g.reason === "ai_off" ? "ai_off" : "budget", g.reason === "ai_off" ? "AI is switched off" : "daily AI budget reached");
   const chain = MODELS().filter((m) => !r.search || /gpt-oss/.test(m));   // browser_search is a gpt-oss tool
   let last = null;
   for (const model of chain) {
-    try { return await callOnce(model, r); }
+    try { const out = await callOnce(model, r); gov.record(r.feature || "assistant", out.usage && out.usage.total_tokens, r.search ? 1 : 0); return out; }
     catch (e) { if (!(e instanceof GroqError) || !e.fallbackable) throw e; last = e; }
   }
   throw last || new GroqError("no_model", "no Groq model available");

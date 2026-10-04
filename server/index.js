@@ -4,6 +4,7 @@
  * Run:  npm install && npm start  →  http://localhost:3000
  */
 require("dotenv").config();
+require("./lib/upstream").install();              // every outbound call is metered; Yahoo calls are coalesced, paced and guarded
 const path = require("path");
 const express = require("express");
 
@@ -60,7 +61,7 @@ app.use("/api", require("./lib/rate-limit").apiLimiter);
 const CACHEABLE = [/^\/pulse$/, /^\/quote\//, /^\/quotes$/, /^\/intel\/sectors$/, /^\/history\//];
 app.use("/api", (req, res, next) => {
   if (req.method === "GET" && CACHEABLE.some((re) => re.test(req.path))) {
-    res.set("Cache-Control", "public, max-age=15, stale-while-revalidate=30");
+    res.set("Cache-Control", "public, max-age=1, stale-while-revalidate=5"); // live prices are overlaid per request
   }
   next();
 });
@@ -74,6 +75,14 @@ app.use("/api", require("./routes/sectors"));
 app.use("/api", require("./routes/support"));
 app.use("/api", require("./routes/macro"));
 app.use("/api", require("./routes/quant"));
+// sector rotation (RRG) on official NSE indices, and the Yahoo load meter (diagnostics)
+app.get("/api/market/rotation", async (req, res) => {
+  try { const tf = req.query.tf === "daily" ? "daily" : "weekly"; res.json(await require("./cache").cached(`rrg:out:${tf}`, 60e3, () => require("./lib/rotation").rotation(tf))); }
+  catch (e) { res.status(502).json({ error: "rotation unavailable" }); }
+});
+app.get("/api/upstream/status", (_req, res) => res.json(require("./lib/upstream").status()));
+// Live Scanner (/api/scanner/*) + terminal-wide live quotes; the scanner starts on its first viewer
+require("./scanner").mount(app);
 
 app.use(express.static(path.join(__dirname, "..", "public"), { extensions: ["html"] }));
 app.get("/healthz", (_req, res) => res.json({ ok: true, ts: Date.now() }));
@@ -96,7 +105,7 @@ app.listen(PORT, () => {
   console.log(`MERIDIAN running → http://localhost:${PORT}`);
   console.log(`Terminal        → http://localhost:${PORT}/terminal`);
   console.log(`Narrative engine: ${process.env.ANTHROPIC_API_KEY ? "Claude API (key detected)" : "deterministic rules (add ANTHROPIC_API_KEY in .env for AI-written reports)"}`);
-  { const g = require("./lib/insights/gemini"); console.log(`Research layer: ${g.hasKey() ? `Gemini ${g.MODELS().join(" → ")} · exchange filings + news + document reading${(process.env.GEMINI_SEARCH || "auto") === "off" ? "" : " + Google Search grounding when available"}` : "off (set GEMINI_API_KEY in .env for researched reports)"}`); }
+  { const g = require("./lib/insights/gemini"); console.log(`Research layer: ${g.hasKey() ? `Gemini ${g.MODELS().join(" → ")} · exchange filings + news + document reading${(process.env.GEMINI_SEARCH || "off") === "off" ? "" : " + Google Search grounding when available"}` : "off (set GEMINI_API_KEY in .env for researched reports)"}`); }
   console.log(`Earnings transcripts: ${process.env.FMP_API_KEY ? "FMP (key detected)" : process.env.API_NINJAS_KEY ? "API Ninjas (key detected)" : "paste-only (add FMP_API_KEY or API_NINJAS_KEY in .env to fetch automatically)"}`);
   console.log(`Earnings estimates: ${process.env.FMP_API_KEY ? "FMP (key detected)" : "off (add FMP_API_KEY in .env)"}`);
   console.log(`Google sign-in: enabled (client ${(process.env.GOOGLE_CLIENT_ID || "default project client").slice(0, 24)}…)${process.env.SESSION_SECRET ? "" : " · ⚠ set SESSION_SECRET for persistent sessions"}`);

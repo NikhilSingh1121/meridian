@@ -112,9 +112,13 @@ const PA_MATH = {
     return { mid, up, lo };
   },
   vwap(c) {
-    // session-anchored is impractical across ranges; use cumulative anchored at window start
+    // intraday candles: session VWAP, reset at each IST trading day (the standard definition);
+    // daily and longer candles: anchored at the window start
     const out = new Array(c.length).fill(null); let pv = 0, vv = 0;
+    const intraday = c.length > 1 && c[1].t - c[0].t < 20 * 3600e3;
+    const day = (t) => Math.floor((t + 5.5 * 3600e3) / 86400e3);
     for (let i = 0; i < c.length; i++) {
+      if (intraday && i > 0 && day(c[i].t) !== day(c[i - 1].t)) { pv = 0; vv = 0; }
       const tp = (c[i].h + c[i].l + c[i].c) / 3, v = c[i].v || 0;
       pv += tp * v; vv += v; out[i] = vv > 0 ? pv / vv : null;
     }
@@ -1029,9 +1033,17 @@ class PAChart {
     /* x labels */
     const tickEvery = Math.max(1, Math.round(n / Math.max(3, Math.floor(this.W / 90))));
     ctx.textAlign = "center"; ctx.fillStyle = C.mutInk;
+    const intra = this._intraday(), istDay = (t) => Math.floor((t + 19800e3) / 86400e3);
+    let prevDay = null;
     for (let i = this.view.i0; i <= this.view.i1; i++) {
       if ((i - this.view.i0) % tickEvery !== 0) continue;
       const d = new Date(this.c[i].t);
+      if (intra) {                                   // intraday: time of day (IST); the date where the day changes
+        const dy = istDay(this.c[i].t), newDay = dy !== prevDay; prevDay = dy;
+        const lb = newDay ? d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", timeZone: "Asia/Kolkata" }) : d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" });
+        ctx.fillStyle = newDay ? C.mutInk : C.mutInk; ctx.fillText(lb, this._xAt(i, z), this.H - 8);
+        continue;
+      }
       const lbl = n > 260 ? d.toLocaleDateString("en-IN", { month: "short", year: "2-digit" }) : n > 40 ? d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) + (this._intraday() ? " " + d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "");
       ctx.fillText(lbl, this._xAt(i, z), this.H - 8);
     }

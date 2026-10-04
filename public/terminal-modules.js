@@ -851,7 +851,7 @@ TABS.reports = {
         rep._vmsModelStatus = vmsForSymbol.modelStatus;
         rep._vmsLastRecalcAt = vmsForSymbol.lastRecalcAt;
       }
-      $("#aiMode").textContent = rep.meta.mode === "ai" ? "AI narrative (Claude)" : "Research Report - Not an Invesetment Advice";
+      $("#aiMode").textContent = rep.meta.mode === "ai" ? "AI narrative (Claude)" : "Research Report - Not Investment Advice";
       // Show VMS sync status
       const vmsNote = !useLab
         ? `<span class="vms-tag vms-ev" style="margin-left:8px">MARKET-BASED VALUATION · MODELING LAB DCF OFF</span>`
@@ -876,7 +876,7 @@ TABS.reports = {
     const partial = r && r.meta && (r.meta.failures || []).length;
     if (r) note = `<span class="vms-tag vms-ev" style="margin-left:8px" title="${esc(`${(r.meta && r.meta.evidence) || 0} evidence items · research cut-off ${r.cutoff}${partial ? ` · ${r.meta.failures.map((f) => f.group).join(", ")} kept to the core text` : ""}`)}">RESEARCH ${partial ? "PARTIALLY " : ""}INTEGRATED · ${src} SOURCE${src === 1 ? "" : "S"}</span>`;
     else if (job && job.status === "running") note = `<span class="vms-tag vms-adj" style="margin-left:8px">RESEARCHING LATEST DISCLOSURES · ${esc(job.stage || "")} · ${job.elapsed || 0}s</span>`;
-    else if (job && job.status === "failed") note = `<span class="vms-tag vms-adj" style="margin-left:8px" title="${esc(job.reason || "")}">RESEARCH UNAVAILABLE — CORE REPORT SHOWN</span>`;
+    // a failed research job leaves no trace: the deterministic report is the report
     else if (rep.researchJob) note = `<span class="vms-tag vms-adj" style="margin-left:8px">RESEARCHING LATEST DISCLOSURES…</span>`;
     const qa = rep.qa, qaTag = qa && qa.total ? `<span class="vms-tag ${qa.failed ? "vms-adj" : "vms-ev"}" style="margin-left:8px" title="${esc(qa.checks.filter((c) => c.status !== "pass").map((c) => c.label + ": " + c.detail).join(" · ") || "All consistency checks passed")}">${qa.failed ? `${qa.failed} CHECK${qa.failed === 1 ? "" : "S"} FAILED` : `CHECKS ${qa.total - qa.notes}/${qa.total - qa.notes} PASSED`}</span>` : "";
     $("#reportStatus").innerHTML = `done ${this._vmsNote || ""}${qaTag}${note}`;
@@ -904,9 +904,9 @@ TABS.reports = {
         const wasOpen = RG.isOpen(), y = window.scrollY;
         $("#reportCanvas").innerHTML = renderReport(rep);
         if (wasOpen) window.scrollTo(0, 0); else window.scrollTo(0, y);   // keep a reader's place if they were already reading
-        RG.finish(j.status === "partial" ? "Report ready — some sections kept to the core analysis" : "Report ready");
+        RG.finish("Report ready");
       } else {
-        RG.finish("Research unavailable — showing the core report");
+        RG.finish("Report ready");
       }
       this._researchStatus(rep, j);
       return;
@@ -3538,7 +3538,17 @@ const IDCF = {
       const data = isRecompute
         ? await api(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(mergedOverrides) })
         : await api(url);
-      if (data.error) { this.setStatus(data.error); this.busy = false; return; }
+      if (data.error) {
+        // no model for this company (e.g. the provider returned no revenue or share count):
+        // clear the previous company's model everywhere and say why, instead of rendering it
+        if (data.meta) { data.meta.symbol = symbol; valuationModelState.update({ ...data, idcf: null }); }
+        this.data = null;
+        const out = $("#idcfOut");
+        if (out) out.innerHTML = `<div class="empty-mini">${esc(data.error)}</div>`;
+        const expBtn = $("#idcfExportExcel");
+        if (expBtn) expBtn.style.display = "none";
+        this.setStatus(esc(data.error)); this.busy = false; return;
+      }
 
       // Stamp meta for downstream
       data.meta.symbol = symbol;
@@ -3598,7 +3608,7 @@ const IDCF = {
       if (this.symbol !== sym || !this.data || !this.data.planAI || this.data.planAI.key !== key) return;
       let r = null; try { r = await api("/api/idcf-rationale/" + key); } catch { /* retry */ }
       if (r && (r.status === "done" || r.status === "failed")) {
-        this.data.planAI = { key, status: r.status, result: r.result || null, reason: r.status === "failed" ? "AI rationale could not be generated — engine rationale shown" : null };
+        this.data.planAI = { key, status: r.status, result: r.result || null };
         const root = document.getElementById("aplRoot");
         if (root) root.outerHTML = renderAssumptionPlan(this.data);
         return;
@@ -3628,7 +3638,8 @@ const IDCF = {
   },
 
   renderAssumptionPanel(overrides) {
-    const a = this.data.idcf.assumptions, w = this.data.idcf.waccBuild;
+    if (!this.data || !this.data.idcf || !this.data.idcf.assumptions) return;   // no model for this company
+    const a = this.data.idcf.assumptions, w = this.data.idcf.waccBuild || {};
     const ev = this.data.evidence?.assumptions || {};
     const N2 = (v) => v != null && isFinite(v) ? (+v).toFixed(2) : "";
     const confTag = (c) => c === "High" ? "conf-h" : c === "Medium" ? "conf-m" : "conf-l";
@@ -4377,9 +4388,12 @@ function renderAssumptionPlan(data) {
   const allAdj = (p.adjustments || []).map((a) => `<tr class="apl-row"><td class="apl-name">${esc(a.driver)}</td><td class="apl-txt"><b>${esc(a.label)}</b></td><td class="apl-num apl-eff-c">${esc(a.effect || "")}</td><td class="apl-txt apl-basis">${esc(a.why || "")}</td></tr>`).join("");
   const adjTable = allAdj ? `<div class="ai-table-wrap"><table class="apl-t apl-kv"><thead><tr><th>Driver</th><th>Factor</th><th class="apl-num">Effect</th><th>Why</th></tr></thead><tbody>${allAdj}</tbody></table></div>` : `<div class="muted apl-empty">No adjustments — the defaults are the evidence as built.</div>`;
 
-  const aiNote = aiState === "running" ? `<span class="apl-pending">AI rationale is being written…</span>`
-    : aiState === "done" ? `<span class="apl-ok">engine commentary + AI check · ${esc((data.planAI.result && data.planAI.result.model) || "Gemini")}</span>`
-    : `<span class="muted">engine commentary${data.planAI && data.planAI.reason ? ` · ${esc(data.planAI.reason)}` : ""}</span>`;
+  // the AI check runs only on request, and only when the server says AI is available;
+  // otherwise the table reads as the engine's own analysis, with no trace of AI
+  const aiOn = typeof window !== "undefined" && window.MT_AI && window.MT_AI.available;
+  const aiNote = aiState === "running" ? `<span class="apl-pending">AI check running…</span>`
+    : aiState === "done" ? `<span class="apl-ok">engine commentary + AI check</span>`
+    : `<span class="muted">engine commentary</span>${aiOn ? ` <button class="mini-btn apl-ai-btn" type="button" data-apl-ai title="Ask the AI analyst to review these assumptions (never changes a number)">✦ AI check</button>` : ""}`;
   const qual = `<div class="apl-quality">
       <span>Earnings quality <b>${esc(q.earningsQualityGrade || "—")}</b></span><span>Moat <b>${esc(q.moat || "—")}</b></span>
       <span>ROIC <b>${q.roic != null ? N1(q.roic) + "%" : "—"}</b></span><span>Cash conversion <b>${q.cashConversion != null ? N2(q.cashConversion) + "×" : "—"}</b></span>
@@ -4407,6 +4421,19 @@ function renderAssumptionPlan(data) {
     </div>
   </div>`;
 }
+/* ✦ AI check on the default plan — on request only */
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest && e.target.closest("[data-apl-ai]");
+  if (!b || !IDCF.data || !IDCF.symbol) return;
+  b.disabled = true;
+  let r = null;
+  try { r = await api("/api/idcf-rationale/start/" + encodeURIComponent(IDCF.symbol), { method: "POST" }); } catch { r = null; }
+  if (!IDCF.data) return;
+  IDCF.data.planAI = r && r.key && (r.status === "running" || r.status === "done") ? { key: r.key, status: r.status, result: r.result || null } : { status: "off" };
+  const root = document.getElementById("aplRoot");
+  if (root) root.outerHTML = renderAssumptionPlan(IDCF.data);
+  IDCF.pollPlanAI();
+});
 /* expand / collapse the assumption table (state kept for the session) */
 document.addEventListener("click", (e) => {
   const b = e.target.closest && e.target.closest("[data-apl-toggle]");
@@ -4980,7 +5007,7 @@ function renderInstitutionalDCF(data, uiState) {
   if (b.terminalShare > 0.7) drivers.push("the terminal value, which carries " + P(b.terminalShare*100) + " of enterprise value");
   drivers.push("the " + P(a.growthY1_5) + " revenue growth assumption and the " + P(a.ebitdaMargin) + " EBITDA margin");
   const aggressive = a.growthY1_5 > 15 || a.terminalG > 4.5;
-  const s17 = sec(17, "Valuation Commentary", "deterministic — add ANTHROPIC_API_KEY for AI prose",
+  const s17 = sec(17, "Valuation Commentary", "how the value is built",
     `<div class="idcf-prose">
       <p>The base case yields an intrinsic value of <b>${px(b.perShare)}</b>, implying <b class="${F.cls(up)}">${P(up)}</b> versus the current ${px(d.currentPrice)}. Value is driven primarily by ${drivers.join(", and ")}.</p>
       <p>The most sensitive assumptions are the WACC (${N(a.wacc,1)}%) and terminal growth (${P(a.terminalG)}); the sensitivity grid in Section 15 shows how the per-share value swings across a ±1.5% WACC and ±1% growth band. ${d.tvWarn ? "Because the terminal value dominates enterprise value, small changes in the long-run assumptions move the target materially." : "Terminal value is within a comfortable share of enterprise value, so the target rests on the explicit forecast rather than the perpetuity."}</p>

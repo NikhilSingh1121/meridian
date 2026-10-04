@@ -660,6 +660,7 @@ async function corporateAnnouncements(symbol) {
 }
 
 module.exports = {
+  nseGet,
   corporateAnnouncements, shareholdingPattern, pledgeSummary, insiderTrades, corporateActions, eventCalendar, resultsFilings, archiveText, nseDate,
   fiiDiiLatest, fiiDiiPack, fiiWindows, fiiExtras, seedHistoryFromEnv, allIndices,
   // historical baseline + aggregation (exported for the routes and tests)

@@ -13,6 +13,9 @@ const yahoo = require("../providers/yahoo");
 const { cached, cachedDurable } = require("../cache");
 const Q = require("../lib/quant");
 const S = require("../lib/quant-stats");
+const A = require("../lib/quant-assess");
+/* conclusion + assumption check for the top of each desk; never allowed to break the report */
+const withAssessment = (out, fn) => { try { return { ...out, assessment: fn(out) }; } catch (e) { console.warn("[quant] assessment:", e.message); return out; } };
 
 const ANALYSIS_TTL = 10 * 60 * 1000;   // computed reports
 const HISTORY_TTL = 5 * 60 * 1000;     // shares keys with routes/market.js
@@ -93,7 +96,7 @@ const regionOf = (symbol) => (/\.(NS|BO)$/i.test(symbol) ? "india" : "us");
 
 /** GET /api/quant/strategies — the backtester's rule catalogue (static). */
 router.get("/quant/strategies", (_req, res) => {
-  res.json({ strategies: Q.strategyCatalogue() });
+  res.json({ strategies: Q.strategyCatalogue().map((x) => ({ ...x, typical: A.TYPICAL[x.id] || null })) });
 });
 
 /**
@@ -129,7 +132,7 @@ router.get("/quant/backtest/:symbol", async (req, res) => {
       return r;
     });
     if (out.error) return res.status(422).json(out);
-    res.json(out);
+    res.json(withAssessment(out, (o) => A.assessBacktest(o, { symbol })));
   } catch (e) {
     failUpstream(res, e, symbol, "Backtest");
   }
@@ -218,7 +221,7 @@ router.get("/quant/factors/:symbol", async (req, res) => {
       };
     });
     if (out.error) return res.status(422).json(out);
-    res.json(out);
+    res.json(withAssessment(out, (o) => A.assessFactors(o)));
   } catch (e) {
     failUpstream(res, e, symbol, "Factor attribution");
   }
@@ -255,7 +258,7 @@ router.get("/quant/pairs", async (req, res) => {
       return r;
     });
     if (out.error) return res.status(422).json(out);
-    res.json(out);
+    res.json(withAssessment(out, (o) => A.assessPairs(o)));
   } catch (e) {
     failUpstream(res, e, `${a} / ${b}`, "Pair analysis");
   }
@@ -279,9 +282,33 @@ router.get("/quant/profile/:symbol", async (req, res) => {
       return r;
     });
     if (out.error) return res.status(422).json(out);
-    res.json(out);
+    res.json(withAssessment(out, (o) => A.assessProfile(o, { symbol })));
   } catch (e) {
     failUpstream(res, e, symbol, "Return profile");
+  }
+});
+
+/**
+ * GET /api/quant/compare/:symbol?range=5y&costBps=15
+ * Every strategy at its defaults on the same candles: a leaderboard, with a
+ * three-period consistency check. Shares the backtester's history cache.
+ */
+router.get("/quant/compare/:symbol", async (req, res) => {
+  const symbol = cleanSym(req.params.symbol);
+  const range = cleanRange(req.query.range);
+  const costBps = Math.max(0, Math.min(200, Number(req.query.costBps ?? 10) || 0));
+  try {
+    const out = await cached(`qcmp:${symbol}:${range}:${costBps}`, ANALYSIS_TTL, async () => {
+      const h = await history(symbol, range);
+      if (!h || !h.points || h.points.length < 250) return { error: `Not enough daily history for ${symbol}.` };
+      const r = Q.compareStrategies(h.points, { costBps });
+      if (r.error) return r;
+      return { symbol, range, ...r };
+    });
+    if (out.error) return res.status(422).json(out);
+    res.json(out);
+  } catch (e) {
+    failUpstream(res, e, symbol, "Strategy comparison");
   }
 });
 

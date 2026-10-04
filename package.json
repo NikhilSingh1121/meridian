@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "test": "node --test server/lib/analytics.test.js server/lib/infrastructure.test.js server/lib/research-workbook.test.js server/lib/macrodata.test.js server/lib/quant.test.js server/lib/fiidii.test.js server/lib/payments-baseline.test.js server/lib/insights.test.js server/lib/pack.test.js server/lib/reportChecks.test.js server/lib/calls.test.js"
+    "test": "node --test server/lib/analytics.test.js server/lib/infrastructure.test.js server/lib/research-workbook.test.js server/lib/macrodata.test.js server/lib/quant.test.js server/lib/quant-assess.test.js server/lib/fiidii.test.js server/lib/payments-baseline.test.js server/lib/insights.test.js server/lib/pack.test.js server/lib/reportChecks.test.js server/lib/calls.test.js server/lib/aiGovernor.test.js server/scanner/test/m1-data.test.js server/scanner/test/m2-engine.test.js server/scanner/test/m3-live.test.js server/scanner/test/m8-perf.test.js server/scanner/test/m12-scanner-views.test.js server/scanner/test/m14-rotation.test.js server/scanner/test/m15-upstream.test.js"
   },
   "engines": {
     "node": ">=22"

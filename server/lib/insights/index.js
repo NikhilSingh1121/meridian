@@ -60,6 +60,17 @@ function step(job, key) {
 }
 
 const keyOf = (meta) => `${VERSION}|${String(meta.symbol).toUpperCase()}|${meta.date}`;
+const gov = require("../aiGovernor");
+/* research and document readings are reused for AI_RESEARCH_REUSE_DAYS (default 7)
+   instead of being redone every day: filings change quarterly, not daily */
+const REUSE_DAYS = () => { const v = +process.env.AI_RESEARCH_REUSE_DAYS; return Number.isFinite(v) && v >= 0 ? Math.min(30, v) : 7; };
+function recentKeys(meta) {
+  const out = [], d0 = new Date(String(meta.date) + "T00:00:00Z");
+  if (isNaN(d0)) return [keyOf(meta)];
+  for (let i = 0; i <= REUSE_DAYS(); i++) { const d = new Date(d0); d.setUTCDate(d.getUTCDate() - i); out.push(keyOf({ ...meta, date: d.toISOString().slice(0, 10) })); }
+  return out;
+}
+const aiUsable = () => gemini.hasKey() && gov.status().available;
 const fileOf = (key) => path.join(CACHE_DIR, crypto.createHash("sha1").update(key).digest("hex").slice(0, 24) + ".json");
 
 function cacheGet(key) {
@@ -84,6 +95,11 @@ function cachePut(key, research) {
    part-way (typically a quota or capacity limit) resumes on the next attempt
    rather than repeating browser sessions it already paid for */
 const passKey = (key) => `${key}|passes`;
+/* the most recent key in the reuse window whose document reading completed */
+function recentPassKey(meta) {
+  for (const k of recentKeys(meta)) { const p = passesGet(k); if (p.__complete) return k; }
+  return keyOf(meta);
+}
 function passesGet(key) {
   try { const j = JSON.parse(fs.readFileSync(fileOf(passKey(key)), "utf8")); if (j && j.key === passKey(key)) return j.passes || {}; } catch { }
   return {};
@@ -106,7 +122,7 @@ async function runPipeline(job, report) {
     job.stage = "Planning research";
     const reading = [...jobs.values()].find((j) => j.key === job.key && j.kind === "docs" && j.status === "running" && j.promise);
     if (reading) { onProgress("discover"); await Promise.race([reading.promise, new Promise((r) => setTimeout(r, Math.round(budget * 0.45)))]); }
-    const done = passesGet(job.key);
+    const done = passesGet(recentPassKey(report.meta));
     const research = await conductDeepCompanyResearch({
       report, profile, onProgress, donePasses: done, deadline: t0 + Math.round(budget * 0.45),
       onPass: (k, rec) => { done[k] = rec; passesPut(job.key, done); },
@@ -150,10 +166,9 @@ async function runPipeline(job, report) {
  * @returns { research } when cached, { job } when running/started, or { status } when off
  */
 function researchForReport(report) {
-  if (!gemini.hasKey()) return { status: { available: false, reason: "not configured (GEMINI_API_KEY missing)" } };
   const key = keyOf(report.meta);
-  const cached = cacheGet(key);
-  if (cached) return { research: cached, status: { available: true, cached: true } };
+  for (const k of recentKeys(report.meta)) { const cached = cacheGet(k); if (cached) return { research: cached, status: { available: true, cached: true } }; }
+  if (!aiUsable()) return { status: { available: false, reason: "off" } };
   const running = [...jobs.values()].find((j) => j.key === key && j.kind !== "docs" && j.status === "running");
   if (running) return { job: publicJob(running) };
   const job = { id: crypto.randomBytes(8).toString("hex"), kind: "report", key, symbol: report.meta.symbol, status: "running", stage: "Queued", step: -1, startedAt: Date.now(), budget: BUDGET_MS() };
@@ -201,8 +216,9 @@ function docsView(key, job) {
 
 /* start (or join) document reading for a company; returns the current view */
 function documentsFor(report, { start = true } = {}) {
-  if (!gemini.hasKey()) return { status: "off" };
-  const key = keyOf(report.meta);
+  const key = recentPassKey(report.meta);
+  // a reading already on file is shown even when AI is off; nothing new is started then
+  if (!aiUsable()) { const v = docsView(key, null); return v.count ? v : { status: "off" }; }
   const done = passesGet(key);
   const running = [...jobs.values()].find((j) => j.key === key && j.status === "running");
   if (running || done.__complete || !start) return docsView(key, running);

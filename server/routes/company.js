@@ -168,7 +168,7 @@ async function buildLens(s, { mode = "market", labDcf = null } = {}) {
   const dcfM = ok.find(isAnchor);
   const rel = ok.filter((m) => !isAnchor(m));
   const w = (m) => m.weight;
-  const labD = mode !== "lab" ? null : labDcf ? { value: labDcf.target, wacc: labDcf.assumptions.wacc, terminalG: labDcf.assumptions.terminalG, growth: labDcf.assumptions.growthY1_5, terminalShare: labDcf.terminalShare }
+  const labD = mode !== "lab" ? null : labDcf ? { value: labDcf.target, wacc: labDcf.assumptions?.wacc, terminalG: labDcf.assumptions?.terminalG, growth: labDcf.assumptions?.growthY1_5, terminalShare: labDcf.terminalShare }
     : idcf && !idcf.error ? { value: idcf.target, wacc: idcf.assumptions.wacc, terminalG: idcf.assumptions.terminalG, growth: idcf.assumptions.growthY1_5, terminalShare: idcf.base.terminalShare } : null;
   let reverse = null;
   try { reverse = A.reverseDCF(bundle, co.statements, co.dcf.inputs, co.growth, {}, co.price); } catch { reverse = null; }
@@ -691,7 +691,14 @@ async function buildInstitutionalDCF(symbol, overrides = {}, opts = {}) {
     catch (e) { tornado = { error: "Tornado build failed: " + String(e.message || e).slice(0, 120) }; }
   }
 
+  // the engine returns null when the source data can't support a DCF — say why, so no view
+  // has to guess (every consumer checks `error` / a null idcf instead of crashing)
+  const dcfError = idcf && !idcf.error ? undefined : idcf && idcf.error ? idcf.error
+    : !(co.statements.income || []).some((r) => r.revenue > 0) ? `A DCF can't be built for ${co.name}: the data provider returned no revenue for any recent year.`
+    : !dcfIn.sharesOut ? `A DCF can't be built for ${co.name}: the data provider returned no share count, so a per-share value can't be calculated.`
+    : `A DCF can't be built for ${co.name} from the available statements.`;
   return {
+    error: dcfError,
     meta: {
       symbol, name: co.name, currency: co.currency, exchange: co.exchange,
       price: co.price, sector: co.profile.sector, unitNote: currencyUnit(co.currency),
@@ -706,12 +713,27 @@ async function buildInstitutionalDCF(symbol, overrides = {}, opts = {}) {
     // deterministic key-assumptions note — always available; AI only corroborates on top
     commentary: (() => { try { return require("../lib/dcfCommentary").commentary(plan, idcf, { name: co.name, currencySymbol: co.currency === "INR" ? "₹" : co.currency === "USD" ? "$" : "", tornado }); } catch { return null; } })(),
     // analyst commentary on the default plan — started once per plan, cached; never alters a number
-    planAI: (() => { try { const r = DcfAI.ensure(plan, { name: co.name, symbol, sector: co.profile.sector }, { start: opts.ai !== false }); return { key: r.key || null, status: r.status, reason: r.reason || null, result: r.result || null }; } catch { return { status: "off" }; } })(),
+    planAI: (() => { try { const r = DcfAI.ensure(plan, { name: co.name, symbol, sector: co.profile.sector }, { start: opts.ai === true }); return { key: r.key || null, status: r.status, reason: r.reason || null, result: r.result || null }; } catch { return { status: "off" }; } })(),
     assumptionsUsed: { ...dcfIn, paths: undefined },
     evidence,
   };
 }
 
+router.get("/ai/status", (_req, res) => {
+  const st = require("../lib/aiGovernor").status();
+  const keyed = require("../lib/insights/gemini").hasKey() || require("../lib/insights/groq").hasKey();
+  res.set("Cache-Control", "no-store").json({ available: !!(keyed && st.available) });
+});
+/* the AI check on the default plan runs only when the user asks for it (it costs model tokens) */
+router.post("/idcf-rationale/start/:symbol", async (req, res) => {
+  const symbol = req.params.symbol.toUpperCase();
+  try {
+    const co = await getCo(symbol), bundle = await getBundle(symbol);
+    const { plan } = await engineInputs(symbol, co, bundle);
+    const r = DcfAI.ensure(plan, { name: co.name, symbol, sector: co.profile.sector }, { start: true });
+    res.set("Cache-Control", "no-store").json({ key: r.key || null, status: r.status, result: r.result || null });
+  } catch { res.json({ status: "off" }); }
+});
 router.get("/idcf-rationale/:key", (req, res) => {
   const k = String(req.params.key || "").replace(/[^a-f0-9]/g, "").slice(0, 24);
   res.set("Cache-Control", "no-store").json(DcfAI.status(k));

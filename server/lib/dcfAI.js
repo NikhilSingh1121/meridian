@@ -20,6 +20,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const gemini = require("./insights/gemini");
+const gov = require("./aiGovernor");
 
 const VERSION = "dcf-ai-v2";
 const DIR = process.env.MERIDIAN_DCF_AI_DIR || path.join(__dirname, "..", "data", "dcf-ai");
@@ -96,7 +97,7 @@ function validate(json, dg) {
 async function run(key, dg) {
   const r = await gemini.chat({
     messages: [{ role: "system", content: SYSTEM }, { role: "user", content: `DATA (JSON):\n${JSON.stringify(dg)}\n\nWrite: overview (3-4 sentences on the shape of the forecast and what drives value), then 2-4 sentences each for growth, ebitdaMargin, reinvestment (capex and D&A), workingCapital, taxRate, wacc and terminal, and watch (3-5 short items: what would make you revise the assumptions). Then corroboration: for growth, ebitdaMargin, capexPctRev, wcPctRev, taxRate (each about its first forecast year value), wacc and terminalG give verdict, suggested (only if you would use a different value, in percent) and a one-sentence reason.` }],
-    schema: { name: "dcf_rationale", schema: SCHEMA }, maxTokens: 2600, reasoning: "low", timeoutMs: 60_000,
+    feature: "dcf", schema: { name: "dcf_rationale", schema: SCHEMA }, maxTokens: 2600, reasoning: "low", timeoutMs: 60_000,
   });
   const result = { ...validate(r.json || {}, dg), model: r.model, tokens: r.usage && r.usage.total_tokens, generatedAt: new Date().toISOString() };
   cachePut(key, result);
@@ -111,11 +112,11 @@ function ensure(plan, meta, { start = true } = {}) {
   if (hit) return { key, status: "done", result: hit };
   const j = jobs.get(key);
   if (j) return { key, status: j.status, result: j.result || null, error: j.error || null };
-  if (!gemini.hasKey()) return { key, status: "off", reason: "AI rationale needs GEMINI_API_KEY — the engine rationale is shown instead" };
+  if (!gemini.hasKey() || !gov.status().available) return { key, status: "off" };
   if (!start) return { key, status: "idle" };
   const today = new Date().toISOString().slice(0, 10);
   if (day !== today) { day = today; started = 0; }
-  if (started >= DAILY_MAX) return { key, status: "off", reason: "daily AI budget reached — the engine rationale is shown instead" };
+  if (started >= DAILY_MAX) return { key, status: "off" };
   started++;
   const job = { status: "running" };
   job.promise = run(key, dg)
