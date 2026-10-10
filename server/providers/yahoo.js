@@ -149,9 +149,9 @@ async function getQuote(symbol) {
   c.lastAsk = Date.now();
   try {
     const pc = priceCache.get(symbol);
-    // the batch endpoint needs Yahoo's session (crumb); while that path cools down, use the chart call
-    if (!(pc && Date.now() - pc.at < PRICE_FRESH) && require("../lib/upstream").sessionCooling()) throw new Error("session cooling");
-    const r = pc && Date.now() - pc.at < PRICE_FRESH ? pc.r : await batchPrice(symbol);
+    // batch prices: v7 quote with a session token, else the token-free spark endpoint (inside quoteFields) —
+    // one request per 20–50 symbols instead of a chart call per symbol while the token is unavailable
+    const r =pc && Date.now() - pc.at < PRICE_FRESH ? pc.r : await batchPrice(symbol);
     const price = r.regularMarketPrice;
     const mt = tms(r.regularMarketTime);
     if (!(price > 0)) throw new Error("no price");

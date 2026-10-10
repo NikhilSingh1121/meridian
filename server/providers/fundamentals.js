@@ -1,61 +1,130 @@
 /** Fundamentals provider — wraps yahoo-finance2 (handles Yahoo auth/crumbs).
     Live company fundamentals: statements, ratios inputs, holders, estimates, news. */
 
-/* ── Yahoo session fallback ─────────────────────────────────────────────────
-   Most Yahoo endpoints need a "crumb" (a session token). The library asks
-   query1…/v1/test/getcrumb for it, and from cloud IPs Yahoo sometimes answers 429
-   for a long while — typically right after a redeploy, when the process has no
-   session cached, so every fundamentals call fails ("Failed to get crumb, status
-   429"). Fallback: take the session cookie from fc.yahoo.com, ask query2 (then
-   query1) for the crumb, and store both in the library's cookie jar, which it
-   checks before minting its own. Every later call then reuses that session. */
+/* ── Yahoo session (crumb) ──────────────────────────────────────────────────
+   Four Yahoo endpoints need a "crumb" (session token): company summaries, v7 quotes,
+   the screener and the sector pages. From cloud IPs (Render) Yahoo often refuses the
+   token endpoint (/v1/test/getcrumb → 429), typically right after a redeploy, when
+   the new process has no session yet. Two library details turned that into a lasting
+   outage: (1) yahoo-finance2 caches a FAILED crumb request for the life of the process
+   and never asks again, and (2) a crumb written into its cookie jar is ignored once a
+   crumb (good or failed) is cached. So the session is established here, not by the
+   library:
+     · a session given by the operator (YAHOO_COOKIE + YAHOO_CRUMB env vars), if set;
+     · the A3 cookie from fc.yahoo.com, then the crumb from query2 / query1 getcrumb;
+     · if getcrumb is refused, the crumb embedded in the finance.yahoo.com quote page
+       (a different endpoint, so a refused getcrumb does not block it);
+   then the library's cached state is cleared (getCrumbClear) and the new cookie +
+   crumb are put in its jar, where it finds them before ever minting its own. The
+   session is set up once at start-up and again whenever a call fails on the crumb,
+   with retries spaced 30 s → 15 min so a refusing Yahoo is not hammered. These
+   requests use https directly (huge response headers on the quote page overflow
+   fetch's limit) and are paced here instead of by the upstream breakers. */
+const https = require("https");
+const path = require("path");
+const { pathToFileURL } = require("url");
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-const CRUMB_ERR = /Failed to get crumb|Could not find crumb|Invalid Crumb|Unauthorized/i;
-let _seeding = null, _seededAt = 0;
-function seedYahooSession(inst) {
+const CRUMB_ERR = /Failed to get crumb|Could not find crumb|Invalid Crumb|Unauthorized|unable to access this feature|No set-cookie header|cool-down|fetch failed/i;
+const validCrumb = (c) => typeof c === "string" && c.length >= 5 && c.length < 64 && !/[\s<>{}"]/.test(c);
+const SES = { ok: false, source: null, at: 0, fails: 0, nextAt: 0, lastError: null, envBad: false };
+let _seeding = null;
+
+function httpsGet(url, headers = {}, maxBody = 3e6) {
+  return new Promise((resolve) => {
+    const req = https.get(url, { headers: { "User-Agent": UA, ...headers }, maxHeaderSize: 256 * 1024 }, (res) => {
+      let body = "", size = 0; res.setEncoding("utf8");
+      res.on("data", (d) => { size += d.length; if (size <= maxBody) body += d; else res.destroy(); });
+      res.on("end", () => resolve({ status: res.statusCode, headers: res.headers, body }));
+      res.on("close", () => resolve({ status: res.statusCode, headers: res.headers, body }));
+    });
+    req.on("error", () => resolve(null));
+    req.setTimeout(15_000, () => req.destroy());
+  });
+}
+const cookiesOf = (r) => ((r && r.headers && r.headers["set-cookie"]) || []);
+const cookieHeader = (setCookies) => setCookies.map((c) => c.split(";")[0]).filter(Boolean).join("; ");
+
+/** obtain { setCookies, crumb, source } without the library — null when Yahoo refuses every route */
+async function mintSession() {
+  const envCookie = (process.env.YAHOO_COOKIE || "").trim(), envCrumb = (process.env.YAHOO_CRUMB || "").trim();
+  if (envCookie && validCrumb(envCrumb) && !SES.envBad) {
+    const setCookies = envCookie.split(/;\s*/).filter((kv) => /^[^=\s]+=/.test(kv)).map((kv) => `${kv}; Domain=.yahoo.com; Path=/; Secure`);
+    return { setCookies, crumb: envCrumb, source: "YAHOO_COOKIE / YAHOO_CRUMB" };
+  }
+  let setCookies = cookiesOf(await httpsGet("https://fc.yahoo.com/", { Accept: "text/html" }, 2e4));
+  if (!setCookies.length) setCookies = cookiesOf(await httpsGet("https://www.yahoo.com/", { Accept: "text/html" }, 2e4));
+  const cookie = cookieHeader(setCookies);
+  if (!cookie) return null;
+  for (const host of ["query2", "query1"]) {
+    const r = await httpsGet(`https://${host}.finance.yahoo.com/v1/test/getcrumb`, { cookie, Accept: "*/*", Origin: "https://finance.yahoo.com", Referer: "https://finance.yahoo.com/" }, 2e3);
+    const crumb = r && r.status === 200 ? String(r.body || "").trim() : "";
+    if (validCrumb(crumb)) return { setCookies, crumb, source: `${host} getcrumb` };
+  }
+  // getcrumb refused: the quote page carries the same crumb in its embedded data
+  const page = await httpsGet("https://finance.yahoo.com/quote/AAPL/", { cookie, Accept: "text/html,application/xhtml+xml" });
+  const m = page && page.status === 200 && /"crumb"\s*:\s*"([^"]{5,64})"/.exec(page.body || "");
+  const crumb = m ? m[1].replace(/\\u002F/gi, "/").replace(/\\\//g, "/") : "";
+  if (validCrumb(crumb)) return { setCookies, crumb, source: "quote page" };
+  return null;
+}
+
+/* the library's module-level crumb cache (same module instance the library itself imports) */
+let _crumbClear;
+async function crumbClear() {
+  if (_crumbClear !== undefined) return _crumbClear;
+  try {
+    const root = path.resolve(path.dirname(require.resolve("yahoo-finance2")), "..", "..");
+    const mod = await import(pathToFileURL(path.join(root, "esm", "src", "lib", "getCrumb.js")).href);
+    _crumbClear = typeof mod.getCrumbClear === "function" ? mod.getCrumbClear : null;
+  } catch { _crumbClear = null; }
+  return _crumbClear;
+}
+
+/** establish a session for the library; resolves true when a fresh crumb is in its jar */
+function seedYahooSession(inst, force = false) {
   if (_seeding) return _seeding;
-  if (Date.now() - _seededAt < 30_000) return Promise.resolve(false);   // don't hammer Yahoo
+  if (!force && Date.now() < SES.nextAt) return Promise.resolve(false);   // spaced retries — never hammer Yahoo
   _seeding = (async () => {
     const jar = inst && inst._opts && inst._opts.cookieJar;
     if (!jar) return false;
-    const r1 = await fetch("https://fc.yahoo.com/", { headers: { "User-Agent": UA }, redirect: "manual", signal: AbortSignal.timeout(10_000) }).catch(() => null);
-    const sc = r1 && r1.headers.getSetCookie ? r1.headers.getSetCookie() : [];
-    if (sc.length) await jar.setFromSetCookieHeaders(sc, "https://fc.yahoo.com/");
-    for (const host of ["query2", "query1"]) {
-      const url = `https://${host}.finance.yahoo.com/v1/test/getcrumb`;
-      const r2 = await fetch(url, {
-        headers: { "User-Agent": UA, cookie: await jar.getCookieString(url), accept: "*/*", origin: "https://finance.yahoo.com", referer: "https://finance.yahoo.com/" },
-        signal: AbortSignal.timeout(10_000),
-      }).catch(() => null);
-      if (!r2 || r2.status !== 200) continue;
-      const crumb = (await r2.text().catch(() => "")).trim();
-      if (crumb && crumb.length < 64 && !/[\s<{]/.test(crumb)) {
-        await jar.setCookie(`crumb=${crumb}`, "http://config.yf2/");
-        console.log(`[yahoo] session re-established via fc.yahoo.com + ${host} (library crumb request was refused)`);
-        return true;
-      }
+    const s = await mintSession().catch((e) => { SES.lastError = e.message; return null; });
+    if (!s) {
+      SES.fails++; SES.ok = false;
+      SES.nextAt = Date.now() + Math.min(15 * 60e3, 30e3 * 2 ** Math.min(5, SES.fails - 1));
+      console.warn(`[yahoo] could not establish a session token (attempt ${SES.fails}); next try ${new Date(SES.nextAt).toISOString()}. Charts, prices, statements and search do not need it.`);
+      return false;
     }
-    console.warn("[yahoo] session fallback failed — Yahoo is refusing this host for now");
-    return false;
-  })().finally(() => { _seeding = null; _seededAt = Date.now(); });
+    const clear = await crumbClear();
+    if (clear) await clear(jar);            // drop the library's cached (failed or stale) crumb and cookies
+    await jar.setFromSetCookieHeaders(s.setCookies, "https://finance.yahoo.com/");
+    await jar.setCookie(`crumb=${s.crumb}`, "http://config.yf2/");
+    Object.assign(SES, { ok: true, source: s.source, at: Date.now(), fails: 0, nextAt: Date.now() + 60e3, lastError: null });
+    console.log(`[yahoo] session token established via ${s.source}`);
+    return true;
+  })().finally(() => { _seeding = null; });
   return _seeding;
 }
+function sessionInfo() { return { ok: SES.ok, source: SES.source, since: SES.at || null, failedAttempts: SES.fails, nextAttempt: SES.nextAt > Date.now() && !SES.ok ? new Date(SES.nextAt).toISOString() : null }; }
 
 let yfPromise = null;
 async function yf() {
   if (!yfPromise) {
     yfPromise = import("yahoo-finance2").then((m) => {
       const inst = new m.default({ suppressNotices: ["yahooSurvey", "ripHistorical"] });
-      // every library call: on a session (crumb) failure, re-establish the session through
-      // the fallback above and retry that call once
+      // set the session up front, so the library never has to mint one itself
+      if (process.env.NODE_ENV !== "test" && !process.env.NODE_TEST_CONTEXT && !process.env.YAHOO_NO_WARM) seedYahooSession(inst, true).catch(() => {});
+      // every library call: on a session (crumb) failure, re-establish the session and retry once
       return new Proxy(inst, {
         get(target, prop) {
           const v = target[prop];
           if (typeof v !== "function") return v;
           return async (...args) => {
+            if (_seeding) await _seeding.catch(() => {});      // a session being set up: wait for it instead of minting in parallel
             try { return await v.apply(target, args); }
             catch (e) {
-              if (!CRUMB_ERR.test(String(e && e.message)) || !(await seedYahooSession(target))) throw e;
+              if (!CRUMB_ERR.test(String(e && e.message))) throw e;
+              if (SES.source === "YAHOO_COOKIE / YAHOO_CRUMB" && /Invalid Crumb|Unauthorized/i.test(String(e.message))) { SES.envBad = true; SES.nextAt = 0; console.warn("[yahoo] the YAHOO_COOKIE / YAHOO_CRUMB session was rejected — minting a fresh one instead"); }
+              if (!(await seedYahooSession(target))) throw e;
               return v.apply(target, args);
             }
           };
@@ -64,6 +133,53 @@ async function yf() {
     });
   }
   return yfPromise;
+}
+
+/* ── token-free price fields (Yahoo's spark endpoint) ────────────────────────
+   Up to 20 symbols per request, no session token needed — the fallback for the v7 quote
+   calls (batch prices, breadth) whenever the token is unavailable. Same row shape as the
+   library's quote(); daily mode adds 50 / 200-day averages and 3-month average volume, which
+   move once a day and so are fetched at most every 30 minutes per symbol. */
+async function sparkFetch(symbols, range, interval) {
+  const out = [];
+  for (let i = 0; i < symbols.length; i += 20) {
+    const part = symbols.slice(i, i + 20);
+    const r = await fetch(`https://query1.finance.yahoo.com/v7/finance/spark?symbols=${part.map(encodeURIComponent).join(",")}&range=${range}&interval=${interval}`, { headers: { "User-Agent": UA, Accept: "application/json" } });
+    if (!r.ok) throw new Error(`spark ${r.status}`);
+    const j = await r.json();
+    for (const it of (j && j.spark && j.spark.result) || []) { const resp = it.response && it.response[0]; if (resp && resp.meta) out.push({ symbol: it.symbol, resp }); }
+  }
+  return out;
+}
+const dailyStats = new Map();   // symbol → { at, fiftyDayAverage, twoHundredDayAverage, averageDailyVolume3Month }
+async function sparkRows(symbols, { daily = false } = {}) {
+  const out = [];
+  for (const { symbol, resp } of await sparkFetch(symbols, "1d", "5m")) {
+    const m = resp.meta; if (!(m.regularMarketPrice > 0)) continue;
+    const prev = m.previousClose ?? m.chartPreviousClose ?? null;
+    const reg = m.currentTradingPeriod && m.currentTradingPeriod.regular, nowS = Date.now() / 1000;
+    out.push({
+      symbol, shortName: m.shortName || m.longName || symbol, longName: m.longName, currency: m.currency,
+      regularMarketPrice: m.regularMarketPrice, regularMarketPreviousClose: prev,
+      regularMarketChange: prev ? m.regularMarketPrice - prev : undefined, regularMarketChangePercent: prev ? (m.regularMarketPrice / prev - 1) * 100 : m.regularMarketChangePercent,
+      regularMarketTime: m.regularMarketTime, regularMarketDayHigh: m.regularMarketDayHigh, regularMarketDayLow: m.regularMarketDayLow,
+      regularMarketVolume: m.regularMarketVolume, fiftyTwoWeekHigh: m.fiftyTwoWeekHigh, fiftyTwoWeekLow: m.fiftyTwoWeekLow,
+      marketState: reg && nowS >= reg.start && nowS < reg.end ? "REGULAR" : "CLOSED", __source: "spark",
+    });
+  }
+  if (daily && out.length) {
+    const stale = out.map((r) => r.symbol).filter((s) => !(dailyStats.get(s) && Date.now() - dailyStats.get(s).at < 30 * 60e3));
+    if (stale.length) {
+      const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : undefined);
+      for (const { symbol, resp } of await sparkFetch(stale, "1y", "1d").catch(() => [])) {
+        const q = (resp.indicators && resp.indicators.quote && resp.indicators.quote[0]) || {};
+        const cl = (q.close || []).filter((x) => x != null), v = (q.volume || []).filter((x) => x != null).slice(-63);
+        dailyStats.set(symbol, { at: Date.now(), fiftyDayAverage: cl.length >= 50 ? avg(cl.slice(-50)) : undefined, twoHundredDayAverage: cl.length >= 200 ? avg(cl.slice(-200)) : undefined, averageDailyVolume3Month: v.length ? Math.round(avg(v)) : undefined });
+      }
+    }
+    for (const r of out) { const d = dailyStats.get(r.symbol); if (d) Object.assign(r, { fiftyDayAverage: d.fiftyDayAverage, twoHundredDayAverage: d.twoHundredDayAverage, averageDailyVolume3Month: d.averageDailyVolume3Month }); }
+  }
+  return out;
 }
 
 // Statement-history modules were deprecated by Yahoo (empty since Nov 2024).
@@ -76,10 +192,18 @@ const MODULES = [
 
 /** Live quotes for many symbols in ONE upstream request (breadth scan). */
 async function batchQuotes(symbols) {
-  const y = await yf();
   const fields = ["symbol", "shortName", "regularMarketPrice", "regularMarketChangePercent", "regularMarketPreviousClose", "fiftyTwoWeekHigh", "fiftyTwoWeekLow", "regularMarketTime", "regularMarketVolume", "averageDailyVolume3Month", "fiftyDayAverage", "twoHundredDayAverage"];
-  const rows = await y.quote(symbols, { fields }, { validateResult: false });
-  return (Array.isArray(rows) ? rows : [rows]).filter(Boolean);
+  try {
+    if (require("../lib/upstream").sessionCooling()) throw new Error("session cooling");
+    const y = await yf();
+    const rows = await y.quote(symbols, { fields }, { validateResult: false });
+    return (Array.isArray(rows) ? rows : [rows]).filter(Boolean);
+  } catch (e) {
+    // no session token right now: the same fields from the token-free spark endpoint
+    const rows = await sparkRows(symbols, { daily: true });
+    if (!rows.length) throw e;
+    return rows;
+  }
 }
 
 async function quoteSummary(symbol, modules = MODULES) {
@@ -300,10 +424,18 @@ async function annualStatements(symbol, years = 6) {   // one spare year: a stub
 
 /** Price fields for many symbols in one request (the 15-second quote refresh between chart calls). */
 async function quoteFields(symbols) {
-  const y = await yf();
   const fields = ["symbol", "regularMarketPrice", "regularMarketDayHigh", "regularMarketDayLow", "regularMarketTime", "regularMarketPreviousClose", "marketState"];
-  const rows = await y.quote(symbols, { fields }, { validateResult: false });
-  return (Array.isArray(rows) ? rows : [rows]).filter(Boolean);
+  try {
+    if (require("../lib/upstream").sessionCooling()) throw new Error("session cooling");
+    const y = await yf();
+    const rows = await y.quote(symbols, { fields }, { validateResult: false });
+    return (Array.isArray(rows) ? rows : [rows]).filter(Boolean);
+  } catch (e) {
+    // no session token right now: spark gives the same price fields without one
+    const rows = await sparkRows(symbols);
+    if (!rows.length) throw e;
+    return rows;
+  }
 }
 
 /** Light bundle for peer rows / screener — fewer modules, faster. */
@@ -534,4 +666,4 @@ async function pool(items, limit, fn) {
   return out;
 }
 
-module.exports = { batchQuotes, quoteFields, quoteSummary, miniSummary, chartCloses, peerSuggestions, newsFor, searchSymbols, sectorApi, screener, marketFairValue, earningsSummary, fillShareCount, UNIVERSE, pool };
+module.exports = { sessionInfo, sparkRows, batchQuotes, quoteFields, quoteSummary, miniSummary, chartCloses, peerSuggestions, newsFor, searchSymbols, sectorApi, screener, marketFairValue, earningsSummary, fillShareCount, UNIVERSE, pool };

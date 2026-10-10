@@ -7,12 +7,15 @@
  *                  (2 s for quotes/charts, 30 s for search, 5 s otherwise) — many panels and tabs
  *                  asking for the same thing in the same second cost one call
  *   · pacing       at most N requests in flight per host, queued in order (bursts are smoothed)
- *   · breakers     a 429 / 999 opens a circuit for 30 s, doubling to 10 min (session: 60 s → 60 min);
- *                  while open, those Yahoo calls fail fast so callers serve their cached / stale data
- *                  instead of hammering an endpoint that is already limiting us (the usual cause of
- *                  long blocks). Two independent circuits: SESSION (the crumb and every endpoint that
- *                  needs one — fundamentals, screener, batch quotes) and DATA (charts, search). Yahoo
- *                  often refuses only the crumb from cloud IPs; prices and charts then keep flowing.
+ *   · breakers     a 429 / 999 opens a circuit for 30 s, doubling to 10 min (session: 60 s → 20 min;
+ *                  mint: 60 s → 15 min); while open, those Yahoo calls fail fast so callers serve their
+ *                  cached / stale data instead of hammering an endpoint that is already limiting us.
+ *                  Three independent circuits: MINT (getting a session token — getcrumb, fc.yahoo.com,
+ *                  the finance.yahoo.com pages), SESSION (endpoints that need the token — company
+ *                  summaries, v7 quotes, screener, sector pages) and DATA (charts, spark, search,
+ *                  fundamentals time series, insights — none of these needs a token). Yahoo often
+ *                  refuses only token minting from cloud IPs: a refused mint must not pause calls that
+ *                  already hold a valid token, and nothing token-free is ever paused by it.
  * Everything (all hosts) is metered: requests, cache hits, coalesced, errors, bytes, per endpoint.
  * GET /api/upstream/status shows the meter and the breaker state.
  */
@@ -23,11 +26,13 @@ const MICRO_MAX = 400;
 
 const meter = { since: Date.now(), hosts: {}, endpoints: {}, recent: [], perMin: {}, symbols: {} };
 const inflight = new Map(), micro = new Map(), queues = new Map();
-// session = crumb + crumb-gated endpoints; data = everything else on Yahoo
-const SESSION_EP = /getcrumb|^\/v7\/finance\/quote|\/finance\/quoteSummary|fundamentals-timeseries|\/finance\/screener|\/finance\/insights|\/v1\/finance\/(sectors|industries)/;
+// mint = obtaining a session token; session = endpoints that need the token; data = everything else on Yahoo
+// (fundamentals time series and insights answer without a token — verified — so they are data)
+const SESSION_EP = /^\/v7\/finance\/quote|\/finance\/quoteSummary|\/finance\/screener|\/finance\/options|\/v1\/finance\/(sectors|industries)/;
+const MINT_HOST = /^(fc|www|finance|guce|consent|login)\.yahoo\.com$/i;
 const mk = (min, max) => ({ openUntil: 0, backoff: min, min, max, trips: 0, lastStatus: null, lastTripAt: 0 });
-const breakers = { session: mk(60e3, 60 * 60e3), data: mk(30e3, 10 * 60e3) };
-const kindOf = (u) => (/^fc\.yahoo\.com$/i.test(u.hostname) || SESSION_EP.test(u.pathname) ? "session" : "data");
+const breakers = { session: mk(60e3, 20 * 60e3), data: mk(30e3, 10 * 60e3), mint: mk(60e3, 15 * 60e3) };
+const kindOf = (u) => (/getcrumb/.test(u.pathname) || MINT_HOST.test(u.hostname) ? "mint" : SESSION_EP.test(u.pathname) ? "session" : "data");
 const breaker = breakers.data;   // legacy alias (status / tests)
 
 const epKey = (u) => `${u.host}${u.pathname.replace(/\/[A-Za-z0-9^.=%&-]{1,30}(?=$|\?)/g, (m) => (/^\/(v\d+|finance|chart|quote|search|api|rss|content)$/i.test(m) ? m : "/:sym")).replace(/\/\d+/g, "/:n").slice(0, 60)}${/\/chart\//.test(u.pathname) ? ` [${u.searchParams.get("interval") || "?"}/${u.searchParams.get("range") || "?"}]` : ""}`;
@@ -96,7 +101,7 @@ function trip(status, kind = "data") {
   b.trips++; b.lastStatus = status; b.lastTripAt = Date.now();
   b.openUntil = Date.now() + b.backoff;
   b.backoff = Math.min(b.max, b.backoff * 2);
-  console.warn(`[upstream] Yahoo answered ${status} (${kind}): pausing ${kind === "session" ? "session-token calls (fundamentals, screener, batch quotes)" : "Yahoo data calls"} until ${new Date(b.openUntil).toISOString()}`);
+  console.warn(`[upstream] Yahoo answered ${status} (${kind}): pausing ${kind === "session" ? "token-gated calls (company summaries, v7 quotes, screener)" : kind === "mint" ? "session-token minting (calls already holding a token continue)" : "Yahoo data calls"} until ${new Date(b.openUntil).toISOString()}`);
 }
 /* is Yahoo's session (crumb) path cooling down? callers can skip crumb-gated work */
 function sessionCooling() { return Date.now() < breakers.session.openUntil; }
@@ -111,6 +116,8 @@ function status() {
     since: meter.since, uptimeMin: +((now - meter.since) / 60e3).toFixed(1), requestsLastMinute: perMin,
     yahoo: { requests: sum("requests"), servedWithoutCall: sum("cacheHits") + sum("coalesced"), cacheHits: sum("cacheHits"), coalesced: sum("coalesced"), errors: sum("errors"), blockedByBreaker: sum("blocked"), bytes: sum("bytes") },
     session: { open: now < breakers.session.openUntil, secondsLeft: Math.max(0, Math.ceil((breakers.session.openUntil - now) / 1000)), trips: breakers.session.trips, lastStatus: breakers.session.lastStatus },
+    mint: { open: now < breakers.mint.openUntil, secondsLeft: Math.max(0, Math.ceil((breakers.mint.openUntil - now) / 1000)), trips: breakers.mint.trips, lastStatus: breakers.mint.lastStatus },
+    yahooSession: (() => { try { return require("../providers/fundamentals").sessionInfo(); } catch { return null; } })(),
     breaker: { open: now < breaker.openUntil, secondsLeft: Math.max(0, Math.ceil((breaker.openUntil - now) / 1000)), trips: breaker.trips, lastStatus: breaker.lastStatus, lastTripAt: breaker.lastTripAt || null, nextBackoffSec: breaker.backoff / 1000 },
     yahooPerMinute: Object.entries(meter.perMin).slice(-30).map(([m, n]) => ({ at: new Date(+m * 60e3).toISOString().slice(11, 16), n })),
     cacheExtended: (() => { try { return require("../cache").cacheStats.extended; } catch { return null; } })(),
@@ -119,5 +126,5 @@ function status() {
     endpoints: Object.entries(meter.endpoints).sort((a, b) => b[1].requests - a[1].requests).slice(0, 40).map(([k, v]) => ({ endpoint: k, ...v })),
   };
 }
-const _test = { reset() { meter.since = Date.now(); meter.hosts = {}; meter.endpoints = {}; meter.recent = []; meter.perMin = {}; meter.symbols = {}; inflight.clear(); micro.clear(); queues.clear(); Object.assign(breakers.session, { openUntil: 0, backoff: breakers.session.min, trips: 0, lastStatus: null, lastTripAt: 0 }); Object.assign(breaker, { openUntil: 0, backoff: 30e3, trips: 0, lastStatus: null, lastTripAt: 0 }); }, breaker };
+const _test = { reset() { meter.since = Date.now(); meter.hosts = {}; meter.endpoints = {}; meter.recent = []; meter.perMin = {}; meter.symbols = {}; inflight.clear(); micro.clear(); queues.clear(); Object.assign(breakers.session, { openUntil: 0, backoff: breakers.session.min, trips: 0, lastStatus: null, lastTripAt: 0 }); Object.assign(breakers.mint, { openUntil: 0, backoff: breakers.mint.min, trips: 0, lastStatus: null, lastTripAt: 0 }); Object.assign(breaker, { openUntil: 0, backoff: 30e3, trips: 0, lastStatus: null, lastTripAt: 0 }); }, breaker };
 module.exports = { install, status, trip, sessionCooling, dataCoolingMs, yahooPerMinuteNow, _test };
