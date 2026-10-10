@@ -77,7 +77,7 @@ const MODULES = [
 /** Live quotes for many symbols in ONE upstream request (breadth scan). */
 async function batchQuotes(symbols) {
   const y = await yf();
-  const fields = ["symbol", "shortName", "regularMarketPrice", "regularMarketChangePercent", "regularMarketPreviousClose", "fiftyTwoWeekHigh", "fiftyTwoWeekLow", "regularMarketTime", "regularMarketVolume", "averageDailyVolume3Month"];
+  const fields = ["symbol", "shortName", "regularMarketPrice", "regularMarketChangePercent", "regularMarketPreviousClose", "fiftyTwoWeekHigh", "fiftyTwoWeekLow", "regularMarketTime", "regularMarketVolume", "averageDailyVolume3Month", "fiftyDayAverage", "twoHundredDayAverage"];
   const rows = await y.quote(symbols, { fields }, { validateResult: false });
   return (Array.isArray(rows) ? rows : [rows]).filter(Boolean);
 }

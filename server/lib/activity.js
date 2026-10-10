@@ -22,7 +22,7 @@ const on = () => process.env.ACTIVITY_LOG !== "0";
 const visitors = new Map();   // id → { id, user, first, last, tab, country, device }
 
 const TABS = {
-  markets: "Market Intelligence", scanner: "Live Scanner", sector: "Sector Analysis", portfolio: "Portfolio Analysis",
+  markets: "Market Intelligence", ixa: "Index Chart Analysis", scanner: "Live Scanner", sector: "Sector Analysis", portfolio: "Portfolio Analysis",
   research: "Company Analysis", earnings: "Earnings Call", forensic: "Forensic Analysis", models: "Modeling Lab",
   risk: "Risk Center", reports: "Report Generation", quant: "Quant Lab", calc: "Calculators", learn: "Learning Center", library: "Library",
 };

@@ -16,6 +16,7 @@ class LiveQuotes {
   constructor({ FeedClass = YahooFeed, maxSymbols = 400 } = {}) {
     this.q = new Map(); this.b5 = new Map(); this.seq = 0; this.push = new SsePush({ maxClients: 60 });
     this.FeedClass = FeedClass; this.feed = null; this.maxSymbols = maxSymbols; this.timer = null;
+    this.listeners = new Set();   // other modules (Index Analyser) receive every raw tick
   }
   start() {
     if (this.feed) return;
@@ -41,6 +42,7 @@ class LiveQuotes {
     const k = Math.floor(t.ts / 300e3) * 300e3; let b = this.b5.get(t.s); if (!b) { b = []; this.b5.set(t.s, b); }
     if (b.length && b[b.length - 1].t === k) b[b.length - 1].c = t.ltp; else if (!b.length || k > b[b.length - 1].t) { b.push({ t: k, c: t.ltp }); if (b.length > 90) b.shift(); }
     this.q.set(t.s, { s: t.s, price: t.ltp, time: t.ts, dayHigh: t.high ?? prev?.dayHigh ?? null, dayLow: t.low ?? prev?.dayLow ?? null, prevClose: t.prevClose ?? prev?.prevClose ?? null, changePct: t.changePct ?? null, seq: ++this.seq });
+    for (const f of this.listeners) { try { f(t); } catch { /* a listener never breaks the feed */ } }
   }
   /** the polled 5-minute sparkline extended with streamed 5-minute closes after it */
   sparkFor(symbol, quote) {
@@ -52,6 +54,8 @@ class LiveQuotes {
     return [...base, ...after.map((x) => x.c)].slice(-80);
   }
   /** has the stream delivered a price for this symbol within `ms`? */
+  onTicks(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
+  quote(symbol) { return this.q.get(symbol) || null; }
   isFresh(symbol, ms = 60e3) { const L = this.q.get(symbol); return !!L && Date.now() - L.time < ms; }
   /** patched copy of a polled quote, or the quote itself */
   overlay(symbol, quote) {

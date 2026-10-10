@@ -565,9 +565,12 @@ const CHARTX = {
   compare: [],
   chart: null,
   // [label, visible days, fetch range (with look-back), interval]
-  RANGES: [["1M", 31, "1y", "1d"], ["3M", 92, "2y", "1d"], ["6M", 183, "2y", "1d"], ["1Y", 365, "2y", "1d"], ["5Y", 1826, "10y", "1wk"]],
+  RANGES: [["1M", 31, "1y", "1d"], ["3M", 92, "2y", "1d"], ["6M", 183, "2y", "1d"], ["1Y", 365, "2y", "1d"], ["5Y", 1826, "10y", "1d"]],
   PREF_KEY: "meridian_cx_prefs",
   _tf: "1Y",
+  // candle size: daily or weekly bars over the chosen window (weekly fetches a longer look-back so the 50/200 averages exist)
+  _iv: "1d",
+  WEEKLY_RANGE: { "1M": "2y", "3M": "2y", "6M": "5y", "1Y": "5y", "5Y": "10y" },
   _seq: 0,
   _mounted: false,
 
@@ -576,7 +579,7 @@ const CHARTX = {
   },
   _savePrefs() {
     const o = this.chart.opt;
-    try { localStorage.setItem(this.PREF_KEY, JSON.stringify({ type: o.type, ind: [...o.ind], evOn: o.evOn, evFilter: [...o.evFilter], tf: this._tf })); } catch { }
+    try { localStorage.setItem(this.PREF_KEY, JSON.stringify({ type: o.type, ind: [...o.ind], evOn: o.evOn, evFilter: [...o.evFilter], tf: this._tf, iv: this._iv })); } catch { }
   },
 
   mount() {
@@ -586,11 +589,13 @@ const CHARTX = {
       this._mounted = true;
       const P = this._prefs();
       if (P.tf && this.RANGES.some(([l]) => l === P.tf)) this._tf = P.tf;
+      if (P.iv === "1d" || P.iv === "1wk") this._iv = P.iv;
       host.innerHTML = `
         <div class="cx">
           <div class="cx-bar">
             <div class="cx-search cx-main-search"><input id="cxSearch" placeholder="Search ticker or name — stocks · indices · rates · FX · commodities · crypto" autocomplete="off" spellcheck="false" /><div class="cx-drop" id="cxDrop" hidden></div></div>
             <div class="cx-tf" id="cxTf">${this.RANGES.map(([l]) => `<button class="cx-tfb ${l === this._tf ? "on" : ""}" data-cxtf="${l}" type="button">${l}</button>`).join("")}</div>
+            <div class="cx-tf" id="cxIv" title="Candle size">${[["1d", "D", "Daily candles"], ["1wk", "W", "Weekly candles"]].map(([k, l, t]) => `<button class="cx-tfb ${k === this._iv ? "on" : ""}" data-cxiv="${k}" type="button" title="${t}">${l}</button>`).join("")}</div>
             <div class="mc-chips" id="cxChips"></div>
             <div class="cx-tools">
               <div class="cx-dd" id="cxTypeDD">
@@ -653,6 +658,12 @@ const CHARTX = {
     host.addEventListener("click", (e) => {
       const dd = e.target.closest("[data-dd]");
       if (dd) { const m = $("#" + dd.dataset.dd); closeMenus(m.id); m.hidden = !m.hidden; if (m.id === "cxEvMenu" && !m.hidden) this._renderEvents(); return; }
+      const iv = e.target.closest("[data-cxiv]");
+      if (iv) {
+        this._iv = iv.dataset.cxiv;
+        $$("[data-cxiv]", host).forEach((b) => b.classList.toggle("on", b === iv));
+        this._savePrefs(); this._fetch(); return;
+      }
       const tf = e.target.closest("[data-cxtf]");
       if (tf) {
         this._tf = tf.dataset.cxtf;
@@ -790,7 +801,9 @@ const CHARTX = {
 
   async _fetch(keepView) {
     if (!this.chart) return;
-    const [, days, range, interval] = this.RANGES.find(([l]) => l === this._tf) || this.RANGES[3];
+    const [label, days, dRange] = this.RANGES.find(([l]) => l === this._tf) || this.RANGES[3];
+    const interval = this._iv === "1wk" ? "1wk" : "1d";
+    const range = interval === "1wk" ? (this.WEEKLY_RANGE[label] || "5y") : dRange;
     const wanted = [this.main, ...this.compare];
     const seq = ++this._seq;
     try {

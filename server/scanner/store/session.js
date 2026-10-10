@@ -29,4 +29,5 @@ function marketStatus(ts = Date.now()) {
   if (p.min >= CLOSE_MIN) return { open: false, reason: "closed", text: "NSE closed at 15:30 IST — showing today's session as of close." };
   return { open: true, reason: "open", text: "NSE is open." };
 }
-module.exports = { IST_OFFSET, OPEN_MIN, CLOSE_MIN, SESSION_MIN, istParts, istDate, sessionMinute, sessionOpenTs, minuteFloor, isMarketOpen, marketStatus, setHolidays, holidayOn };
+const holidayList = () => [...holidays].map(([date, name]) => ({ date, name })).sort((a, b) => a.date.localeCompare(b.date));
+module.exports = { holidayList, IST_OFFSET, OPEN_MIN, CLOSE_MIN, SESSION_MIN, istParts, istDate, sessionMinute, sessionOpenTs, minuteFloor, isMarketOpen, marketStatus, setHolidays, holidayOn };

@@ -58,6 +58,8 @@ function mount(app) {
   // every quote the terminal asks for is auto-subscribed to the stream, then overlaid
   require("../cache").setQuoteOverlay((sym, q) => { if (process.env.LIVE_QUOTES !== "0") live.ensure([sym]); return live.overlay(sym, q); });
   app.use("/api", liveRouter(live));
+  // Index Analyser: shares the same tick stream (one computation per index, pushed to every viewer)
+  require("../lib/indexlive").mount(app, live);
   // Yahoo load: a quote the stream keeps current needs its REST refresh only for the 5-minute sparkline;
   // an NSE / BSE quote cannot change while the Indian market is closed. Screen refresh rates are unchanged.
   const INDIAN = /\.(NS|BO)$|^\^(NSE|BSE|CNX|INDIAVIX|NIFTY)/i;

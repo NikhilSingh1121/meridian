@@ -87,17 +87,19 @@ async function buildBreadth() {
       high52: q.fiftyTwoWeekHigh ?? null, low52: q.fiftyTwoWeekLow ?? null,
       // today's volume vs its 3-month daily average — "how unusual is the tape"
       volX: q.regularMarketVolume && q.averageDailyVolume3Month ? +(q.regularMarketVolume / q.averageDailyVolume3Month).toFixed(2) : null,
+      ma50: q.fiftyDayAverage ?? null, ma200: q.twoHundredDayAverage ?? null,
     }))
     .filter((r) => r.price !== null && r.changePct !== null);
   if (!rows.length) throw new Error("no breadth rows");
   const adv = rows.filter((r) => r.changePct > 0).length, dec = rows.filter((r) => r.changePct < 0).length;
   const near52H = rows.filter((r) => r.high52 && r.price >= r.high52 * 0.95).length;
   const near52L = rows.filter((r) => r.low52 && r.price <= r.low52 * 1.05).length;
+  const pctAbove = (k) => { const v = rows.filter((r) => r[k]); return v.length ? Math.round((v.filter((r) => r.price > r[k]).length / v.length) * 100) : null; };
   const byChg = [...rows].sort((a, b) => b.changePct - a.changePct);
   const mover = ({ symbol, name, price, changePct, volX }) => ({ symbol, name, price, changePct, volX });
   return {
     asOf: Date.now(), n: rows.length, advancers: adv, decliners: dec, unchanged: rows.length - adv - dec,
-    adRatio: dec ? +(adv / dec).toFixed(2) : null, near52H, near52L,
+    adRatio: dec ? +(adv / dec).toFixed(2) : null, near52H, near52L, above50: pctAbove("ma50"), above200: pctAbove("ma200"),
     avgChange: +(rows.reduce((s, r) => s + r.changePct, 0) / rows.length).toFixed(2),
     movers: {
       gainers: byChg.filter((r) => r.changePct > 0).slice(0, 10).map(mover),
@@ -164,3 +166,5 @@ router.delete("/library/:id", AUTH.requireUser, (req, res) => {
 });
 
 module.exports = router;
+/* shared with the Index Analyser's regime engine (same 15 s cache key, so no extra Yahoo calls) */
+module.exports.breadth = () => cachedDurable("breadth:nifty", 15_000, buildBreadth);

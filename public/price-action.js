@@ -212,17 +212,18 @@ const PA_STRUCT = {
     const emaBull = e20[i] != null && e50[i] != null && e20[i] > e50[i];
     const structBull = hh + hl, structBear = lh + ll;
     let dir = 0;
-    if (emaBull && slope > 0.001 && structBull >= structBear) dir = structBull > structBear * 1.5 ? 2 : 1;
-    else if (!emaBull && slope < -0.001 && structBear >= structBull) dir = structBear > structBull * 1.5 ? -2 : -1;
+    const sth = pre?.slopeTh ?? 0.001;   // callers on short candles (intraday index) pass a volatility-scaled threshold
+    if (emaBull && slope > sth && structBull >= structBear) dir = structBull > structBear * 1.5 ? 2 : 1;
+    else if (!emaBull && slope < -sth && structBear >= structBull) dir = structBear > structBull * 1.5 ? -2 : -1;
     const label = dir === 2 ? "Strong Uptrend" : dir === 1 ? "Uptrend" : dir === -2 ? "Strong Downtrend" : dir === -1 ? "Downtrend" : "Range / Sideways";
     return { dir, label, detail: `${hh}HH·${hl}HL vs ${lh}LH·${ll}LL, EMA20 ${emaBull ? ">" : "<"} EMA50` };
   },
   /* was the short window before i falling (for reversal-from-decline context)? */
-  legInto(c, i, n = 5) {
+  legInto(c, i, n = 5, th = 0.015) {
     if (i < n + 1) return 0;
     const a = c[i - n].c, b = c[i - 1].c;
     const chg = (b - a) / a;
-    return chg < -0.015 ? -1 : chg > 0.015 ? 1 : 0;
+    return chg < -th ? -1 : chg > th ? 1 : 0;
   },
 };
 
@@ -392,12 +393,14 @@ const PA_PATTERN = (() => {
     return hits;
   }
 
-  function detectAll(c) {
+  /* opts (optional): { legTh, slopeTh } — leg and EMA-slope thresholds for candles whose
+     typical move differs from daily equities (e.g. 5-minute index candles) */
+  function detectAll(c, opts = {}) {
     if (!c || c.length < 10) return [];
     const closes = c.map((k) => k.c);
     const atrArr = PA_MATH.atr(c, 14);
     const e20 = PA_MATH.ema(closes, 20), e50 = PA_MATH.ema(closes, 50);
-    const pre = { closes, e20, e50 };
+    const pre = { closes, e20, e50, slopeTh: opts.slopeTh };
     const bodies = c.map((k) => Math.abs(k.c - k.o));
     const trendCache = {};
     const x = {
@@ -407,7 +410,7 @@ const PA_PATTERN = (() => {
         return w.length ? w.reduce((a, b) => a + b, 0) / w.length : bodies[i] || 1e-9;
       },
       trend: (i) => (trendCache[i] ??= PA_STRUCT.trendAt(c, i, pre)),
-      legInto: (cc, i, n) => PA_STRUCT.legInto(cc, i, n),
+      legInto: (cc, i, n) => PA_STRUCT.legInto(cc, i, n, opts.legTh),
     };
     const out = [];
     const lastByName = {};
@@ -433,12 +436,12 @@ const PA_PATTERN = (() => {
    Never evaluates a candlestick in isolation:
    Pattern + Trend + Structure + S/R + EMA alignment + Momentum + Volume + Confirmation */
 const PA_SCORE = {
-  analyze(c, patterns) {
+  analyze(c, patterns, opts = {}) {
     if (!c || c.length < 20) return [];
     const closes = c.map((k) => k.c);
     const e20 = PA_MATH.ema(closes, 20), e50 = PA_MATH.ema(closes, 50), e200 = PA_MATH.ema(closes, 200);
     const rsi = PA_MATH.rsi(closes), macd = PA_MATH.macd(closes), atr = PA_MATH.atr(c, 14);
-    const pre = { closes, e20, e50 };
+    const pre = { closes, e20, e50, slopeTh: opts.slopeTh };
     const levels = PA_STRUCT.levels(c);
     const avgVol = PA_MATH.sma(c.map((k) => k.v || 0), 20);
 
@@ -450,7 +453,7 @@ const PA_SCORE = {
       const bullish = p.dir > 0, bearish = p.dir < 0;
 
       // 1 · Trend context (with-trend continuation, or reversal after a genuine leg)
-      const leg = PA_STRUCT.legInto(c, i, 6);
+      const leg = PA_STRUCT.legInto(c, i, 6, opts.legTh);
       if (bullish && trend.dir > 0) { score += 10; factors.push({ ok: true, t: `With-trend signal — ${trend.label.toLowerCase()} favours upside continuation` }); }
       else if (bearish && trend.dir < 0) { score += 10; factors.push({ ok: true, t: `With-trend signal — ${trend.label.toLowerCase()} favours downside continuation` }); }
       else if (bullish && leg < 0) { score += 8; factors.push({ ok: true, t: "Reversal context — pattern formed after a measurable decline" }); }
@@ -507,8 +510,8 @@ const PA_SCORE = {
   },
 
   /* symbol-level bias from trend + last few scored patterns */
-  bias(c, scored) {
-    const trend = PA_STRUCT.trendAt(c);
+  bias(c, scored, opts = {}) {
+    const trend = PA_STRUCT.trendAt(c, c.length - 1, opts.slopeTh != null ? { slopeTh: opts.slopeTh } : undefined);
     let s = trend.dir * 18;
     for (const p of scored.slice(-5)) s += p.dir * (p.score / 100) * 14;
     const closes = c.map((k) => k.c);

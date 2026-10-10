@@ -128,7 +128,7 @@ const TABS = {};
 const TAB_LABELS = {
   markets:"Market Intelligence", sector:"Sector Analysis", portfolio:"Portfolio Analysis",
   research:"Company Analysis", earnings:"Earnings Call", forensic:"Forensic Analysis", models:"Modeling Lab",
-  risk:"Risk Center", reports:"Report Generation", quant:"Quant Lab", scanner:"Live Scanner",
+  risk:"Risk Center", reports:"Report Generation", quant:"Quant Lab", scanner:"Live Scanner", ixa:"Index Chart Analysis",
   calc:"Calculators", learn:"Learning Center", library:"Library",
 };
 
@@ -222,7 +222,7 @@ function initMobileNav() {
   const tabBtns = $$(".ttabs button[data-tab]");
   // Three sections (mobile drawer only — the desktop bar is one flat row in the same order)
   const groups = [
-    { label: "Macro Economics", tabs: ["markets","scanner","sector","portfolio"] },
+    { label: "Macro Economics", tabs: ["markets","ixa","scanner","sector","portfolio"] },
     { label: "Equity Research", tabs: ["research","earnings","forensic","models","risk","reports","quant"] },
     { label: "Other Utilities", tabs: ["calc","learn","library"] },
   ];

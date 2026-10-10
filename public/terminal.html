@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="/earnings-ws.css" />
   <link rel="stylesheet" href="/forensic-ws.css" />
   <link rel="stylesheet" href="/live-scanner.css" />
+  <link rel="stylesheet" href="/index-analyser.css" />
   <link rel="stylesheet" href="/assistant.css" />
   <link rel="stylesheet" href="/mobile.css" />
 </head>
@@ -66,6 +67,7 @@
   <!-- ── Module tabs ── -->
   <nav class="ttabs" id="ttabs">
     <button data-tab="markets" class="active">Market Intelligence</button>
+    <button data-tab="ixa">Index Chart Analysis</button>
     <button data-tab="scanner">Live Scanner</button>
     <button data-tab="sector">Sector Analysis</button>
     <button data-tab="portfolio">Portfolio Analysis</button>
@@ -525,6 +527,11 @@
     <!-- ════ TAB · SECTOR ANALYSIS ════
          Institutional sector / industry breakdown (see sector-analysis.js).
          All rendering lives in #sectorRoot — TABS.sector.init() builds it. -->
+    <!-- ════ TAB · INDEX CHART ANALYSIS ════ built by index-analyser.js inside #ixaRoot; live data over SSE from /api/ix/stream -->
+    <section class="tab" id="tab-ixa" hidden>
+      <div id="ixaRoot"></div>
+    </section>
+
     <!-- ════ TAB · LIVE SCANNER ════ built by live-scanner.js inside #lscRoot; data over SSE from /api/scanner/stream -->
     <section class="tab" id="tab-scanner" hidden>
       <div id="lscRoot"></div>
@@ -590,6 +597,8 @@
   <script src="/calculators.js"></script>
   <script src="/learning.js"></script>
   <script src="/auth.js"></script>
+  <script src="/ix-chart.js"></script>
+  <script src="/index-analyser.js"></script>
   <script src="/live-scanner.js"></script>
   <script src="/live-top5.js"></script>
   <script src="/live-rotation.js"></script>
